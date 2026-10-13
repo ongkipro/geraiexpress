@@ -13,6 +13,7 @@ const MESSAGES: Record<string, string> = {
   no_awb: "Label hanya tersedia setelah resi terbit.",
   provider_label_required: "Label resmi untuk pengiriman ini harus diambil dari PDF Mengantar, bukan label contoh.",
   nothing_to_reconcile: "Tidak ada operasi yang perlu direkonsiliasi.",
+  admin_required: "Hanya admin gerai yang dapat melakukan tindakan ini.",
   demo_requires_anonymous_session: "Mode demo hanya untuk sesi demo.",
 };
 

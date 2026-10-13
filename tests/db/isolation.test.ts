@@ -188,16 +188,41 @@ describe("demo isolation (IAM-4)", () => {
 });
 
 describe("registration gate (PR-29 pending)", () => {
-  it("an anonymous demo identity cannot become a usable email/password account without inbox proof", async () => {
+  it("an anonymous demo identity cannot start an email or phone conversion at all (PR-31)", async () => {
     const anon = client();
-    await anon.auth.signInAnonymously();
+    const { data } = await anon.auth.signInAnonymously();
+    const id = data.user!.id;
     const email = `convert-${Date.now()}@geraiexpress.test`;
-    await anon.auth.updateUser({ email });
-    await anon.auth.updateUser({ password: "convert-password-123" });
-    const { data: me } = await anon.auth.getUser();
-    expect(me.user?.is_anonymous).toBe(true);
+    expect((await anon.auth.updateUser({ email })).error).not.toBeNull();
+    expect((await anon.auth.updateUser({ phone: "+6281200000000" })).error).not.toBeNull();
+    expect((await anon.auth.updateUser({ password: "convert-password-123" })).error).not.toBeNull();
+    // No pending change was stored, so no confirmation link exists for an inbox owner to click.
+    expect(sql(`select coalesce(email,'') || '|' || coalesce(email_change,'') || '|' || coalesce(phone_change,'') || '|' || is_anonymous from auth.users where id = '${id}'`)).toBe("|||true");
     const login = await client().auth.signInWithPassword({ email, password: "convert-password-123" });
     expect(login.error).not.toBeNull();
+    // The session itself keeps working for the demo.
+    expect((await anon.auth.refreshSession()).error).toBeNull();
+    expect((await anon.rpc("start_demo")).error).toBeNull();
+  });
+
+  it("the conversion outcome is refused in the database even if Auth attempted it directly", async () => {
+    const anon = client();
+    const { data } = await anon.auth.signInAnonymously();
+    const id = data.user!.id;
+    expect(() => sql(`update auth.users set email = 'direct-${id}@geraiexpress.test', email_confirmed_at = now() where id = '${id}'`))
+      .toThrow(/anonymous_identity_is_demo_only/);
+    for (const change of [
+      "is_anonymous = false",
+      `email_change = 'pending-${id}@geraiexpress.test'`,
+      "phone = '6281200000001'",
+      "phone_change = '6281200000002'",
+      "encrypted_password = 'x'",
+    ]) {
+      expect(() => sql(`update auth.users set ${change} where id = '${id}'`), change)
+        .toThrow(/anonymous_identity_is_demo_only/);
+    }
+    // Ordinary Auth bookkeeping on the same row still succeeds.
+    expect(sql(`update auth.users set last_sign_in_at = now() where id = '${id}' returning is_anonymous`)).toContain("t");
   });
 
   it("public email signup is refused while anonymous demo sign-in works", async () => {

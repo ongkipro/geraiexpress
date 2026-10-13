@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 
 export const FIXTURE_PASSWORD = "geraiexpress-local-dev";
 
@@ -50,4 +51,19 @@ export async function expectTouchTargets(page: Page) {
       .map((el) => `${el.tagName.toLowerCase()} "${(el.textContent || el.getAttribute("aria-label") || "").trim().slice(0, 40)}" ${Math.round(el.getBoundingClientRect().width)}×${Math.round(el.getBoundingClientRect().height)}`),
   );
   expect(small, "touch targets below 44px").toEqual([]);
+}
+
+// Local stack only: the signed-in user's id from the Supabase SSR session cookie (possibly chunked).
+export async function sessionUserId(page: Page): Promise<string> {
+  const parts = (await page.context().cookies())
+    .filter((c) => /^sb-.*-auth-token(\.\d+)?$/.test(c.name))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  const raw = parts.map((c) => c.value).join("").replace(/^base64-/, "");
+  return JSON.parse(Buffer.from(raw, "base64url").toString("utf8")).user.id;
+}
+
+// Local-only superuser SQL for fixture changes the API must not allow (e.g. demoting a role).
+// Always targets the local docker database; tests using it cannot run against a remote preview.
+export function localSql(statement: string): string {
+  return execFileSync("docker", ["exec", "supabase_db_geraiexpress", "psql", "-U", "postgres", "-tA", "-v", "ON_ERROR_STOP=1", "-c", statement], { encoding: "utf8" }).trim();
 }

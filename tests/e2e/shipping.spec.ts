@@ -1,7 +1,7 @@
 // PR-4 / PR-5 / PR-6 / PR-7 / PR-9 / UX-1 / UX-3: contact reuse → draft → simulated quote →
 // explicit confirmation → sample label, plus unknown-outcome recovery and foreign access.
-import { expect, test } from "@playwright/test";
-import { expectNoHorizontalOverflow, signIn, startDemo } from "./helpers";
+import { expect, test } from "./fixtures";
+import { expectNoHorizontalOverflow, localSql, sessionUserId, signIn, startDemo } from "./helpers";
 
 test("complete simulated counter flow with saved contacts", async ({ page }) => {
   await startDemo(page);
@@ -73,6 +73,15 @@ test("unknown outcome is reconciled without a second order", async ({ page }) =>
   await page.getByRole("button", { name: "Periksa status operasi asli" }).click();
   await expect(page.getByText(/Tidak ada pesanan kedua yang dibuat/)).toBeVisible();
   await expect(page.getByText("Resi terbit").first()).toBeVisible();
+});
+
+test("an operator sees an unknown outcome but must escalate to the admin (DEC-008)", async ({ page }) => {
+  await startDemo(page);
+  localSql(`update public.memberships set role = 'operator' where user_id = '${await sessionUserId(page)}'`);
+  await page.getByRole("link", { name: "Periksa" }).first().click();
+  await expect(page.getByText(/Jangan buat pengiriman baru untuk paket ini/)).toBeVisible();
+  await expect(page.getByText("Minta admin gerai memeriksa status operasi asli.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Periksa status operasi asli" })).toHaveCount(0);
 });
 
 test("another tenant's shipment is not found", async ({ page }) => {

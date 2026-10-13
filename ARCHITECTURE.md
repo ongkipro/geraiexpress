@@ -31,7 +31,7 @@ flowchart LR
         Health["/healthz (no-store)"]
     end
     subgraph Supabase["Supabase (local stack, CLI 2.120.0, Postgres 17)"]
-        Auth["Auth<br/>email/password fixtures · anonymous demo<br/>before_user_created hook blocks public signup"]
+        Auth["Auth<br/>email/password fixtures · anonymous demo<br/>before_user_created hook blocks public signup<br/>anonymous identities locked to demo"]
         API["Data API / RPC<br/>publishable key + user JWT only"]
         DB["public schema: RLS on every table<br/>composite same-tenant FKs<br/>column-level grants"]
         Priv["private schema: helpers, triggers,<br/>quote_costs (no API grants)"]
@@ -151,12 +151,14 @@ sequenceDiagram
 | Runtime | Next.js 16.3.8 App Router on `@opennextjs/cloudflare` 1.20.10, Wrangler 4.149.0, React 19.3.0, TypeScript 6.0.3; exact pins; pnpm `minimumReleaseAge` policy respected | `pnpm build`, `pnpm cf:build`; e2e against `wrangler dev` (workerd) |
 | Adapter decision | Next.js 16.4.0 failed in workerd (`Unexpected loadManifest(/.next/server/preview-props.json)`, HTTP 500) with OpenNext 1.20.10; pinned 16.3.8, which passes. vinext (Cloudflare-recommended, beta) not used; OpenNext 1.x accepted as DEC-005 | BUILD-LOG 2026-10-14; `scripts/worker-smoke.sh` |
 | Session handling | `src/middleware.ts` refreshes Supabase cookies and sets `Cache-Control: private, no-store` on every non-static response; Node middleware not used (OpenNext does not support it) | Reviewer curl of Worker responses; e2e |
-| Identity | Supabase Auth email/password (seeded local fixtures only) and anonymous demo sessions; public signup refused by `private.before_user_created`; email confirmations on so an anonymous user cannot attach an unverified email | `tests/db/isolation.test.ts` registration gate |
+| Identity | Supabase Auth email/password (seeded local fixtures only) and anonymous demo sessions; public signup refused by `private.before_user_created`; email confirmations on; trigger `private.lock_anonymous_identity` on `auth.users` refuses, for anonymous identities, any email/phone/password change request and any clearing of `is_anonymous`; OAuth linking is additionally off (`enable_manual_linking = false`), so a demo session cannot become a real account (PR-31) | `tests/db/isolation.test.ts` registration gate, mutation-checked |
 | Tenancy | `memberships` + `private.member_role()`; anonymous identities count only in demo tenants; `ge_tenant` cookie validated against own memberships; multiple memberships require `/pilih-gerai` | DB isolation suite; e2e forged-cookie and two-membership tests |
 | Contacts | Tenant-owned contacts and addresses, optimistic revision on edit, address archive keeps one primary | `tests/e2e/contacts.spec.ts` |
 | Shipments | Draft → simulated quote (per revision, 30 min expiry) → explicit confirmation → one `create_order` operation → simulated AWB `SIM…`; content frozen after submission; unknown outcome reconciles the original operation | `tests/db/shipment-flow.test.ts`; `tests/e2e/shipping.spec.ts` |
 | Pricing | Customer charge = simulated normal tariff; synthetic net cost stored only in `private.quote_costs` | DB grant assertions; reviewer RSC/payload inspection |
 | Labels | Watermarked sample label page for simulated shipments only; completed job reused; print hides app shell | e2e label tests |
+| Roles | DEC-008: `tenant_admin` and `operator`; `reconcile_shipment` (unknown outcome) requires `tenant_admin`, operators see an escalation notice; a demo visitor is `tenant_admin` of their own sample gerai | `tests/db/shipment-flow.test.ts` operator denial; e2e operator escalation |
+| Abuse limits | `src/lib/rate-limit.ts` + `ratelimits` in `wrangler.jsonc`: per-visitor (IPv4 address, IPv6 /64) sign-in and demo-entry limits before Supabase Auth (RATE-1 native Auth ingress) | `tests/unit/visitor-key.test.ts`; e2e RATE-1 tests on Worker and next dev, mutation-checked |
 | Readiness | `/pengaturan` shows per-capability state; for real tenants every provider capability is "Belum tersedia" or "Belum diverifikasi" (only the outlet pickup address can be "Siap") | e2e settings tests |
 | Quote reuse | `request_quotes` returns the unexpired set of the current revision instead of inserting another (migration `20261014090000`) | `tests/db/shipment-flow.test.ts` |
 | Presentation | shadcn/ui (radix base, rhea style) remapped to UI-2 tokens; system font; Tailwind names `text-base/sm/xs/xl/3xl` carry the UI-2 sizes so `cn()` merges correctly; ≥44px targets | e2e touch-target, overflow and keyboard checks at 390/768/1280 |
@@ -174,11 +176,24 @@ sequenceDiagram
 
 ## Open production gates found during implementation
 
-- Supabase per-IP Auth rate limits will see the Worker's egress address rather than each
-  visitor; decide forwarding/limits before any shared preview.
-- A person who controls a real inbox can still verify an email on an anonymous demo identity
-  (the `before_user_created` hook does not run for that update). Harmless today (no
-  email-matched invitations); must be closed before invite-by-email (PR-31).
+- Supabase per-IP Auth rate limits see the Worker's shared egress address, not each visitor.
+  Forwarding the visitor IP (`Sb-Forwarded-For`) is documented by Supabase only with a secret
+  API key, which this app deliberately does not hold. Implemented instead (T-011): Workers Rate
+  Limiting bindings keyed by `CF-Connecting-IP` (IPv4 per address, IPv6 per /64) in front of
+  sign-in (10/60 s) and demo entry (5/60 s), failing closed in the deployed Worker when the
+  binding or IP is missing. Accepted residuals: counters are per Cloudflare location and
+  eventually consistent, so a distributed attacker gets roughly the limit per location; one
+  person behind a shared address (carrier-grade NAT is common on Indonesian mobile networks)
+  can block that address's sign-in and demo entry for up to a minute; token refresh in middleware and demo
+  reset have no per-visitor limit. Direct calls to Supabase Auth with the publishable key meet
+  Supabase's own per-IP limits with the visitor's real address. Still open for the remote
+  project: size its Auth limits (sign-in, anonymous sign-ins, token refresh) for aggregate
+  traffic from Worker egress, and pick unique `namespace_id`s for the account.
+- `private.lock_anonymous_identity` is a trigger on `auth.users`. Locally the `postgres` role
+  can create it but cannot alter or drop it (not the table owner); confirm the same on the remote
+  project before relying on a later migration to change it. The remote project must also keep
+  manual identity linking disabled. A refused email change surfaces from Auth as HTTP 500
+  ("Error sending email change email"); the app offers no email change to demo sessions.
 - `next dev` rewrites `AGENTS.md` when it detects an AI-agent environment
   (`node_modules/next/dist/server/lib/generate-agent-files.js`); agents must start it with the
   agent environment variables unset or revert the injected block.

@@ -2,7 +2,7 @@
 // operation, stale revision/quote rejection, frozen snapshots, label reuse and unknown recovery.
 import { beforeAll, describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { demoVisitor } from "./helpers";
+import { demoVisitor, sql } from "./helpers";
 
 let c: SupabaseClient;
 let tenant: string;
@@ -131,6 +131,23 @@ describe("simulated shipping flow", () => {
   it("label is refused before an AWB exists", async () => {
     const d = await newCompleteDraft();
     expect((await c.rpc("request_label", { p_shipment: d.id })).error?.message).toBe("no_awb");
+  });
+
+  it("an operator cannot resolve an unknown outcome; it stays unknown for the admin (DEC-008)", async () => {
+    const op = await demoVisitor();
+    const { data: s } = await op.c.from("shipments").select("id").eq("tenant_id", op.tenant).eq("submission_state", "unknown").single();
+    sql(`update public.memberships set role = 'operator' where tenant_id = '${op.tenant}'`);
+    const denied = await op.c.rpc("reconcile_shipment", { p_shipment: s!.id });
+    expect(denied.error?.message).toBe("admin_required");
+    const { data: after } = await op.c.from("shipments").select("submission_state").eq("id", s!.id).single();
+    expect(after!.submission_state).toBe("unknown");
+    const { data: ops } = await op.c.from("provider_operations").select("state").eq("shipment_id", s!.id);
+    expect(ops).toEqual([{ state: "unknown" }]);
+  });
+
+  it("a demo visitor is the admin of their own sample gerai", async () => {
+    const { data } = await c.from("memberships").select("role").eq("tenant_id", tenant);
+    expect(data).toEqual([{ role: "tenant_admin" }]);
   });
 
   it("unknown outcome reconciles the original operation once", async () => {

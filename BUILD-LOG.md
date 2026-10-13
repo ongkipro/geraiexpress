@@ -115,3 +115,57 @@ E2E_BASE_URL=http://127.0.0.1:8787 pnpm test:e2e   # 390/768/1280 projects
 
 Open gates discovered: Supabase per-IP Auth limits behind Worker egress; verified-inbox
 conversion of anonymous identities before invite-by-email; adapter choice. See ARCHITECTURE.md.
+
+## 2026-10-14 — T-009 anonymous identity lock (PR-31 prerequisite)
+
+Probe on the local stack: an anonymous session's `updateUser({ email })` succeeded and stored
+`email_change`, so whoever controls that inbox could confirm it and turn the demo identity into
+a permanent account with the same id. `enable_confirmations` only delayed it; the
+`before_user_created` hook does not run for updates.
+
+Fix: migration `20261014100000_anonymous_identity_lock.sql` adds a `BEFORE UPDATE` trigger on
+`auth.users` that refuses, for anonymous rows, any change to email, email_change, phone,
+phone_change or password and any clearing of `is_anonymous`. Auth writes `''` instead of NULL
+for some of these columns, so comparisons coalesce. Supabase documents user triggers on
+`auth.users`; locally `postgres` can create but not alter/drop it (mutation check used
+`supabase_admin`).
+
+Checks: `pnpm db:reset && pnpm test:db` (35 passed); db lint; mutation check (trigger disabled →
+both new tests fail); review follow-up added direct-SQL refusals for every guarded column; full e2e on next dev and Worker (110 passed, 1 skipped each).
+
+## 2026-10-14 — T-010 recovery is admin-only (DEC-008)
+
+`reconcile_shipment` accepted any member. Migration `20261014110000_reconcile_admin_only.sql`
+checks `tenant_admin` before any row lock (`admin_required`, 42501); the shipment page shows an
+operator "Minta admin gerai memeriksa status operasi asli." instead of the button. `start_demo`
+now makes the visitor `tenant_admin` of their own sample gerai (sole member), and existing demo
+memberships are upgraded, so the recovery path remains demonstrable.
+
+Checks: `pnpm db:reset && pnpm test:db` (37 passed); mutation check (role check removed →
+operator test fails); typecheck; cf:build, bundle scan, worker smoke; full e2e on Worker and next
+dev (113 passed, 1 skipped each), including the operator escalation view.
+
+## 2026-10-14 — T-011 per-visitor Auth entry limits (RATE-1)
+
+Supabase documents IP forwarding (`Sb-Forwarded-For`) for Auth rate limits only with a secret
+API key; the app holds none by design, so every server-side Auth call would share the Worker's
+egress bucket. Added Workers Rate Limiting bindings (`SIGN_IN_LIMITER` 10/60 s,
+`DEMO_LIMITER` 5/60 s) keyed by `CF-Connecting-IP`, checked in `signInAction` and
+`startDemoAction` before Supabase is called. Missing binding or IP fails closed when
+`NODE_ENV=production` (the Worker) and is allowed in `next dev`.
+
+Local behaviour verified with a scratch Worker: wrangler dev enforces the binding and passes a
+client-supplied `cf-connecting-ip` through, and windows are wall-clock aligned. E2E therefore
+gives each test a random private-range visitor IP (`tests/e2e/fixtures.ts`), and limit tests
+start early in a window. The run was recorded under requirement NFR-3 by mistake; the
+governing requirement is RATE-1.
+
+Review follow-up: the first version keyed IPv6 by full address, so rotating inside a /64 bypassed
+it (MAJOR); keys are now IPv4 per address and IPv6 per /64 (`src/lib/visitor-key.ts`, unit
+tested with the fail-closed branch), the message says "jaringan ini" because addresses are
+shared, and residuals (per-location counters, CGNAT griefing, unlimited refresh/reset) are
+recorded in ARCHITECTURE.md.
+
+Checks: typecheck; unit (8); mutation check (limiter forced to allow → both limit tests fail); cf:build,
+bundle scan, worker smoke (bindings listed); full e2e on Worker and next dev, 119 passed and
+1 skipped each.

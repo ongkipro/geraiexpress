@@ -122,10 +122,14 @@ export default async function ShipmentPage({
         {s.submission_state === "unknown" || s.submission_state === "queued" || s.submission_state === "in_flight" ? (
           <>
             <p>Hasil pengiriman ke kurir belum pasti. Jangan buat pengiriman baru untuk paket ini — periksa operasi aslinya terlebih dahulu.</p>
-            <form action={reconcileAction}>
-              <input type="hidden" name="shipment_id" value={s.id} />
-              <Button type="submit">Periksa status operasi asli</Button>
-            </form>
+            {ws.role === "tenant_admin" ? (
+              <form action={reconcileAction}>
+                <input type="hidden" name="shipment_id" value={s.id} />
+                <Button type="submit">Periksa status operasi asli</Button>
+              </form>
+            ) : (
+              <p className="font-semibold">Minta admin gerai memeriksa status operasi asli.</p>
+            )}
           </>
         ) : s.submission_state === "issued" ? (
           <div className="flex flex-wrap gap-3">

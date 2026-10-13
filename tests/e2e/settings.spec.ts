@@ -1,5 +1,5 @@
 // PR-8 / UX-3: capability readiness is explicit and demo restrictions are explained.
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { expectNoHorizontalOverflow, expectTouchTargets, signIn, startDemo } from "./helpers";
 
 test("demo settings show simulated capabilities and restrictions", async ({ page }) => {

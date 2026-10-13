@@ -5,6 +5,9 @@ import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { TENANT_COOKIE } from "@/lib/workspace";
 import { friendlyError } from "@/lib/errors";
+import { withinLimit } from "@/lib/rate-limit";
+
+const TOO_MANY = "Terlalu banyak percobaan dari jaringan ini. Tunggu satu menit lalu coba lagi.";
 
 const TENANT_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -19,6 +22,7 @@ export async function signInAction(_: SignInState, form: FormData): Promise<Sign
   const email = String(form.get("email") ?? "").trim();
   const password = String(form.get("password") ?? "");
   if (!email || !password) return { error: "Isi email dan kata sandi.", email };
+  if (!(await withinLimit("SIGN_IN_LIMITER"))) return { error: TOO_MANY, email };
   const supabase = await supabaseServer();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   // One message for every failure so the form does not reveal which emails exist.
@@ -31,6 +35,7 @@ export type DemoState = { error?: string };
 
 // PR-21 / IAM-4: each visitor gets an anonymous session and an isolated, seeded demo tenant.
 export async function startDemoAction(): Promise<DemoState> {
+  if (!(await withinLimit("DEMO_LIMITER"))) return { error: TOO_MANY };
   const supabase = await supabaseServer();
   const { data: current } = await supabase.auth.getUser();
   // Never silently end a real account's session to start a demo.

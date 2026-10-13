@@ -1,6 +1,16 @@
 // PR-1, PR-13, PR-21, UX-3, NFR-4: entry, scope, demo isolation and sign-out in a real browser.
-import { expect, test } from "@playwright/test";
-import { expectNoHorizontalOverflow, expectTouchTargets, signIn, signOut, startDemo } from "./helpers";
+import { expect, test } from "./fixtures";
+import { randomInt } from "node:crypto";
+import { FIXTURE_PASSWORD, expectNoHorizontalOverflow, expectTouchTargets, signIn, signOut, startDemo } from "./helpers";
+
+const TOO_MANY = /Terlalu banyak percobaan dari jaringan ini/;
+
+// Limiter windows are aligned to the wall clock; start a burst early in a window so it cannot
+// straddle a reset.
+async function freshLimitWindow() {
+  const into = Date.now() % 60_000;
+  if (into > 30_000) await new Promise((r) => setTimeout(r, 60_000 - into + 250));
+}
 
 test("login page offers sign-in and a discoverable demo entry", async ({ page }) => {
   await page.goto("/masuk");
@@ -145,3 +155,41 @@ test("a person with two gerai memberships must choose one explicitly", async ({ 
   await expect(page.getByText("GXTEST-A1")).toHaveCount(0);
 });
 
+
+test("sign-in is limited per visitor before Supabase Auth is reached (RATE-1)", async ({ page }) => {
+  test.setTimeout(120_000);
+  await freshLimitWindow();
+  await page.goto("/masuk");
+  const attempt = async (password: string) => {
+    await page.getByRole("textbox", { name: "Email" }).fill("owner-a@geraiexpress.test");
+    await page.getByLabel("Kata sandi").fill(password);
+    await Promise.all([
+      page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/masuk")),
+      page.getByRole("button", { name: "Masuk", exact: true }).click(),
+    ]);
+  };
+  for (let i = 0; i < 10; i++) {
+    await attempt(`salah-${i}-12345`);
+    await expect(page.locator("#signin-error")).toHaveText(/Email atau kata sandi tidak cocok/);
+  }
+  // The 11th attempt in the window is refused even with the right password.
+  await attempt(FIXTURE_PASSWORD);
+  await expect(page.locator("#signin-error")).toHaveText(TOO_MANY);
+  await expect(page).toHaveURL(/\/masuk$/);
+});
+
+test("demo entry is limited per visitor (RATE-1)", async ({ browser }) => {
+  const ip = `10.250.${randomInt(256)}.${randomInt(1, 255)}`;
+  test.setTimeout(120_000);
+  const baseURL = test.info().project.use.baseURL;
+  await freshLimitWindow();
+  for (let i = 0; i < 6; i++) {
+    const context = await browser.newContext({ baseURL, extraHTTPHeaders: { "cf-connecting-ip": ip } });
+    const page = await context.newPage();
+    await page.goto("/masuk");
+    await page.getByRole("button", { name: "Coba demo" }).click();
+    if (i < 5) await expect(page).toHaveURL(/\/pengiriman$/);
+    else await expect(page.getByRole("alert").filter({ hasText: TOO_MANY })).toBeVisible();
+    await context.close();
+  }
+});

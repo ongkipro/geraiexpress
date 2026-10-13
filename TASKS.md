@@ -34,6 +34,9 @@ narrative is in [BUILD-LOG.md](BUILD-LOG.md).
 | T-006 Sample label and print | PR-6 (sim), UX-3 | R2 | PASS, reviewed | label reuse, print media, no-AWB redirect |
 | T-008 Quote reuse in RPC and seeded quotes | DATA-2, PR-4 | R3 | PASS, security-reviewed | DB tests, db lint, Worker e2e |
 | T-007 Readiness settings, browser proof, system map | PR-8, UX-3, NFR-4 | R2→R3 | PASS, reviewed | settings e2e, full Worker e2e, ARCHITECTURE.md system map |
+| T-009 Lock anonymous demo identities (no email/phone/password conversion; OAuth linking off) | PR-31, IAM-4, IAM-8 | R3 | PASS, security-reviewed | DB tests incl. direct-SQL refusal, mutation check, full e2e on next dev and Worker |
+| T-010 Unknown-outcome recovery is admin-only; demo visitor is admin of own sample gerai | IAM-1, DEC-008, PR-21 | R3 | PASS, security-reviewed | operator-denied RPC test (mutation-checked), operator escalation e2e, full e2e on next dev and Worker |
+| T-011 Per-visitor limits on sign-in and demo entry (Workers Rate Limiting) | RATE-1 native Auth ingress portion (run recorded as NFR-3) | R3 | PASS, security-reviewed | unit key/fail-closed tests, e2e limit tests (mutation-checked), full e2e on Worker and next dev |
 
 T-008 was inserted after T-006 so the closing documentation reflects the final database.
 
@@ -42,12 +45,13 @@ T-008 was inserted after T-006 so the closing documentation reflects the final d
 Owner decisions DEC-005 to DEC-008 (adapter, CTX-9, CTX-34, roles) were accepted on
 2026-10-14 and the verified slice was committed and pushed on owner request.
 
-1. Enforce DEC-008 operator limits in RLS/RPC as each gated action (contact archive, export,
-   unknown-outcome resolution, member management) is built; each needs an operator-denied test.
-2. Close the anonymous-to-verified-email conversion before any invite-by-email work (PR-31).
-3. Remote Supabase project + Cloudflare preview with isolated demo data (DEL-1 stage 2 hosting;
-   needs provisioning/deploy approval and an Auth rate-limit decision for Worker egress).
-4. Mengantar sandbox contract proof (DEL-1 stage 3; needs sandbox credentials; ownership per DEC-006).
+1. Enforce DEC-008 operator limits in RLS/RPC as each remaining gated action (contact archive,
+   export, member management) is built; each needs an operator-denied test. When roles become
+   editable, role-gated RPCs such as `reconcile_shipment` must re-check the role after taking the
+   row lock (today only a superuser can change roles).
+2. Remote Supabase project + Cloudflare preview with isolated demo data (DEL-1 stage 2 hosting;
+   needs provisioning/deploy approval; size the project's Auth limits for Worker egress per ARCHITECTURE.md).
+3. Mengantar sandbox contract proof (DEL-1 stage 3; needs sandbox credentials; ownership per DEC-006).
 
 ## Deferred (owner decision or external gate)
 

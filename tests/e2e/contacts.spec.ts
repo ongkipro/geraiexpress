@@ -1,5 +1,5 @@
 // PR-2 / UX-1: save, search, edit and reuse contacts within the current tenant only.
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { expectNoHorizontalOverflow, signIn, startDemo } from "./helpers";
 
 test("create a contact with an address, find it, edit it", async ({ page }) => {
