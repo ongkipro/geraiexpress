@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.wrangler/
+.env
+.env.*
+!.env.example
+coverage/
+*.log
+.DS_Store
+supabase/.temp/
+supabase/.branches/
+.open-next/
+.dev.vars
+playwright-report/
+test-results/
+*.tsbuildinfo
+next-env.d.ts

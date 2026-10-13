@@ -1,0 +1,49 @@
+{
+  "name": "geraiexpress",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "cf:build": "opennextjs-cloudflare build",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "check:bundle": "node scripts/check-client-bundle.mjs",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "smoke:worker": "bash scripts/worker-smoke.sh",
+    "db:start": "supabase start",
+    "db:reset": "supabase db reset",
+    "test:db": "vitest run tests/db",
+    "dev:env": "bash scripts/dev-env.sh",
+    "test:unit": "vitest run tests/unit",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@opennextjs/cloudflare": "1.20.10",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.117.3",
+    "class-variance-authority": "0.7.1",
+    "cn": "0.4.0",
+    "lucide-react": "1.55.0",
+    "next": "16.3.8",
+    "radix-ui": "1.8.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "0.0.1",
+    "tw-animate-css": "1.4.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "shadcn": "4.21.4",
+    "supabase": "2.120.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3",
+    "vitest": "5.0.4",
+    "wrangler": "4.149.0"
+  }
+}

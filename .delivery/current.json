@@ -1,0 +1,14 @@
+{
+  "activeRun": null,
+  "lastRun": {
+    "finishedAt": "2026-10-13T18:47:14Z",
+    "result": "PASS",
+    "runId": "RUN-20261013T183607Z-8ef65bb0"
+  },
+  "observedHead": null,
+  "observedState": "REVIEWING",
+  "project": "geraiexpress",
+  "schemaVersion": 1,
+  "statusAuthority": "STATUS.md",
+  "updatedAt": "2026-10-13T18:47:14Z"
+}

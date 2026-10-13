@@ -1,0 +1,102 @@
+{
+  "date": "2026-10-13",
+  "authority": "Repository copies are canonical; source files retained as non-authoritative snapshots",
+  "operation": "Native project-init promotion plus explicit research copy; no source deletion",
+  "files": [
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/02-PRD.md",
+      "destination": "docs/spec/02-PRD.md",
+      "sha256": "33ce5fdf49b48ca28c33efecb8943cec593ab115f865e74fe92b4248853ea9c6"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/03-TECHNICAL-DESIGN.md",
+      "destination": "docs/spec/03-TECHNICAL-DESIGN.md",
+      "sha256": "48d5f26b7114e37c38bc9958627d92de28786b77639bfc8f9c49e045f42ce37e"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/04-SYSTEM-ARCHITECTURE.md",
+      "destination": "docs/spec/04-SYSTEM-ARCHITECTURE.md",
+      "sha256": "2a8d11f715abbcb32fc823becaaeb4355f44534a45e38ea4a8871752f4be6f3d"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/05-DATA-MODEL.md",
+      "destination": "docs/spec/05-DATA-MODEL.md",
+      "sha256": "3085ecc432f2e8456f984b1b74cfaf286df7f7fcbcbc8c5c662cc5d9cd941743"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/06-TENANT-ISOLATION.md",
+      "destination": "docs/spec/06-TENANT-ISOLATION.md",
+      "sha256": "9f7ec949a29cdee7bc1ec99a3212802bfd31b9da6317d765574a12dd666935d9"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/07-IAM-RBAC-ABAC.md",
+      "destination": "docs/spec/07-IAM-RBAC-ABAC.md",
+      "sha256": "4e8c8a6e38f0e64476ca1d7ffba6485c9aba980999026a27237e9e63ba69b347"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/10-DESIGN-SYSTEM-WHITELABEL.md",
+      "destination": "docs/spec/10-DESIGN-SYSTEM-WHITELABEL.md",
+      "sha256": "c2d2df9ee4a9712471320544a7b6f3a475392ea9589959f7656db5fec8403e07"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/11-BILLING-PAYMENTS.md",
+      "destination": "docs/spec/11-BILLING-PAYMENTS.md",
+      "sha256": "0b53748d4ebb8b81c006f95d86c71ebfa47cb9ffd428f2a81559c84ff0fe3491"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/12-SECURITY-ARCHITECTURE.md",
+      "destination": "docs/spec/12-SECURITY-ARCHITECTURE.md",
+      "sha256": "34c18318b25e32bea4ae5f11de5c041e6835fc77c57ed8b2f9fed0b8e2ba891e"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/13-COMPLIANCE-PRIVACY.md",
+      "destination": "docs/spec/13-COMPLIANCE-PRIVACY.md",
+      "sha256": "212f26aff408eea09abb5bd54e306d0e0afd004aa6e5791e3ceaf73fbc520a4d"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/15-DEVOPS-CICD-MIGRATIONS.md",
+      "destination": "docs/spec/15-DEVOPS-CICD-MIGRATIONS.md",
+      "sha256": "c8d4da0075ef63d84bb0f99a9975507fdcae77d3ff05e8da96f35385117a3958"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/16-OBSERVABILITY-RATE-LIMITING.md",
+      "destination": "docs/spec/16-OBSERVABILITY-RATE-LIMITING.md",
+      "sha256": "9bbd49d8e78dd51a0699eec36a60ea9f439c73b97b86f84d2f8c79b5712163ce"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/17-UX-FLOWS-SCREEN-CONTRACTS.md",
+      "destination": "docs/spec/17-UX-FLOWS-SCREEN-CONTRACTS.md",
+      "sha256": "53fd61da950e4fefdb5d2546a573f9d3f10e6eb4422bf89d33b45ceafb9022cf"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/CONTEXT-RECORD.md",
+      "destination": "docs/spec/CONTEXT-RECORD.md",
+      "sha256": "b6482b3ac8dc2f8db910fcb0fea0cba922efbbfe9830b23f87e6c108cf181251"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/README.md",
+      "destination": "docs/spec/README.md",
+      "sha256": "1ce9a0f4f0622d05b74d6c039fd9b1f528336e4bc702fbab1a8176fbcbbc5198"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/reference-scan.json",
+      "destination": "docs/spec/reference-scan.json",
+      "sha256": "c5494ff8fe2a0df246e34adf6be54613e67f601b9d71d92c9360c58f9729387a"
+    },
+    {
+      "source": "/home/ongki/Documents/work/prd/geraiexpress/sources.json",
+      "destination": "docs/spec/sources.json",
+      "sha256": "f456fc10313b96e92f171bf9e7e8d78bf3161cde37ed774998ef2da325817777"
+    },
+    {
+      "source": "/home/ongki/Documents/work/research/geraiexpress-mengantar-partner-api.md",
+      "destination": "docs/research/geraiexpress-mengantar-partner-api.md",
+      "sha256": "ec0799858c57dab4813171985588db430ab0f0d65b6a7afe2d51c9d86feeb662"
+    },
+    {
+      "source": "/home/ongki/Documents/work/research/geraiexpress-geraicuan-pricing-review.md",
+      "destination": "docs/research/geraiexpress-geraicuan-pricing-review.md",
+      "sha256": "93169d1ccd59fb9f0a9a310c793c0d9086a0c6c26dfe2579193b6161d47dbe33"
+    }
+  ]
+}
