@@ -29,6 +29,13 @@ export function client(): SupabaseClient {
   return c;
 }
 
+// DEC-010: the dispatcher's machine identity (local secret key). Only for dispatch_* tests.
+export function machine(): SupabaseClient {
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
 export async function signIn(email: string): Promise<SupabaseClient> {
   const c = client();
   const { error } = await c.auth.signInWithPassword({ email, password: FIXTURE_PASSWORD });
@@ -77,3 +84,39 @@ export async function verifiedNewUser(prefix = "applicant"): Promise<{ c: Supaba
   if (e2) throw new Error(`verify ${email}: ${e2.message}`);
   return { c, email, id: data.user!.id };
 }
+
+// TD-3 / DEC-010 dispatcher fixtures.
+import { randomUUID } from "node:crypto";
+import { credentialAad, sealCredential } from "../../src/lib/credential-crypto";
+const OWNER_A = "00000000-0000-4000-a000-0000000000a1";
+
+export type Fixture = { tenant: string; shipment: string; op: string };
+
+// A fresh active tenant with a Mengantar-ready outlet, a submitted shipment, a real quote, a
+// sealed seller key and one queued real operation. Built as superuser: confirm_shipment does not
+// create real operations until T-024.
+export async function realOperation(opts: { tenant?: string; demo?: boolean; simulated?: boolean; sellerKey?: string; sealKey?: string; noCredential?: boolean } = {}): Promise<Fixture> {
+  const tenant = opts.tenant ?? randomUUID();
+  const outlet = randomUUID(), shipment = randomUUID(), quote = randomUUID(), op = randomUUID();
+  const ref = `GX261014-${randomUUID().slice(0, 6).toUpperCase()}`;
+  const sealed = await sealCredential(opts.sellerKey ?? "API-TESTSELLERKEY01", credentialAad(tenant, 1), opts.sealKey ?? Buffer.alloc(32, 7).toString("base64"));
+  sql(`
+    ${opts.tenant ? "" : `insert into public.tenants (id, name, lifecycle, is_demo) values ('${tenant}', 'Gerai Dispatch', 'active', ${opts.demo ? "true" : "false"});
+    ${opts.noCredential ? "" : `insert into private.seller_credentials (tenant_id, mode, ciphertext, iv, key_version, hint, version)
+      values ('${tenant}', 'byok', '${sealed.ciphertext}', '${sealed.iv}', '${sealed.keyVersion}', 'Y01', 1);`}`}
+    insert into public.outlets (tenant_id, id, name, mengantar_pickup_address_id, mengantar_area_id)
+      values ('${tenant}', '${outlet}', 'Outlet D', '6acf44a4771fe2b474c055ca', '5fc62f60f8f44b34aa4c0dcd');
+    insert into public.shipments (tenant_id, outlet_id, id, reference, submission_state, recipient_name, recipient_phone,
+      recipient_address, recipient_area_id, item_description, weight_grams, goods_value_idr, is_simulated, created_by)
+      values ('${tenant}', '${outlet}', '${shipment}', '${ref}', 'queued', 'Penerima Uji', '081234567890',
+      'Jl. Uji 1', '5fc63169f8f44b34aa4c2ee1', 'Dokumen', 1000, 50000, ${opts.simulated ? "true" : "false"}, '${OWNER_A}');
+    insert into public.shipment_quotes (tenant_id, shipment_id, id, shipment_revision, courier, service, normal_tariff_idr,
+      eta_days, is_simulated, expires_at)
+      values ('${tenant}', '${shipment}', '${quote}', 1, 'JT', 'REG', 9000, '1-2', ${opts.simulated ? "true" : "false"}, now() + interval '1 hour');
+    update public.shipments set selected_quote_id = '${quote}' where id = '${shipment}';
+    insert into public.provider_operations (tenant_id, shipment_id, id, kind, idempotency_key, input_digest, state, is_simulated, actor)
+      values ('${tenant}', '${shipment}', '${op}', 'create_order', 'key-${op}', 'digest', 'queued', ${opts.simulated ? "true" : "false"}, '${OWNER_A}');
+  `);
+  return { tenant, shipment, op };
+}
+

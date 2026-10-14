@@ -38,7 +38,7 @@ flowchart LR
     end
     Sim["Simulated provider<br/>(SQL, demo tenants only)"]
     Mengantar["Mengantar Partner/Public API"]:::target
-    Dispatcher["Account dispatcher / Durable Object"]:::target
+    Dispatcher["Account dispatcher (src/lib/mengantar/dispatcher.ts)<br/>machine identity, dispatch_* RPCs"]
 
     UI --> MW --> Pages
     UI -->|form posts| Actions
@@ -50,15 +50,21 @@ flowchart LR
     API --> DB
     DB --> Priv
     DB -->|request_quotes / confirm_shipment<br/>is_demo only| Sim
-    DB -.->|not implemented| Dispatcher -.-> Mengantar
+    Dispatcher -->|"dispatch_claim / dispatch_record<br/>service_role only"| DB
+    Dispatcher -->|seller key opened in Worker| Mengantar
+    WS -.->|"not wired yet (T-024)"| Dispatcher
 
     classDef target stroke-dasharray: 5 5,color:#7a7a7a
 ```
 
-No service-role or secret key exists in the application: every server read and write runs with
-the signed-in user's JWT, so the Worker and a hostile browser calling the Data API directly hit
-the same RLS and RPC checks (TEN-1). Provider dispatch, credential storage and webhooks are
-absent; the only "provider" is a deterministic SQL simulation that refuses non-demo tenants.
+Every user-driven read and write runs with the signed-in user's JWT, so the Worker and a hostile
+browser calling the Data API directly hit the same RLS and RPC checks (TEN-1). The one exception
+is the account dispatcher (DEC-010, T-022): it records Mengantar results through `dispatch_*`
+RPCs that only `service_role` may execute, so no user can forge a resi. It is built and proven
+against the sandbox but not yet called by any page (T-024 wires issuance); until then the
+only provider in the app is the deterministic SQL simulation for demo tenants. Per seller, at
+most one real operation is in flight (a partial unique index); a stale in-flight or unknown
+operation is reconciled by its reference, never resent.
 
 ### Code map (`src/`)
 
@@ -204,8 +210,8 @@ sequenceDiagram
 |---|---|
 | Invitation email and account recovery (PR-32, PR-33) | Invitations work without app-sent mail (admin shares the sign-in link; the invitee verifies by code); invitation mail and password recovery need ARCH-3 mail proof |
 | Opening public registration on a real project | Proved custom SMTP delivery (PR-33), the OTP templates applied to the remote project, Terms/Privacy (PRIV-3), CAPTCHA (T-016) |
-| Mengantar Partner seller creation, key verification against Mengantar, rotation, live quote/order/label, webhooks (PR-17, PR-19, PR-20, PR-3–PR-6 live) | Sandbox credentials, Partner access, ARCH-2 egress, Terms/Privacy versions (PR-20); a decrypting dispatcher (TD-3) |
-| Account dispatcher / Durable Object / queues (TD-3) | Needed only when a real provider call exists |
+| Mengantar Partner seller creation in the app, key verification, rotation, live quotes/issuance in the UI, labels, webhooks (PR-17, PR-19, PR-20, PR-3–PR-6 live) | Clients and the dispatcher exist (T-019–T-022, sandbox-proven); UI wiring is T-023/T-024; production needs ARCH-2 egress (Partner), Terms/Privacy versions (PR-20), label whitelisting |
+| Durable Object / queues for the dispatcher (TD-3) | Deferred by DEC-010 until volume requires them; a sweep for stale operations comes with T-024 |
 | Super Admin pricing, monitoring, integrations and recovery (PR-23, PR-25–PR-27) | Built on T-012's grants as each capability gets a page; integrations in T-015 |
 | Production Super Admin bootstrap | Owner runs the first grant on the remote project (remote write approval) and enrols TOTP; a second recovery governor follows (DEC-008). Never via `seed.sql`, which holds local-only working admin credentials |
 | CSV, export, overview, finance | Later accepted requirements |

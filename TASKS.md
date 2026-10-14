@@ -59,6 +59,7 @@ is proved, and no cloud resource, Mengantar call or real credential is involved.
 | T-019 Mengantar Public API read client (area search, estimate) with sanitized production fixtures and a live read-only contract check; no order, payment or UI wiring | DEL-1 stage 3, TD-3, UX line 187 | R2 | PASS | `pnpm test:unit` (parser/transport, mutation-checked), `pnpm test:contract` live against production (owner-approved read-only, Node), client run in local workerd, sandbox refusal recorded |
 | T-020 Mengantar Partner client (signed list/register/get key, sandbox origin) and sandbox proof: seller registered via Partner, Public API with that key, write path (pickup address, order, status simulation) | DEL-1 stage 3, DEC-006, PR-17–PR-20, TD-3 | R3 | PASS | unit (offline signing vector, envelope/error mapping, mutation-checked), `pnpm test:contract` on the sandbox (Partner list, area search, estimate), recorded sandbox order `261014LJ9GP7` → DELIVERED |
 | T-021 Mengantar order adapter: create one drop-off order judged per item (issued / unpaid / failed / rejected / unknown outcome), GeraiExpress reference as `destinationMark`, reconciliation by ORDER_ID and by reference scan | DEL-1 stage 3, TD-3, PR-10 | R3 | PASS | unit (sandbox fixtures, mutation-checked), live sandbox adapter run (rejected, unpaid, both reconciliations) |
+| T-022 Account dispatcher core (DEC-010): migration (Mengantar ids on outlets/shipments, operation result fields, one in-flight real operation per tenant, `awaiting_payment`, service_role-only `dispatch_claim`/`dispatch_begin_reconcile`/`dispatch_record`) and `src/lib/mengantar/dispatcher.ts` (dispatch, reconcile by reference); not wired to the UI | TD-3, DEC-010, DATA-2 | R3 | PASS | test:db 84 (dispatcher 16), unit 63 (dispatcher 11, mutation-checked), live: dispatcher on the local DB against the sandbox (order sent, lost answer reconciled, never-sent → not created), shipping e2e 42 |
 
 ## Next candidates (not started; each needs its owner decision or gate)
 
@@ -75,11 +76,18 @@ Owner decisions DEC-005 to DEC-008 (adapter, CTX-9, CTX-34, roles) were accepted
    search in the address form), then quote through the tenant's sealed BYOK key in the Worker and
    write quotes via a server-only RPC, keeping simulated quotes for the demo. Needs the account
    dispatcher's key-opening path (TD-3) and a decision on caching/rate limits for estimates.
-4. Account dispatcher (TD-3) on top of the T-021 adapter: durable attempt record before dispatch
-   (reference, courier, time), per-seller serialization, unknown-outcome reconciliation through
-   `findOrdersByReference`, pay-unpaid as a batch command; then wiring into issuance in place of
-   the simulated path. Per-courier drop-off support must shape the courier list. Label PDF needs
-   Mengantar to whitelist the account; webhooks need a public URL and the callback secret.
+4. T-023 live quotes and area pickers: outlet Mengantar setup (pickup address + area), recipient
+   area search in intake, estimates through the tenant's key with normal tariff to the counter
+   and net cost private; per-courier drop-off support shapes the list.
+5. T-024 issuance wiring: confirm_shipment creates real operations for connected tenants, the
+   server action runs the dispatcher with the machine identity (SUPABASE_SECRET_KEY Worker secret,
+   MENGANTAR_ENV), reconciliation UI and a sweep for stale operations, COD amount on shipments,
+   pay-unpaid as a batch command; add `recipient_area_id` to the confirmation input digest and
+   status labels for `awaiting_payment`; validate dispatch inputs before confirmation (a refused
+   real operation ends the shipment); if `dispatch_release` itself fails the operation drifts to
+   unknown and could be concluded "not created" — the sweep must surface it, not fail it silently.
+   Label PDF needs Mengantar to whitelist the account;
+   webhooks need a public URL and the callback secret.
 
 ## Deferred (owner decision or external gate)
 

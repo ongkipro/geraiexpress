@@ -461,3 +461,39 @@ count/total are always 0. Only a plain 400 refusal is `rejected` (409/422/429 ar
 `failed` keeps the provider batch and record id. COD proven on the sandbox (`2610142JG95B`, COD
 value = amount collected) and documented on the type. Unit 53 (orders 16), mutants for the new
 guards killed, live reconciliation re-run on the sandbox.
+
+## 2026-10-14 — T-022 account dispatcher core (DEC-010)
+
+Owner accepted the design: results written only by the machine identity (Supabase secret key as
+a Worker secret; `dispatch_*` executable by `service_role` only) and per-seller serialization as
+a database rule (partial unique index: one real in-flight operation per tenant), Durable Objects
+deferred. Migration `20261014160000_dispatcher.sql`: Mengantar pickup address/area ids on
+outlets, recipient area id on shipments (draft content, guarded), operation result fields and
+`provider_env`, `awaiting_payment`, and the claim / begin-reconcile / record commands. Record is
+fenced by the attempt from in-flight, accepts truthful results from unknown, refuses "not
+created" until the attempt is 5 minutes old, upgrades an unpaid order to issued only for the same
+provider order, and replays identical final results. `dispatcher.ts` opens the sealed key in the
+Worker, sends one order, records the judged outcome (never resends), and reconciles by reference
+(duplicates or partial rows stay unknown; a sandbox operation is never looked up in production).
+The adapter's reference rule now accepts shipment references (`GX…`) and order rows carry batch.
+
+Verified: test:db 79 twice (the dispatcher's machine-only test first left outlets in fixture
+tenant A and broke an invitations assertion; it now uses its own tenant and the leftovers were
+removed), unit 62 (dispatcher 10; 9 mutants, two survived first — one guard was redundant and
+removed, one test added), db lint, build, shipping e2e 42 on next dev (restarted with the hook
+relay; both had stopped). Live: `tests/contract/dispatcher.live.test.ts` on the local DB with
+the sandbox seller key sent `261014WXQFKT` (unpaid), reconciled a simulated lost answer to the
+same order, and concluded "not created" for an attempt never sent.
+
+Review (CHANGES_REQUIRED, fixed in the unapplied-elsewhere migration, local DB reset): the
+operation now records the key version it was sent with and reconciliation gets that key only
+while it is active (a rotation could otherwise search the new account and conclude "not
+created", orphaning a real order); "not created" and provider-error-item conclusions can be
+re-checked and are corrected to issued/unpaid with an `outcome_corrected` event when the order
+turns up; claim locks the tenant and stays busy while an operation became unknown less than 5
+minutes ago; a missing key refuses the claim and an unopenable key releases the operation back to
+the queue (new `dispatch_release`, attempt-fenced) instead of failing the shipment; claim checks
+the shipment is queued, real, and its quote matches the revision; local refusals use a typed
+`InvalidOrderRequest`. Ceiling (per-tenant, not per-account serialization) recorded in DEC-010;
+digest/area and `awaiting_payment` labels noted for T-024. test:db 84 (dispatcher 16), unit 63,
+live sandbox 2 passed again (order sent and reconciled), shipping e2e 42.

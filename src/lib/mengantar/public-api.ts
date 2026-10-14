@@ -49,6 +49,14 @@ export class MengantarError extends Error {
   }
 }
 
+// The request was refused locally, before anything was sent.
+export class InvalidOrderRequest extends Error {
+  constructor() {
+    super("Invalid order request");
+    this.name = "InvalidOrderRequest";
+  }
+}
+
 export type AreaOption = {
   id: string;
   province: string;
@@ -304,8 +312,9 @@ export function parseEstimates(data: unknown, cod: boolean): CourierEstimate[] {
 
 const ORDER_ID = /^[A-Z0-9]{6,20}$/;
 const SKEW_MS = 10 * 60_000;
-// GeraiExpress shipment reference sent as destinationMark and used to reconcile unknown outcomes.
-const REFERENCE = /^GE-[A-Z0-9-]{4,28}$/;
+// GeraiExpress shipment reference (e.g. GX261014-ABC123) sent as destinationMark and used to
+// reconcile unknown outcomes.
+const REFERENCE = /^[A-Z]{2}[A-Z0-9-]{4,30}$/;
 
 export type CreateOrderRequest = {
   courier: string;
@@ -337,6 +346,7 @@ export type CreateOrderResult =
 
 export type ProviderOrder = {
   orderId: string | null;
+  batch: string | null;
   reference: string | null;
   trackingNumber: string | null;
   status: string;
@@ -359,7 +369,7 @@ function createOrderBody(r: CreateOrderRequest) {
     && typeof r.parcelContent === "string" && r.parcelContent.trim().length >= 1 && r.parcelContent.length <= 100
     && (r.goodsValue === undefined) !== (r.codAmount === undefined)
     && (r.goodsValue === undefined || money(r.goodsValue)) && (r.codAmount === undefined || money(r.codAmount));
-  if (!valid) throw new Error("Invalid order request");
+  if (!valid) throw new InvalidOrderRequest();
   return {
     courier: r.courier,
     pickup: { address_id: r.pickupAddressId, type: "dropOff" },
@@ -407,5 +417,6 @@ function parseOrder(row: unknown): ProviderOrder {
   const orderId = typeof row.ORDER_ID === "string" && ORDER_ID.test(row.ORDER_ID) ? row.ORDER_ID : null;
   const reference = typeof row.destinationMark === "string" && REFERENCE.test(row.destinationMark) ? row.destinationMark : null;
   const trackingNumber = typeof row.cnote_no === "string" && row.cnote_no ? row.cnote_no.slice(0, 40) : null;
-  return { orderId, reference, trackingNumber, status: row.status.slice(0, 40), paid: row.isPaid === true, createdAt: row.createdAt };
+  const batch = typeof row.batch === "string" && /^[A-Z0-9]{6,24}$/.test(row.batch) ? row.batch : null;
+  return { orderId, batch, reference, trackingNumber, status: row.status.slice(0, 40), paid: row.isPaid === true, createdAt: row.createdAt };
 }
