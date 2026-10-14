@@ -56,5 +56,28 @@ Owner-approved, sandbox only, with the Partner-registered seller's key
 | `POST /order/simulation` ON DELIVERY, then DELIVERED | 200 each, `previousStatusCategory` chained `active → ON DELIVERY → DELIVERED`, tracking history returned | Deterministic status tests are possible on the sandbox |
 | `POST /label-generation` | 403 `Not allowed` | Label PDF needs Mengantar to whitelist the account; GeraiExpress keeps its own label until then |
 
-Not covered: pay-unpaid (orders were paid at creation), COD orders, webhooks (need a public URL
+Not covered: pay-unpaid (orders were paid at creation), COD orders (covered in T-021 below), webhooks (need a public URL
 and the seller's callback secret), cancellation/deletion.
+
+## Order adapter evidence (T-021, 2026-10-14)
+
+Client methods `createOrder`, `findOrder`, `findOrdersByReference` in `src/lib/mengantar/public-api.ts`;
+fixtures `order-*.json` (sandbox, phones/emails/user records removed).
+
+| Finding | Evidence | Adapter rule |
+|---|---|---|
+| No idempotency key on create-order | Contract has none | Every request carries a GeraiExpress reference `GE-…` as `destinationMark`; an unclear answer is `unknown_outcome` and is reconciled, never retried |
+| `destinationMark` round-trips | Create echoed `GE-T021-MV7W5HXB`; `GET /order?order_id=` returned it | The item must echo our reference, otherwise the outcome is unknown |
+| `GET /order?dateRange=…` does not filter; `count`/`total` are always 0 | JSON form (as documented) returned `[]`; dotted `dateRange.startDate/endDate` was ignored; every list answer had `count: 0, total: 0` | Reconcile by scanning pages per courier until a row predates the attempt by more than a 10-minute skew margin or a page is empty; rows out of order, or a scan that cannot reach the attempt time, are `unknown_outcome`, not "not found" |
+| Order list paging | `size=2` pages returned 2, 2, then `[]`, newest-first by `createdAt`; `size=500` returned all 4 rows; `courier=JNE` returned only the JNE error row, `courier=Sap` none | The scan relies on this ordering and checks it on every page |
+| `batch` filter takes the batch **code** | `batch=26101416Q0L7LJ` found the order; the documented batch `_id` returned `[]` | Store the batch code |
+| `order_id` filter | Exact single order; unknown id → `success:true, data:[]` | `findOrder` returns null for none, malformed for duplicates |
+| COD create | `COD: 150000` (JT drop-off) issued `2610142JG95B` / `JO6948371799` without balance; stored `COD_AMOUNT 150000`, `GOODS_AMOUNT 150000`, `COD_FEE 4995`, `estimatedPrice 97994` (= estimate tariff 93000 + COD fee) | `codAmount` is the total collected from the recipient (provider definition: goods + shipping + COD fee) |
+| Create refusals | Only a plain 400 was observed (anteraja drop-off) | Only 400 `success:false` without a data array is `rejected`; any other 4xx (409/422/429 …) is `unknown_outcome` |
+| Error item | JNE item `status: error` still has `_id`, `batch` and `isPaid: true` | `failed` carries the batch and record id; the dispatcher confirms the batch still holds only an error item before creating again |
+| Insufficient balance | Second JT order: `isPaid:false`, `cnote_no:null`, `ORDER_ID` and batch present | `unpaid` outcome; payment is the batch command (TD-3), not a new create |
+| Live adapter run (sandbox) | anteraja drop-off → `rejected` with provider text; JT → `unpaid 261014LKLL3E`; `findOrder` and `findOrdersByReference` both returned it; unknown reference → `[]` | — |
+
+Sandbox residue on the sandbox seller: one paid JT order (simulated DELIVERED), one paid COD JT order, two unpaid JT orders, and one JNE error item that carries `isPaid: true`.
+
+Not established: provider billable-weight rounding (weight is sent in kg with decimals, e.g. 1.2 echoed); whether an error item can later be completed.

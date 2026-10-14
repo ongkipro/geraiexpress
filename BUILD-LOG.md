@@ -437,3 +437,27 @@ malformed; a bad list entry or count fails the page instead of being dropped (re
 not think a seller is unbound); pagination checked locally; declared oversize covered; sandbox row
 in the Public research reworded. Unit 37 (Partner 10), 6 new guard mutants killed, sandbox
 contract 3 passed again.
+
+## 2026-10-14 — T-021 Mengantar order adapter (DEL-1 stage 3)
+
+Owner accepted the recommendation to continue. Added `createOrder`, `findOrder` and
+`findOrdersByReference` to the Public client (shared `send` with the existing bounds). A create
+is judged on its single item: issued (paid, ORDER_ID, resi, our reference echoed), unpaid,
+failed (error item without identity), rejected (4xx refusal with the provider's text), and
+everything unclear — transport failure, 5xx, unreadable or inconsistent answers, a missing or
+foreign reference — is `unknown_outcome`, never retried. Sandbox probes (owner-approved) showed
+`destinationMark` round-trips, the documented `dateRange` filter does not work, and the `batch`
+filter takes the batch code; reconciliation therefore scans newest-first pages per courier.
+
+Verified: unit 49 (orders 12; mutation check 13 guards, all killed after two tests were added),
+typecheck, live sandbox run: anteraja drop-off rejected with provider text, JT unpaid
+`261014LKLL3E`, found by ORDER_ID and by reference, unknown reference → none.
+
+Review (CHANGES_REQUIRED, fixed): the reference scan could have reported "not found" for an
+existing order (stopped on a short page, trusted ordering, no clock margin) — it now reads until
+an empty page or a row older than the attempt minus 10 minutes, and rows out of order are
+`unknown_outcome`; sandbox confirmed newest-first ordering and honoured page sizes, and that
+count/total are always 0. Only a plain 400 refusal is `rejected` (409/422/429 are unknown).
+`failed` keeps the provider batch and record id. COD proven on the sandbox (`2610142JG95B`, COD
+value = amount collected) and documented on the type. Unit 53 (orders 16), mutants for the new
+guards killed, live reconciliation re-run on the sandbox.

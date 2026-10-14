@@ -1,0 +1,10 @@
+{
+ "httpStatus": 400,
+ "body": {
+  "success": false,
+  "message": "Ekspedisi Anteraja tidak mendukung pengiriman Drop Off",
+  "errorsFront": [
+   "Ekspedisi Anteraja tidak mendukung pengiriman Drop Off"
+  ]
+ }
+}

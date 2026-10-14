@@ -1,0 +1,1019 @@
+{
+ "success": true,
+ "data": [
+  {
+   "receiverScore": {
+    "delivered": 1,
+    "rts": 0,
+    "undelivered": 0,
+    "rate": 10,
+    "totalCalculation": {
+     "delivered": 3,
+     "rts": 3,
+     "undelivered": 0,
+     "rate": 5
+    }
+   },
+   "isBreach": false,
+   "COD_AMOUNT": 0,
+   "status": "active",
+   "statusCategory": "active",
+   "isDraft": false,
+   "isDeleted": false,
+   "isSimulated": false,
+   "isArchived": false,
+   "isPaid": false,
+   "isPreviouslyUnPaid": false,
+   "isPreviouslyError": false,
+   "isHideForPrint": false,
+   "ticketStatus": "none",
+   "dontIncludeSubdistrict": false,
+   "isChatResponseSent": false,
+   "screenshots": [],
+   "otherF": [],
+   "screenshotsTracking": [],
+   "printedDates": [],
+   "isPlant": false,
+   "fakeStatus": false,
+   "issueType": "none",
+   "trackingAdmins": [],
+   "trackingGroups": [],
+   "CourierAdminReply": false,
+   "followedBy": [],
+   "urgent": false,
+   "possibleClaim": "",
+   "claimSolution": "none",
+   "claimNote": "none",
+   "trackingAdminsClaim": [],
+   "trackingClaim": false,
+   "issueTypeClaim": "none",
+   "deliveryAttempts": 0,
+   "deliveryAttemptsDate1": null,
+   "deliveryAttemptsDate3": null,
+   "deliveryAttemptsDate2": null,
+   "lastDeliveryAttemptsDate": null,
+   "cargo": false,
+   "deletedAt": null,
+   "createdFromMobile": false,
+   "shouldUseProductLookup": false,
+   "customProductOrderIds": [],
+   "isProductFromOrderHistory": false,
+   "isExcluded": false,
+   "productOrdersManual": [],
+   "isDangerousGoods": false,
+   "_id": "6acf476a6b00a9b494ff04c6",
+   "destinationMark": "GE-T021-MV7W5HXB",
+   "PICKUP_NAME": "GeraiExpress Sandbox Uji",
+   "PICKUP_ADDRESS": "Jl. Uji Sandbox No. 1",
+   "PICKUP_DISTRICT": "KEBAYORAN BARU",
+   "PICKUP_CITY": "JAKARTA SELATAN",
+   "PICKUP_SERVICE": "REG",
+   "PICKUP_VEHICLE": "TRUCK",
+   "ORDER_ID": "261014H0JAFR",
+   "SHIPPER_NAME": "GeraiExpress Sandbox Uji",
+   "SHIPPER_ADDR1": "Jl. Uji Sandbox No. 1",
+   "SHIPPER_CITY": "JAKARTA SELATAN",
+   "SHIPPER_ZIP": "12160",
+   "SHIPPER_REGION": "DKI JAKARTA",
+   "SHIPPER_COUNTRY": "INDONESIA",
+   "SHIPPER_CONTACT": "Uji GeraiExpress",
+   "RECEIVER_NAME": "Penerima Uji Sandbox",
+   "RECEIVER_ADDR1": "Jl. Kapitan 1 RT 01/04 (uji sandbox), GE-T021-MV7W5HXB",
+   "RECEIVER_ADDR2": "GE-T021-MV7W5HXB",
+   "RECEIVER_CITY": "DEPOK",
+   "RECEIVER_ZIP": "16454",
+   "price": 111600,
+   "RECEIVER_REGION": "JAWA BARAT",
+   "RECEIVER_COUNTRY": "INDONESIA",
+   "RECEIVER_CONTACT": "Penerima Uji Sandbox",
+   "ORIGIN_CODE": "JKT",
+   "DESTINATION_CODE": "DPK",
+   "SERVICE_CODE": "REG",
+   "WEIGHT": 1.2,
+   "QTY": 1,
+   "GOODS_DESC": "Dokumen uji",
+   "GOODS_AMOUNT": 50000,
+   "INSURANCE_FLAG": "Y",
+   "SPECIAL_INS": "Tolong penerima dihubungi dahulu sebelum paket direturn.",
+   "MERCHANT_ID": "6acf4420b93360b458b2d7ba",
+   "TYPE": "DROP",
+   "COD_FLAG": "1",
+   "receiver_area": "DPK007",
+   "addressData": {
+    "origin": "5fc62f60f8f44b34aa4c0dcd",
+    "destination": "5fc63169f8f44b34aa4c2ee1"
+   },
+   "formulir_order_id": "",
+   "publicApiClient": "directCall",
+   "RECEIVER_SUBDISTRICT": "SUKATANI",
+   "RECEIVER_DISTRICT": "TAPOS",
+   "PICKUP_REGION": "DKI JAKARTA",
+   "insuranceamount": 0,
+   "address_id": "6acf44a4771fe2b474c055ca",
+   "batch_id": "6acf476a6b00a9b494ff04b8",
+   "batch": "26101416827JYE",
+   "estimatedPrice": 111600,
+   "estimatedSpecialPrice": 89280,
+   "discountPercent": 20,
+   "discountExtraPercent": 0,
+   "discountExtra": 0,
+   "discount": 22320,
+   "zone": "A",
+   "isReconciliated": true,
+   "isReconciliatedFile": true,
+   "lastStatusChange": "2026-10-14T16:12:00.000Z",
+   "createdDate": "2026-10-14T09:12:10.190Z",
+   "taxPercentage": 11,
+   "proofHistory": [],
+   "chats": [],
+   "reconciliationInvoice": [],
+   "createdAt": "2026-10-14T09:12:10.231Z",
+   "updatedAt": "2026-10-14T09:12:10.306Z",
+   "branch": "DPK",
+   "branchOrigin": "JKT",
+   "branchRegion": "BODETABEKCIL",
+   "__v": 0,
+   "receiverGl": {
+    "rate": 0,
+    "data": {
+     "JNE": {
+      "total": 1,
+      "userIds": [
+       "66fa520afd8f24c0b896de77",
+       "6747ddf02d55896d10220d2d",
+       "6004fbef9b744170bd679c88",
+       "68ae9650de0016b2dd29459b",
+       "69a115acac633e40fb9c23a7",
+       "64fe8e6d625d6fa8089b3b31",
+       "66433e9bb1374b4ff7f174fe",
+       "65af2f2808f40f7cf6934720",
+       "689e883952d6af19245812e1",
+       "67b81e6c73ea227c35a6e19f",
+       "6a51a9d6668092e39b2388b7",
+       "6ab48b5cc7185c05697f6b5d"
+      ],
+      "userData": {
+       "66fa520afd8f24c0b896de77": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 2,
+        "value": 0
+       },
+       "6747ddf02d55896d10220d2d": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 2,
+        "value": 0
+       },
+       "6004fbef9b744170bd679c88": {
+        "delivered": 1,
+        "total": 1,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 10,
+        "inProgress": 4,
+        "value": 10000
+       },
+       "68ae9650de0016b2dd29459b": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 2,
+        "value": 0
+       },
+       "69a115acac633e40fb9c23a7": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "64fe8e6d625d6fa8089b3b31": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 29,
+        "value": 0
+       },
+       "66433e9bb1374b4ff7f174fe": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 2,
+        "value": 0
+       },
+       "65af2f2808f40f7cf6934720": {
+        "delivered": 3,
+        "total": 5,
+        "rts": 2,
+        "undelivered": 0,
+        "rate": 6,
+        "inProgress": 6,
+        "value": 450000
+       },
+       "689e883952d6af19245812e1": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "67b81e6c73ea227c35a6e19f": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6a51a9d6668092e39b2388b7": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6ab48b5cc7185c05697f6b5d": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 2,
+        "value": 0
+       }
+      },
+      "value": 460000,
+      "inProgress": 25,
+      "delivered": 1,
+      "rts": 0,
+      "undelivered": 0,
+      "rate": 10
+     },
+     "SiCepat": {
+      "total": 1,
+      "userIds": [
+       "61283bfc4fb783290e8433f6",
+       "6004fbef9b744170bd679c88",
+       "65af2f2808f40f7cf6934720",
+       "665d773bbb3a74f4ef9b1e8c",
+       "6929021ead34dfbd592e4ecd"
+      ],
+      "userData": {
+       "61283bfc4fb783290e8433f6": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6004fbef9b744170bd679c88": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 3,
+        "value": 0
+       },
+       "65af2f2808f40f7cf6934720": {
+        "delivered": 0,
+        "total": 1,
+        "rts": 1,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 19,
+        "value": 0
+       },
+       "665d773bbb3a74f4ef9b1e8c": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6929021ead34dfbd592e4ecd": {
+        "delivered": 0,
+        "total": 1,
+        "rts": 1,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       }
+      },
+      "value": 0,
+      "inProgress": 5,
+      "delivered": 0,
+      "rts": 1,
+      "undelivered": 0,
+      "rate": 0
+     },
+     "Sap": {
+      "total": 0,
+      "userIds": [
+       "65af2f2808f40f7cf6934720",
+       "6a5895278bb2d2386a0cdff8",
+       "64fe8e6d625d6fa8089b3b31",
+       "6a54d402398c40bbdaa061eb",
+       "6a7d814d77fc90171ba86fef",
+       "6929021ead34dfbd592e4ecd"
+      ],
+      "userData": {
+       "65af2f2808f40f7cf6934720": {
+        "delivered": 1,
+        "total": 2,
+        "rts": 1,
+        "undelivered": 0,
+        "rate": 5,
+        "inProgress": 2,
+        "value": 100000
+       },
+       "6a5895278bb2d2386a0cdff8": {
+        "delivered": 1,
+        "total": 1,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 10,
+        "inProgress": 1,
+        "value": 100000
+       },
+       "64fe8e6d625d6fa8089b3b31": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 8,
+        "value": 0
+       },
+       "6a54d402398c40bbdaa061eb": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6a7d814d77fc90171ba86fef": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6929021ead34dfbd592e4ecd": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       }
+      },
+      "value": 200000,
+      "inProgress": 4,
+      "delivered": 0,
+      "rts": 0,
+      "undelivered": 0,
+      "rate": 0
+     },
+     "iDexpress": {
+      "total": 0,
+      "userIds": [
+       "65af2f2808f40f7cf6934720",
+       "6004fbef9b744170bd679c88",
+       "6a7d814d77fc90171ba86fef",
+       "6929021ead34dfbd592e4ecd"
+      ],
+      "userData": {
+       "65af2f2808f40f7cf6934720": {
+        "delivered": 0,
+        "total": 2,
+        "rts": 2,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 6,
+        "value": 0
+       },
+       "6004fbef9b744170bd679c88": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 3,
+        "value": 0
+       },
+       "6a7d814d77fc90171ba86fef": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6929021ead34dfbd592e4ecd": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       }
+      },
+      "value": 0,
+      "inProgress": 3,
+      "delivered": 0,
+      "rts": 0,
+      "undelivered": 0,
+      "rate": 0
+     },
+     "JT": {
+      "total": 1,
+      "userIds": [
+       "65af2f2808f40f7cf6934720",
+       "6a5895278bb2d2386a0cdff8",
+       "665d773bbb3a74f4ef9b1e8c",
+       "66433e9bb1374b4ff7f174fe",
+       "66fa520afd8f24c0b896de77",
+       "69e1ecffc292912c556ebf5d",
+       "6a0eed96069c5fe715475282",
+       "6a7d814d77fc90171ba86fef",
+       "6a7dc6949124abb5652c1b8a",
+       "6929021ead34dfbd592e4ecd",
+       "6aa79dec07e3fdf2c81bfd43",
+       "6acf4420b93360b458b2d7ba"
+      ],
+      "userData": {
+       "65af2f2808f40f7cf6934720": {
+        "delivered": 2,
+        "total": 4,
+        "rts": 2,
+        "undelivered": 0,
+        "rate": 5,
+        "inProgress": 26,
+        "value": 220000
+       },
+       "6a5895278bb2d2386a0cdff8": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 2,
+        "value": 0
+       },
+       "665d773bbb3a74f4ef9b1e8c": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "66433e9bb1374b4ff7f174fe": {
+        "delivered": 0,
+        "total": 1,
+        "rts": 1,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 0,
+        "value": 0
+       },
+       "66fa520afd8f24c0b896de77": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "69e1ecffc292912c556ebf5d": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 5,
+        "value": 0
+       },
+       "6a0eed96069c5fe715475282": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 4,
+        "value": 0
+       },
+       "6a7d814d77fc90171ba86fef": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 7,
+        "value": 0
+       },
+       "6a7dc6949124abb5652c1b8a": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6929021ead34dfbd592e4ecd": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6aa79dec07e3fdf2c81bfd43": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 3,
+        "value": 0
+       },
+       "6acf4420b93360b458b2d7ba": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       }
+      },
+      "value": 220000,
+      "inProgress": 8,
+      "delivered": 1,
+      "rts": 0,
+      "undelivered": 0,
+      "rate": 10
+     },
+     "Ninja": {
+      "total": 0,
+      "userIds": [
+       "65c1bd1b677f844c4308a7fe",
+       "6004fbef9b744170bd679c88",
+       "65af2f2808f40f7cf6934720"
+      ],
+      "userData": {
+       "65c1bd1b677f844c4308a7fe": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6004fbef9b744170bd679c88": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "65af2f2808f40f7cf6934720": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 2,
+        "value": 0
+       }
+      },
+      "value": 0,
+      "inProgress": 2,
+      "delivered": 0,
+      "rts": 0,
+      "undelivered": 0,
+      "rate": 0
+     },
+     "lion": {
+      "total": 0,
+      "userIds": [
+       "65af2f2808f40f7cf6934720",
+       "6004fbef9b744170bd679c88",
+       "6a7d814d77fc90171ba86fef",
+       "6ab48b5cc7185c05697f6b5d",
+       "6a5895278bb2d2386a0cdff8"
+      ],
+      "userData": {
+       "65af2f2808f40f7cf6934720": {
+        "delivered": 2,
+        "total": 3,
+        "rts": 1,
+        "undelivered": 0,
+        "rate": 6.7,
+        "inProgress": 2,
+        "value": 200000
+       },
+       "6004fbef9b744170bd679c88": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 2,
+        "value": 0
+       },
+       "6a7d814d77fc90171ba86fef": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6ab48b5cc7185c05697f6b5d": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6a5895278bb2d2386a0cdff8": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       }
+      },
+      "value": 200000,
+      "inProgress": 2,
+      "delivered": 0,
+      "rts": 0,
+      "undelivered": 0,
+      "rate": 0
+     },
+     "paxel": {
+      "total": 0,
+      "value": 0,
+      "inProgress": 0,
+      "delivered": 0,
+      "rts": 0,
+      "undelivered": 0,
+      "rate": 0,
+      "totalCalculation": {
+       "delivered": 0,
+       "rts": 0,
+       "undelivered": 0,
+       "rate": 0
+      }
+     },
+     "anteraja": {
+      "total": 0,
+      "userIds": [
+       "66fa520afd8f24c0b896de77",
+       "6a7d814d77fc90171ba86fef",
+       "65af2f2808f40f7cf6934720",
+       "6929021ead34dfbd592e4ecd",
+       "6ab0a4a28cefb7feb9c814a8"
+      ],
+      "userData": {
+       "66fa520afd8f24c0b896de77": {
+        "delivered": 1,
+        "total": 1,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 10,
+        "inProgress": 0,
+        "value": 500000
+       },
+       "6a7d814d77fc90171ba86fef": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "65af2f2808f40f7cf6934720": {
+        "delivered": 2,
+        "total": 3,
+        "rts": 1,
+        "undelivered": 0,
+        "rate": 6.7,
+        "inProgress": 5,
+        "value": 200000
+       },
+       "6929021ead34dfbd592e4ecd": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 3,
+        "value": 0
+       },
+       "6ab0a4a28cefb7feb9c814a8": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       }
+      },
+      "value": 700000,
+      "inProgress": 1,
+      "delivered": 0,
+      "rts": 0,
+      "undelivered": 0,
+      "rate": 0
+     },
+     "pos": {
+      "total": 0,
+      "userIds": [
+       "678f113110fe9cffc76c1f40",
+       "64fe8e6d625d6fa8089b3b31",
+       "66433e9bb1374b4ff7f174fe",
+       "6929021ead34dfbd592e4ecd",
+       "665d773bbb3a74f4ef9b1e8c",
+       "65af2f2808f40f7cf6934720"
+      ],
+      "userData": {
+       "678f113110fe9cffc76c1f40": {
+        "delivered": 0,
+        "total": 1,
+        "rts": 1,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "64fe8e6d625d6fa8089b3b31": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "66433e9bb1374b4ff7f174fe": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6929021ead34dfbd592e4ecd": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "665d773bbb3a74f4ef9b1e8c": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "65af2f2808f40f7cf6934720": {
+        "delivered": 1,
+        "total": 1,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 10,
+        "inProgress": 1,
+        "value": 100000
+       }
+      },
+      "value": 100000,
+      "inProgress": 2,
+      "delivered": 0,
+      "rts": 0,
+      "undelivered": 0,
+      "rate": 0
+     },
+     "spx": {
+      "total": 7,
+      "userIds": [
+       "6004fbef9b744170bd679c88",
+       "663dce8ae6d8c004dc74ad86",
+       "689d9d33d4b12d040c08186b",
+       "6929021ead34dfbd592e4ecd",
+       "6944c41b6706480ccbbb9abc",
+       "69f86b92073972acc8987102",
+       "65af2f2808f40f7cf6934720",
+       "66433e9bb1374b4ff7f174fe",
+       "6a51aa6ed374fcd4e3efd9ef",
+       "6a51ab05d374fcd4e3efdac1",
+       "6a51aaa6d374fcd4e3efda22",
+       "6a51aad3d374fcd4e3efda66",
+       "664c3709f8c46bfb3d6ce497",
+       "6959222b77d45cefbdc0a76a"
+      ],
+      "userData": {
+       "6004fbef9b744170bd679c88": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 19,
+        "value": 0
+       },
+       "663dce8ae6d8c004dc74ad86": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 2,
+        "value": 0
+       },
+       "689d9d33d4b12d040c08186b": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 4,
+        "value": 0
+       },
+       "6929021ead34dfbd592e4ecd": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6944c41b6706480ccbbb9abc": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 2,
+        "value": 0
+       },
+       "69f86b92073972acc8987102": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "65af2f2808f40f7cf6934720": {
+        "delivered": 8,
+        "total": 20,
+        "rts": 6,
+        "undelivered": 6,
+        "rate": 4,
+        "inProgress": 68,
+        "value": 1570000
+       },
+       "66433e9bb1374b4ff7f174fe": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 6,
+        "value": 0
+       },
+       "6a51aa6ed374fcd4e3efd9ef": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6a51ab05d374fcd4e3efdac1": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 2,
+        "value": 0
+       },
+       "6a51aaa6d374fcd4e3efda22": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6a51aad3d374fcd4e3efda66": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "664c3709f8c46bfb3d6ce497": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 1,
+        "value": 0
+       },
+       "6959222b77d45cefbdc0a76a": {
+        "delivered": 0,
+        "total": 0,
+        "rts": 0,
+        "undelivered": 0,
+        "rate": 0,
+        "inProgress": 2,
+        "value": 0
+       }
+      },
+      "value": 1570000,
+      "inProgress": 21,
+      "delivered": 4,
+      "rts": 1,
+      "undelivered": 2,
+      "rate": 5.7
+     }
+    }
+   },
+   "claimReturnDateLimit": null,
+   "claimDamagedDateLimit": null,
+   "claimLostDateLimit": null,
+   "productOrders": [],
+   "courier": "JT",
+   "isPremiumSeller": false,
+   "FULL_RECEIVER_ADDRESS": "Jl. Kapitan 1 RT 01/04 (uji sandbox), GE-T021-MV7W5HXB, GE-T021-MV7W5HXB, SUKATANI, TAPOS, DEPOK, JAWA BARAT, 16454"
+  }
+ ],
+ "count": 0,
+ "total": 0,
+ "lastUpdateHours": 0,
+ "currentHour": "10-14-2026 16:12"
+}

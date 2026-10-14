@@ -33,10 +33,17 @@ export type MengantarErrorCode =
   | "not_allowed" // 403: key/IP not permitted (the sandbox answers this for unlisted callers)
   | "rejected" // provider answered success:false (unknown area, invalid key, ...)
   | "unavailable" // network failure, timeout, 5xx, redirect
-  | "malformed"; // unexpected status, content type, size or shape
+  | "malformed" // unexpected status, content type, size or shape
+  // A create request may have reached Mengantar but its answer is missing or unreadable. Never
+  // retry: reconcile with findOrdersByReference first (TD-3, "unknown outcome").
+  | "unknown_outcome";
 
 export class MengantarError extends Error {
-  constructor(readonly code: MengantarErrorCode) {
+  constructor(
+    readonly code: MengantarErrorCode,
+    // The provider's own refusal text (create-order 4xx only), bounded, for the operator.
+    readonly providerMessage: string | null = null,
+  ) {
     super(`Mengantar request failed: ${code}`);
     this.name = "MengantarError";
   }
@@ -55,7 +62,9 @@ export type EstimateRequest = {
   originAreaId: string;
   destinationAreaId: string;
   weightGrams: number;
-  // COD_AMOUNT = goods value + shipping fee (provider definition). Omit for non-COD.
+  // Estimate's COD_AMOUNT = goods value + shipping fee (provider's estimate definition; it only
+  // sizes the COD fee). Not the create-order COD value, which also includes the COD fee. Omit for
+  // non-COD.
   codAmount?: number;
 };
 
@@ -80,19 +89,26 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
   if (!/^[A-Za-z0-9_-]{8,128}$/.test(apiKey)) throw new Error("Malformed Mengantar API key");
   const base = `${origin}/api/public/${encodeURIComponent(apiKey)}`;
 
-  async function getData(path: string, params: Record<string, string>): Promise<unknown> {
-    const url = `${base}${path}?${new URLSearchParams(params)}`;
+  // Sends one request and returns the parsed JSON envelope with its status. Transport problems are
+  // "unavailable", unreadable answers "malformed"; callers decide what a non-success envelope means.
+  async function send(path: string, params: Record<string, string>, json?: unknown): Promise<{ status: number; payload: Record<string, unknown> }> {
+    const query = new URLSearchParams(params).toString();
+    const url = `${base}${path}${query ? `?${query}` : ""}`;
     let response: Response;
     try {
-      response = await fetchImpl(url, { headers: { Accept: "application/json" }, redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
+      response = await fetchImpl(url, {
+        method: json === undefined ? "GET" : "POST",
+        headers: json === undefined ? { Accept: "application/json" } : { Accept: "application/json", "Content-Type": "application/json" },
+        body: json === undefined ? undefined : JSON.stringify(json),
+        redirect: "manual",
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
     } catch {
       throw new MengantarError("unavailable");
     }
     if (response.status === 403) throw new MengantarError("not_allowed");
     if (response.status >= 500 || (response.status >= 300 && response.status < 400)) throw new MengantarError("unavailable");
-    if (response.status !== 200 || !response.headers.get("content-type")?.includes("application/json")) {
-      throw new MengantarError("malformed");
-    }
+    if (!response.headers.get("content-type")?.includes("application/json")) throw new MengantarError("malformed");
     let body: string;
     try {
       body = await readBounded(response);
@@ -107,8 +123,20 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
       throw new MengantarError("malformed");
     }
     if (!isRecord(payload)) throw new MengantarError("malformed");
+    return { status: response.status, payload };
+  }
+
+  async function getData(path: string, params: Record<string, string>): Promise<unknown> {
+    const { status, payload } = await send(path, params);
+    if (status !== 200) throw new MengantarError("malformed");
     if (payload.success !== true) throw new MengantarError("rejected");
     return payload.data;
+  }
+
+  async function listOrders(params: Record<string, string>): Promise<ProviderOrder[]> {
+    const data = await getData("/order", params);
+    if (!Array.isArray(data)) throw new MengantarError("malformed");
+    return data.map(parseOrder);
   }
 
   return {
@@ -132,6 +160,68 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
       };
       if (codAmount !== undefined) params.COD_AMOUNT = String(codAmount);
       return parseEstimates(await getData("/order/estimate", params), codAmount !== undefined);
+    },
+
+    // Creates exactly one shipment. Every answer is judged on the order item, not the envelope:
+    // Mengantar can answer HTTP 200 success:true with the item in status "error" (sandbox, T-020).
+    async createOrder(request: CreateOrderRequest): Promise<CreateOrderResult> {
+      const body = createOrderBody(request);
+      let answer: { status: number; payload: Record<string, unknown> };
+      try {
+        answer = await send("/order", {}, body);
+      } catch (error) {
+        // Refused before any work (403) is safe; anything else may have created the order.
+        if (error instanceof MengantarError && error.code === "not_allowed") throw error;
+        throw new MengantarError("unknown_outcome");
+      }
+      const { status, payload } = answer;
+      // Only a plain 400 validation refusal is known to create nothing (observed: drop-off not
+      // supported; documented: dropshipper validation). 409/422/429 and other 4xx are unknown.
+      if (status === 400 && payload.success === false && !Array.isArray(payload.data)) {
+        throw new MengantarError("rejected", text(payload.message).slice(0, 200) || null);
+      }
+      const items = payload.data;
+      if (status !== 200 || payload.success !== true || !Array.isArray(items) || items.length !== 1) {
+        throw new MengantarError("unknown_outcome");
+      }
+      return judgeCreatedItem(items[0], request.reference);
+    },
+
+    // Reconciliation by ORDER_ID (exact, with history at the provider).
+    async findOrder(orderId: string): Promise<ProviderOrder | null> {
+      if (!ORDER_ID.test(orderId)) throw new Error("Invalid order id");
+      const orders = (await listOrders({ order_id: orderId })).filter((o) => o.orderId === orderId);
+      if (orders.length > 1) throw new MengantarError("malformed");
+      return orders[0] ?? null;
+    },
+
+    // Reconciliation after an unknown outcome: our reference travels as destinationMark. The
+    // documented dateRange filter does not work (JSON form returns nothing, dotted form is ignored)
+    // and count/total are always 0, so newest-first pages are scanned (order and page size verified
+    // on the sandbox) until a row predates the attempt by more than a clock-skew margin, or a page is
+    // empty. Rows out of order make the scan inconclusive (equal timestamps are allowed). Every match means "exists" unless its
+    // status is "error" (an error item has no ORDER_ID or resi).
+    // lazy: at most maxPages × 50 orders; an account issuing more than that between the attempt and
+    // the reconciliation needs a provider-side reference filter.
+    async findOrdersByReference(query: { reference: string; courier: string; notBefore: Date; maxPages?: number }): Promise<ProviderOrder[]> {
+      const { reference, courier, notBefore, maxPages = 5 } = query;
+      if (!REFERENCE.test(reference)) throw new Error("Invalid reference");
+      if (!Object.values(COURIERS).includes(courier)) throw new Error("Invalid courier");
+      const cutoff = notBefore.getTime() - SKEW_MS;
+      const matches: ProviderOrder[] = [];
+      let previous = Number.POSITIVE_INFINITY;
+      for (let page = 1; page <= maxPages; page++) {
+        const orders = await listOrders({ page: String(page), size: "50", courier });
+        if (orders.length === 0) return matches;
+        for (const order of orders) {
+          const created = Date.parse(order.createdAt);
+          if (created > previous) throw new MengantarError("unknown_outcome");
+          previous = created;
+          if (order.reference === reference) matches.push(order);
+        }
+        if (previous < cutoff) return matches;
+      }
+      throw new MengantarError("unknown_outcome");
     },
   };
 }
@@ -208,4 +298,114 @@ export function parseEstimates(data: unknown, cod: boolean): CourierEstimate[] {
     estimates.push({ courier, tariff, codFee, netShipping, etaText: eta && eta !== "undefined" && eta !== "-" ? eta : null });
   }
   return estimates.sort((a, b) => a.tariff - b.tariff || (a.courier < b.courier ? -1 : a.courier > b.courier ? 1 : 0));
+}
+
+// --- Orders (T-021) ---------------------------------------------------------------------------
+
+const ORDER_ID = /^[A-Z0-9]{6,20}$/;
+const SKEW_MS = 10 * 60_000;
+// GeraiExpress shipment reference sent as destinationMark and used to reconcile unknown outcomes.
+const REFERENCE = /^GE-[A-Z0-9-]{4,28}$/;
+
+export type CreateOrderRequest = {
+  courier: string;
+  // Only drop-off is offered for now; scheduled pickup needs time slots (GET /time returned none).
+  pickupAddressId: string;
+  reference: string;
+  recipient: { areaId: string; address: string; name: string; phone: string };
+  weightGrams: number;
+  quantity: number;
+  parcelContent: string;
+  // Non-COD: the declared goods value. COD: the total the courier collects from the recipient
+  // (goods + shipping + COD fee, provider definition); sandbox stored it as COD_AMOUNT and also as
+  // GOODS_AMOUNT (T-021), so the provider treats the whole collected amount as the declared goods
+  // value, which matters for insurance and claims. Weight is sent in kilograms with decimals; the provider's
+  // billable rounding is not established.
+} & ({ goodsValue: number; codAmount?: never } | { codAmount: number; goodsValue?: never });
+
+export type CreateOrderResult =
+  // Paid and handed a resi: the shipment exists.
+  | { outcome: "issued"; orderId: string; trackingNumber: string; batch: string; tariffWithFees: number | null }
+  // Created but not paid (insufficient balance): no resi yet; payment is a batch command (TD-3).
+  | { outcome: "unpaid"; orderId: string; batch: string }
+  // Mengantar recorded the attempt as an error item without ORDER_ID or resi. The provider keeps
+  // that record (with a batch), so before creating again the dispatcher must confirm the batch
+  // still holds only an error item.
+  // lazy: evidence is one sandbox JNE sample; whether an error item can later be completed at
+  // Mengantar is not established.
+  | { outcome: "failed"; batch: string | null; providerRecordId: string | null };
+
+export type ProviderOrder = {
+  orderId: string | null;
+  reference: string | null;
+  trackingNumber: string | null;
+  status: string;
+  paid: boolean;
+  createdAt: string;
+};
+
+function createOrderBody(r: CreateOrderRequest) {
+  const courierOk = Object.values(COURIERS).includes(r.courier);
+  const { areaId, address, name, phone } = r.recipient ?? ({} as CreateOrderRequest["recipient"]);
+  const money = (v: unknown) => typeof v === "number" && Number.isSafeInteger(v) && v >= 1;
+  const valid = courierOk
+    && AREA_ID.test(r.pickupAddressId) && AREA_ID.test(areaId ?? "")
+    && REFERENCE.test(r.reference)
+    && typeof name === "string" && name.trim().length >= 1 && name.length <= 100
+    && typeof address === "string" && address.trim().length >= 5 && address.length <= 300
+    && typeof phone === "string" && /^\d{10,15}$/.test(phone)
+    && Number.isInteger(r.weightGrams) && r.weightGrams >= 1 && r.weightGrams <= 1_000_000
+    && Number.isInteger(r.quantity) && r.quantity >= 1 && r.quantity <= 1000
+    && typeof r.parcelContent === "string" && r.parcelContent.trim().length >= 1 && r.parcelContent.length <= 100
+    && (r.goodsValue === undefined) !== (r.codAmount === undefined)
+    && (r.goodsValue === undefined || money(r.goodsValue)) && (r.codAmount === undefined || money(r.codAmount));
+  if (!valid) throw new Error("Invalid order request");
+  return {
+    courier: r.courier,
+    pickup: { address_id: r.pickupAddressId, type: "dropOff" },
+    orders: [{
+      ...(r.goodsValue !== undefined ? { goodsValue: r.goodsValue } : { COD: r.codAmount }),
+      customerAddressDataId: areaId,
+      customerAddress: address.trim(),
+      customerName: name.trim(),
+      customerPhone: phone,
+      weight: r.weightGrams / 1000,
+      quantity: r.quantity,
+      parcelContent: r.parcelContent.trim(),
+      destinationMark: r.reference,
+    }],
+  };
+}
+
+function judgeCreatedItem(item: unknown, reference: string): CreateOrderResult {
+  if (!isRecord(item)) throw new MengantarError("unknown_outcome");
+  if (item.status === "error") {
+    // An error item must not carry a shipment identity; if it does, the outcome is unclear.
+    if (item.ORDER_ID || item.cnote_no) throw new MengantarError("unknown_outcome");
+    return {
+      outcome: "failed",
+      batch: typeof item.batch === "string" && /^[A-Z0-9]{6,24}$/.test(item.batch) ? item.batch : null,
+      providerRecordId: typeof item._id === "string" && AREA_ID.test(item._id) ? item._id : null,
+    };
+  }
+  const orderId = typeof item.ORDER_ID === "string" && ORDER_ID.test(item.ORDER_ID) ? item.ORDER_ID : null;
+  const batch = typeof item.batch === "string" && /^[A-Z0-9]{6,24}$/.test(item.batch) ? item.batch : null;
+  if (!orderId || !batch || item.status !== "active" || item.destinationMark !== reference) throw new MengantarError("unknown_outcome");
+  const tracking = typeof item.cnote_no === "string" && /^[A-Za-z0-9-]{6,40}$/.test(item.cnote_no) ? item.cnote_no : null;
+  if (item.isPaid === true && tracking) {
+    const price = item.estimatedPrice;
+    return { outcome: "issued", orderId, trackingNumber: tracking, batch, tariffWithFees: typeof price === "number" && Number.isSafeInteger(price) && price > 0 ? price : null };
+  }
+  if (item.isPaid === false && (item.cnote_no === null || item.cnote_no === undefined)) return { outcome: "unpaid", orderId, batch };
+  throw new MengantarError("unknown_outcome");
+}
+
+function parseOrder(row: unknown): ProviderOrder {
+  if (!isRecord(row) || typeof row.status !== "string" || typeof row.createdAt !== "string" || Number.isNaN(Date.parse(row.createdAt))) {
+    throw new MengantarError("malformed");
+  }
+  const orderId = typeof row.ORDER_ID === "string" && ORDER_ID.test(row.ORDER_ID) ? row.ORDER_ID : null;
+  const reference = typeof row.destinationMark === "string" && REFERENCE.test(row.destinationMark) ? row.destinationMark : null;
+  const trackingNumber = typeof row.cnote_no === "string" && row.cnote_no ? row.cnote_no.slice(0, 40) : null;
+  return { orderId, reference, trackingNumber, status: row.status.slice(0, 40), paid: row.isPaid === true, createdAt: row.createdAt };
 }
