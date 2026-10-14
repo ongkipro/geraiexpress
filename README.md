@@ -2,9 +2,15 @@
 
 Multi-tenant shipping-counter application using Cloudflare, Supabase and Mengantar.
 
-Status: DEL-1 local foundation and synthetic demo preview implemented and verified locally.
-Nothing is deployed, and no real Mengantar account, email or customer data is used. Technical
+Status: DEL-1 local foundation, platform/onboarding slice and a synthetic-data preview
+(deployed, see Preview below). Production is not provisioned, and no real Mengantar account,
+email or customer data is used. Technical
 documentation is English; conversation and product UI are Bahasa Indonesia.
+
+## Preview
+
+A synthetic-data demo preview runs at https://geraiexpress-preview.ongki.workers.dev (open
+`/masuk` → **Coba demo**). Deployment and remote settings: [RELEASE.md](RELEASE.md).
 
 ## Start here
 

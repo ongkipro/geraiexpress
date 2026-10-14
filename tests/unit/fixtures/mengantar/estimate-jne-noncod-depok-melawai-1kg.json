@@ -1,0 +1,25 @@
+{
+ "success": true,
+ "data": {
+  "price": 10000,
+  "currency": "IDR",
+  "isFlat": false,
+  "weight": "1",
+  "JNE_zone": "A",
+  "discountPercent": 30,
+  "cargoDiscountPercent": 5,
+  "discount": 3000,
+  "cargoDiscount": 0,
+  "codFee": 0,
+  "estimatedPrice": 10000,
+  "estimatedSpecialPrice": 7000,
+  "cargoEstimatedPrice": 0,
+  "cargoEstimatedSpecialPrice": 0,
+  "estimatedDate": "2-4 hari",
+  "discountExtraPercent": 0,
+  "discountExtra": 0,
+  "cargoDiscountExtraPercent": 0,
+  "cargoDiscountExtra": 0,
+  "estimate_delivery": "undefined"
+ }
+}

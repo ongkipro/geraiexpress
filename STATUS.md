@@ -25,8 +25,11 @@ Last full verification (2026-10-14): `pnpm test:db` 68, `pnpm test:unit` 16, typ
 build, cf:build, `check:bundle`, worker smoke, and Playwright 176 passed / 1 skipped on both the
 Worker (wrangler dev) and next dev.
 
-Nothing is provisioned or deployed. No Mengantar call, real account, real email or customer
-data exists. Simulation output is labelled as such everywhere it appears.
+A synthetic-data preview is deployed (T-018, 2026-10-14): Worker `geraiexpress-preview` at
+https://geraiexpress-preview.ongki.workers.dev on Supabase project `geraiexpress-preview`
+(RELEASE.md). Auth email, Auth CAPTCHA and Super Admin are intentionally off there. Production
+is not provisioned. No Mengantar call, real account, real email or customer data exists.
+Simulation output is labelled as such everywhere it appears.
 
 ## How to run it
 
@@ -41,11 +44,15 @@ None. See TASKS.md "Next candidates".
 
 Accepted 2026-10-14: DEC-005 to DEC-009. Still open:
 
-- Permission to provision a remote Supabase project and a Cloudflare preview; at that point the
-  remote settings listed in ARCHITECTURE.md (captcha secret, hook URI/secret, limits, Turnstile
-  keys) are applied deliberately, never by `supabase config push`.
+- Preview hardening inputs: a real Turnstile widget (site key + secret) to enable Auth
+  CAPTCHA, and who bootstraps the first Super Admin on the preview.
+- Mengantar sandbox access: the sandbox answers 403 for every key from our IP, so Mengantar must
+  enable the caller (development and Worker egress addresses) before any write-path proof. The
+  supplied sandbox value is a Public API key (owner, 2026-10-14); no Partner credentials exist.
+- Mengantar keys pasted in chat on 2026-10-14 (production read key, sandbox key, account password)
+  should be rotated once testing is done.
 - Cloudflare Email Sending eligibility and sending domain (the hook's production transport;
-  until then production Auth email fails closed), Mengantar sandbox credentials, Terms/Privacy
+  until then production Auth email fails closed), Terms/Privacy
   and retention.
 
 ## Implementation gates

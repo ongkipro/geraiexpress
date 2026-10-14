@@ -347,3 +347,61 @@ without a current address is refused even if the anonymous flag were missing (e2
 replay inside the 5-minute window is recorded as a `// lazy:` ceiling (id store with the
 production transport); null payload and `[::1]` loopback nits fixed. Mail-related e2e 30 passed on
 both runtimes after the change; `pnpm test:db` 68.
+
+## 2026-10-14 — T-018 preview on Cloudflare + Supabase (DEL-1 stage 2)
+
+Owner authorized running Cloudflare and Supabase via CLI. Created Supabase project
+`geraiexpress-preview` (ap-southeast-1) with a generated DB password kept only in the owner's
+secrets store; `db push` applied 9 migrations (dry run first; no seed, so no fixture admins);
+remote `db lint` clean. Remote Auth settings live in `infra/supabase-preview/supabase/config.toml`
+and were applied with `config push --workdir` after reviewing the diff (anonymous sign-ins on,
+both hooks, OTP length 6, aggregate-sized rate limits, site URL, GraphQL schema off). The API
+refused `sms_sent = 0` (minimum 1). Worker deployed with `pnpm deploy:preview` (build without
+`.env.local`, bundle check, `--env preview` with its own rate-limit namespaces and vars);
+`CREDENTIAL_KEY` and `SEND_EMAIL_HOOK_SECRET` generated into the secrets store and put via stdin.
+
+Verified: `pnpm smoke:preview` 6 passed at 390 and 1280 (demo through simulated issuance and
+sample label; closed registration; protected pages); direct Auth probes against the project:
+public signUp and OTP refused, anonymous sign-in allowed, anonymous email change refused by the
+Worker hook over HTTPS, platform RPC refused. Intentionally off: Auth email transport, Auth
+CAPTCHA (needs a real Turnstile widget), Mengantar, Super Admin.
+
+Review (CHANGES_REQUIRED, fixed): STATUS.md and README still said nothing was deployed (status
+authority now records the preview); RELEASE.md recorded the upload version instead of the
+active one and suggested an untargeted rollback onto a version missing a secret (now names
+versions and the rollback target); residuals recorded (direct anonymous sign-in bypasses the
+Worker's demo limiter while CAPTCHA is off, no demo cleanup, no frame/HSTS headers, email rate
+limit to re-check); `deploy-preview.sh` now holds every local `.env*` file, refuses a leftover
+hold file, and aborts unless OpenNext baked an empty environment — redeployed with it (version
+`dddc2184`, both secrets present, `.env.local` restored).
+
+## 2026-10-14 — T-019 Mengantar Public API read client (DEL-1 stage 3)
+
+Owner supplied two values and approved read-only production calls. Probes (no writes): the Partner
+list route refused the pair with 401 `Invalid partner credentials`; the sandbox origin answers
+403 `Not allowed` for every key, including invented keys and the key-agnostic area search, so
+sandbox access is gated on Mengantar's side; the `API-…` value is the owner's production seller
+key (pickup addresses, area search and estimate answered 200). Keys live only in the secrets store
+(`GERAIEXPRESS_MENGANTAR_PROD_READ_KEY`, `GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET`); captured
+responses were checked for key echo before saving sanitized fixtures (area and tariff data only).
+
+Added `src/lib/mengantar/public-api.ts`: fixed origins, key in the path but never in errors,
+`redirect: "manual"` (3xx refused; see review below), 10 s timeout, 256 KiB streamed bound, `success:false` → `rejected`, 403 →
+`not_allowed`. Estimates come from `courier=all`; only documented courier codes are offered and a
+row is dropped when unsupported (or COD-uncovered when COD is requested), when
+`estimatedPrice ≠ price + codFee`, or when the net cost exceeds the tariff (captured cargo/lite
+rows break these). Evidence: `docs/research/geraiexpress-mengantar-public-api.md`.
+
+Verified: unit 9 (mutation check: 7 guards removed one at a time, all killed after two tests were
+strengthened — oversize bound and undocumented-courier allowlist had survived the first pass);
+`test:contract` live against production 2 passed, skipped without a key, sandbox fails with
+`not_allowed` as recorded. Not wired into quoting or UI (TASKS next candidate 3).
+
+Review (CHANGES_REQUIRED, fixed): workerd rejects `redirect: "error"`, so every Worker call would
+have failed as `unavailable` while Node tests passed — now `manual` with 3xx refused, and the
+client was run inside local workerd (`wrangler dev`, invalid key: both calls reached Mengantar and
+returned `not_allowed`). Also: a mid-read stream failure maps to `unavailable`; SiCepat
+`unsupportedPickup`/`unsupportedOriginSicepat` drop the row; non-COD `courier=all` fixture added
+with exact rows; ETA `-` is null; deterministic tie order; contract test only sends
+`GERAIEXPRESS_MENGANTAR_*` variables; leak test covers stack/cause; full docs hash. Unit 11,
+6 new mutants killed.

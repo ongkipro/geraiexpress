@@ -7,8 +7,8 @@ node_modules/
 coverage/
 *.log
 .DS_Store
-supabase/.temp/
-supabase/.branches/
+**/supabase/.temp/
+**/supabase/.branches/
 .open-next/
 .dev.vars
 playwright-report/

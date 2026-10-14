@@ -55,6 +55,8 @@ is proved, and no cloud resource, Mengantar call or real credential is involved.
 | T-015 Mengantar credentials: sealed BYOK seller-key storage (no readback), Partner ID setting, Partner Secret as Worker binding (readiness only) | PR-18 (storage), PR-26, IAM-3, SEC-3, DATA-4 | R3 | PASS, security-reviewed | Worker-side encryption with a Worker secret, ciphertext-only storage, operator/foreign denial, readiness without secret projection |
 | T-016 Turnstile CAPTCHA on Auth entry points: password and demo sign-in, OTP, signup, recovery, resend (gap found 2026-10-14: an anonymous session can make Auth send email-change mail to any address before the T-009 trigger refuses the change, and OTP requests also send mail, so the project mail quota can be drained) | SEC-5, RATE-1, PR-33 | R3 | PASS, security-reviewed | Cloudflare test keys locally; Auth captcha enforced for password and anonymous sign-in, OTP, signup, recovery and resend; real keys are an owner/Cloudflare setup step |
 | T-017 Auth email via the Worker's Send Email Hook (DEC-009): signed hook, anonymous refusal, Bahasa Indonesia code mail, transport binding (Mailpit locally, fail closed otherwise) | PR-33, SEC-5, ARCH-3 | R3 | PASS, security-reviewed | unit signature/policy tests (mutation-checked), hook e2e on both runtimes, anonymous email change sends no mail, full e2e with codes through the hook |
+| T-018 Preview: Supabase project + Worker on workers.dev, migrations without seed, remote Auth settings from a dedicated config, Worker secrets from the secrets store | DEL-1 stage 2 | R3 | PASS, security-reviewed | `pnpm smoke:preview` (6), HTTP checks, remote db lint, direct Auth probes |
+| T-019 Mengantar Public API read client (area search, estimate) with sanitized production fixtures and a live read-only contract check; no order, payment or UI wiring | DEL-1 stage 3, TD-3, UX line 187 | R2 | PASS | `pnpm test:unit` (parser/transport, mutation-checked), `pnpm test:contract` live against production (owner-approved read-only, Node), client run in local workerd, sandbox refusal recorded |
 
 ## Next candidates (not started; each needs its owner decision or gate)
 
@@ -64,9 +66,15 @@ Owner decisions DEC-005 to DEC-008 (adapter, CTX-9, CTX-34, roles) were accepted
 1. Enforce DEC-008 operator limits in RLS/RPC as each remaining gated action (contact archive,
    export) is built; each needs an operator-denied test and a role re-check after its row lock
    (member management and `reconcile_shipment` already do this, T-014).
-2. Remote Supabase project + Cloudflare preview with isolated demo data (DEL-1 stage 2 hosting;
-   needs provisioning/deploy approval; size the project's Auth limits for Worker egress per ARCHITECTURE.md).
-3. Mengantar sandbox contract proof (DEL-1 stage 3; needs sandbox credentials; ownership per DEC-006).
+2. Preview hardening: a real Turnstile widget (enable Auth captcha), Cloudflare Email Sending
+   as the hook transport (codes on the preview), and a Super Admin bootstrap on the preview; demo/anonymous cleanup, frame/HSTS headers, and
+   the email rate limit re-check (RELEASE.md residuals).
+3. Live quotes (after T-019): store a provider area id on outlets and recipient addresses (area
+   search in the address form), then quote through the tenant's sealed BYOK key in the Worker and
+   write quotes via a server-only RPC, keeping simulated quotes for the demo. Needs the account
+   dispatcher's key-opening path (TD-3) and a decision on caching/rate limits for estimates.
+4. Mengantar write-path proof (create order, pay, label, webhook) needs sandbox access: Mengantar
+   must enable our callers (T-019 found sandbox refuses every key with 403).
 
 ## Deferred (owner decision or external gate)
 

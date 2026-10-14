@@ -17,7 +17,10 @@
     "test:db": "vitest run tests/db",
     "dev:env": "bash scripts/dev-env.sh",
     "dev:hook-relay": "node scripts/auth-hook-relay.mjs",
+    "deploy:preview": "bash scripts/deploy-preview.sh",
+    "smoke:preview": "playwright test -c playwright.preview.config.ts",
     "test:unit": "vitest run tests/unit",
+    "test:contract": "vitest run tests/contract",
     "test:e2e": "playwright test"
   },
   "dependencies": {
