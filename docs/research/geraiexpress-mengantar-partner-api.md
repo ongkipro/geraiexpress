@@ -250,3 +250,23 @@ Documentation coverage: all eleven Partner sections reviewed — get started, au
 ### Executed verification
 
 Executed the embedded signer fixture with Node: PASS, two digest comparisons and five signature-binding negatives. The specification structural check passed with 12 Markdown files, 75 declarations, zero findings; independent document checks covered four paths, all 20 error codes, unique source records, and local links. Token contrast was also calculated offline. See the context record for scope and results. These checks do not establish provider acceptance, fixed egress, database security, browser accessibility, or a running application; no live API/deployment evidence is claimed.
+
+### Sandbox evidence (T-020, 2026-10-14)
+
+Owner supplied Partner ID `ongkirich` (not a secret) and the sandbox Partner Secret (secrets
+store only) and approved registering one sandbox seller. Client: `src/lib/mengantar/partner-api.ts`
+(list, register, get key; sandbox origin only; regeneration not built). Unit tests reproduce the
+offline vector above (`6ad3b743…`) through WebCrypto.
+
+| Step | Result |
+|---|---|
+| `sellers/list` `{externalUserId}` before | 200, `total: 0`; calls from the development machine accepted (sandbox does not enforce the IP list) |
+| `sellers` register (`externalUserId geraiexpress:sandbox:proof-seller-1`) | 201, `alreadyRegistered: false`, seller `6acf4420b93360b458b2d7ba`, key `API-` + 16 characters |
+| Same register again | 200, `alreadyRegistered: true`, same seller, same key (idempotency confirmed) |
+| `sellers/api-key` | 200, same key (no rotation) |
+| `sellers/list` after | 200, one seller, `active: true`; list entries also carry name/email/phone, which the client discards |
+| Public API with that key | area search and estimate pass (`pnpm test:contract` on the sandbox) |
+
+The seller key is stored as `GERAIEXPRESS_MENGANTAR_SANDBOX_SELLER_KEY`. The sandbox returned
+Cloudflare 502 pages for whole minutes twice the same afternoon; non-JSON 5xx answers map to
+`unavailable`, and registration is safe to repeat with the same external ID.

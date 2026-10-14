@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createPartnerClient } from "../../src/lib/mengantar/partner-api";
 import { createMengantarPublicClient, type MengantarEnvironment } from "../../src/lib/mengantar/public-api";
 
 // DEL-1 stage 3 live contract check. READ-ONLY: area search and estimate; it never creates, pays,
@@ -34,5 +35,21 @@ describe.skipIf(!key)(`Mengantar Public API live contract (${environment}, read-
     const cod = await client().estimate({ ...base, codAmount: 150000 });
     expect(cod.length).toBeGreaterThan(0);
     for (const row of cod) expect(row.codFee).toBeGreaterThan(0);
+  });
+});
+
+// Partner (sandbox): a signed read of the partner's sellers proves ID, secret and signing.
+//   MENGANTAR_CONTRACT_PARTNER_ID=ongkirich \
+//   MENGANTAR_CONTRACT_PARTNER_SECRET_VAR=GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET secrets-env run -- pnpm test:contract
+const partnerId = process.env.MENGANTAR_CONTRACT_PARTNER_ID;
+const secretVar = process.env.MENGANTAR_CONTRACT_PARTNER_SECRET_VAR ?? "";
+if (secretVar && !secretVar.startsWith("GERAIEXPRESS_MENGANTAR_")) throw new Error("MENGANTAR_CONTRACT_PARTNER_SECRET_VAR must name a GERAIEXPRESS_MENGANTAR_* variable");
+const partnerSecret = secretVar ? process.env[secretVar] : undefined;
+
+describe.skipIf(!partnerId || !partnerSecret)("Mengantar Partner API live contract (sandbox, read-only)", () => {
+  it("lists the partner's sellers with a valid signature", async () => {
+    const result = await createPartnerClient("sandbox", partnerId!, partnerSecret!, fetch).listSellers({ size: 5 });
+    expect(result.total).toBeGreaterThanOrEqual(0);
+    for (const s of result.sellers) expect(Object.keys(s).sort()).toEqual(["active", "externalUserId", "sellerId"]);
   });
 });

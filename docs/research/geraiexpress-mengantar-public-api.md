@@ -18,8 +18,8 @@
 |---|---|---|
 | Authentication | The seller API key is a URL path segment: `{BASE_URL}/api/public/{API_KEY}/...` | A request URL is a secret: never log, throw, return or trace it |
 | Production origin | `https://api-public.mengantar.com` answered 200 from the development machine (no allowlisting requested) | Read calls do not need dedicated egress; the Partner API still does (Partner research §2) |
-| Sandbox origin | `https://sandbox.mengantar.com` answers **403 `Not allowed` for every key**, including invented keys and `/address/search`, which the docs say does not validate the key | Sandbox access is gated by caller (IP) allowlisting or account whitelisting on Mengantar's side. The owner's sandbox key cannot be tested until Mengantar enables the caller |
-| Partner API | `POST /api/partner/v1/sellers/list` with the supplied values answered 401 `Invalid partner credentials` | No Partner credentials exist yet; seller onboarding stays BYOK (DEC-006) |
+| Sandbox origin | `https://sandbox.mengantar.com` answered **403 `Not allowed`** to every key tried in T-019 (the Partner Secret and invented keys), including on `/address/search`; a Partner-registered seller key works there (T-020) | The 43-character sandbox value is the **Partner Secret** (owner, 2026-10-14), not a Public key, so the Public API rightly refused it. Sandbox Public calls need a seller key (from a Partner-registered seller or the sandbox app) |
+| Partner API | With Partner ID `ongkirich` (not a secret per Mengantar) and the Partner Secret, sandbox `POST /api/partner/v1/sellers/list` `{}` answered 200 `{sellers: [], page 1, size 50, total 0}` from the development machine. (An earlier attempt with the production key as Partner ID got 401.) | Partner signing (§3 of the Partner research) is proven on the sandbox; seller registration is the next, owner-approved step |
 | Area search | Despite the docs ("any string"), production answers 403 for an invalid key here too. `GET /address/search?keyword=` returns matching area records (`_id` 24-hex, province/city/district/subdistrict/zip plus courier-specific codes); an unknown keyword returns `success:true, data:[]` | Origin and destination are provider area ids, not free-text addresses: outlets and recipient addresses need a stored area id before a live quote |
 | Estimate shape | `courier=all` returns an object keyed by service: `JNE, JNECargo, SiCepat, SiCepatCargo, SAP, SAPLite, SapCargo, iDexpress, JT, lion, iDexpressCargo, anteraja, spx, pos`. A single courier returns one flat object | The client always asks for `all` and reads only keyed rows |
 | Unknown area | `success:false, data:0` (HTTP 200) | Mapped to `rejected` |
@@ -38,3 +38,23 @@
 - Weight rounding: the request sends kilograms with decimals (`weight=1.5` was accepted and echoed); the
   provider's billable-weight rule (rounding, volumetric) is not established.
 - COD fee formula: observed only for one amount.
+
+## Sandbox write-path evidence (T-020, 2026-10-14)
+
+Owner-approved, sandbox only, with the Partner-registered seller's key
+(`GERAIEXPRESS_MENGANTAR_SANDBOX_SELLER_KEY`). Synthetic recipient; no real goods.
+
+| Step | Result | Consequence for the order adapter |
+|---|---|---|
+| `POST /address` (pickup in Jakarta Selatan, Melawai) | 200, address `6acf44a4771fe2b474c055ca` | Outlet pickup addresses are provider records keyed by an area id |
+| `GET /time` | 200, `data: []` | No scheduled-pickup slots offered to this account; drop-off is the working mode |
+| Estimate `courier=all` (sandbox) | JNE `price: 0, unsupported: true`; other couriers synthetic prices | The parser already drops JNE here; sandbox prices prove shape only |
+| Create order, JNE drop-off | **HTTP 200 `success: true`**, but the item has `status: "error"`, `error: "{}"`, no `ORDER_ID`, `estimatedPrice: 0`, `isPreviouslyError: true` | Success of the envelope is not success of the order: the adapter must judge every item (`status`, `ORDER_ID`, `cnote_no`, `error`) |
+| Create order, anteraja drop-off | 400 `Ekspedisi Anteraja tidak mendukung pengiriman Drop Off` | Drop-off support is per courier; offer only couriers valid for the outlet's pickup mode |
+| Create order, JT drop-off | 200, `ORDER_ID 261014LJ9GP7`, `cnote_no JO6844983511`, `isPaid: true`, `status: active`, `estimatedPrice: 93000`, batch `26101416Q0L7LJ` | First successful issuance; `cnote_no` is the resi |
+| `GET /order` | 200, array including the order | Read-back by `ORDER_ID` works for reconciliation |
+| `POST /order/simulation` ON DELIVERY, then DELIVERED | 200 each, `previousStatusCategory` chained `active → ON DELIVERY → DELIVERED`, tracking history returned | Deterministic status tests are possible on the sandbox |
+| `POST /label-generation` | 403 `Not allowed` | Label PDF needs Mengantar to whitelist the account; GeraiExpress keeps its own label until then |
+
+Not covered: pay-unpaid (orders were paid at creation), COD orders, webhooks (need a public URL
+and the seller's callback secret), cancellation/deletion.

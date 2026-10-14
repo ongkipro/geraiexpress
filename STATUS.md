@@ -46,11 +46,9 @@ Accepted 2026-10-14: DEC-005 to DEC-009. Still open:
 
 - Preview hardening inputs: a real Turnstile widget (site key + secret) to enable Auth
   CAPTCHA, and who bootstraps the first Super Admin on the preview.
-- Mengantar sandbox access: the sandbox answers 403 for every key from our IP, so Mengantar must
-  enable the caller (development and Worker egress addresses) before any write-path proof. The
-  supplied sandbox value is a Public API key (owner, 2026-10-14); no Partner credentials exist.
-- Mengantar keys pasted in chat on 2026-10-14 (production read key, sandbox key, account password)
-  should be rotated once testing is done.
+- Mengantar sandbox works end to end (T-020): Partner ID `ongkirich`, a Partner-registered
+  sandbox seller, and a sandbox order issued and simulated to DELIVERED. Label PDF generation
+  needs Mengantar to whitelist the account (403 today).
 - Cloudflare Email Sending eligibility and sending domain (the hook's production transport;
   until then production Auth email fails closed), Terms/Privacy
   and retention.

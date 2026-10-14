@@ -57,6 +57,7 @@ is proved, and no cloud resource, Mengantar call or real credential is involved.
 | T-017 Auth email via the Worker's Send Email Hook (DEC-009): signed hook, anonymous refusal, Bahasa Indonesia code mail, transport binding (Mailpit locally, fail closed otherwise) | PR-33, SEC-5, ARCH-3 | R3 | PASS, security-reviewed | unit signature/policy tests (mutation-checked), hook e2e on both runtimes, anonymous email change sends no mail, full e2e with codes through the hook |
 | T-018 Preview: Supabase project + Worker on workers.dev, migrations without seed, remote Auth settings from a dedicated config, Worker secrets from the secrets store | DEL-1 stage 2 | R3 | PASS, security-reviewed | `pnpm smoke:preview` (6), HTTP checks, remote db lint, direct Auth probes |
 | T-019 Mengantar Public API read client (area search, estimate) with sanitized production fixtures and a live read-only contract check; no order, payment or UI wiring | DEL-1 stage 3, TD-3, UX line 187 | R2 | PASS | `pnpm test:unit` (parser/transport, mutation-checked), `pnpm test:contract` live against production (owner-approved read-only, Node), client run in local workerd, sandbox refusal recorded |
+| T-020 Mengantar Partner client (signed list/register/get key, sandbox origin) and sandbox proof: seller registered via Partner, Public API with that key, write path (pickup address, order, status simulation) | DEL-1 stage 3, DEC-006, PR-17–PR-20, TD-3 | R3 | PASS | unit (offline signing vector, envelope/error mapping, mutation-checked), `pnpm test:contract` on the sandbox (Partner list, area search, estimate), recorded sandbox order `261014LJ9GP7` → DELIVERED |
 
 ## Next candidates (not started; each needs its owner decision or gate)
 
@@ -73,8 +74,10 @@ Owner decisions DEC-005 to DEC-008 (adapter, CTX-9, CTX-34, roles) were accepted
    search in the address form), then quote through the tenant's sealed BYOK key in the Worker and
    write quotes via a server-only RPC, keeping simulated quotes for the demo. Needs the account
    dispatcher's key-opening path (TD-3) and a decision on caching/rate limits for estimates.
-4. Mengantar write-path proof (create order, pay, label, webhook) needs sandbox access: Mengantar
-   must enable our callers (T-019 found sandbox refuses every key with 403).
+4. Order adapter (after T-020): create-order client that judges every item (an envelope with
+   `success: true` can carry an item in `status: "error"`), per-courier drop-off support, unknown
+   outcome reconciliation by `ORDER_ID`, then the account dispatcher (TD-3). Label PDF needs
+   Mengantar to whitelist the account; webhooks need a public URL and the callback secret.
 
 ## Deferred (owner decision or external gate)
 

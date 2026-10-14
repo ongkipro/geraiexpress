@@ -405,3 +405,35 @@ returned `not_allowed`). Also: a mid-read stream failure maps to `unavailable`; 
 with exact rows; ETA `-` is null; deterministic tie order; contract test only sends
 `GERAIEXPRESS_MENGANTAR_*` variables; leak test covers stack/cause; full docs hash. Unit 11,
 6 new mutants killed.
+
+## 2026-10-14 — Mengantar sandbox credentials identified (after T-019)
+
+The owner stated the sandbox needs no IP allowlist and identified the 43-character value as the
+Partner Secret with Partner ID `ongkirich`. A signed sandbox `POST /api/partner/v1/sellers/list`
+answered 200 (no sellers). T-019's "sandbox gated on Mengantar's side" reading was wrong: the
+Public API refused a Partner Secret used as a seller key. Corrected in the research notes,
+STATUS and TASKS.
+
+## 2026-10-14 — T-020 Mengantar Partner client and sandbox proof (DEL-1 stage 3)
+
+Added `src/lib/mengantar/partner-api.ts` (signed POSTs; list, register, get key; sandbox origin
+only; seller key returned to the caller for sealing; list strips names/emails/phones; provider
+codes allowlisted, `Retry-After` and the 503 `sellerId` carried). Reuses the Public client's
+bounded reader. Owner approved one sandbox seller (`ongkirich+gerai1@gmail.com`): registered
+201, repeat 200 with the same seller and key, get-key identical; key stored only in the secrets
+store. Sandbox write proof with that key: pickup address created; JNE drop-off came back as
+HTTP 200 `success: true` with the item in `status: "error"` (no ORDER_ID) — the order adapter
+must judge items, not the envelope; anteraja refused drop-off; JT drop-off issued
+`261014LJ9GP7` / `JO6844983511`; simulation moved it to ON DELIVERY and DELIVERED; label
+generation 403 (account not whitelisted). The sandbox served Cloudflare 502 pages for minutes at
+a time twice; the run waited for three consecutive healthy checks before retrying.
+
+Verified: unit (Partner 9, mutation check 8/8 killed), typecheck, `pnpm test:contract` on the
+sandbox 3 passed (Partner list, area search, estimate).
+
+Review (CHANGES_REQUIRED, fixed): a missing or blank `Retry-After` had become 0 ("retry now"),
+now null; a new (201) registration with a null key and a response without `alreadyRegistered` are
+malformed; a bad list entry or count fails the page instead of being dropped (reconciliation must
+not think a seller is unbound); pagination checked locally; declared oversize covered; sandbox row
+in the Public research reworded. Unit 37 (Partner 10), 6 new guard mutants killed, sandbox
+contract 3 passed again.

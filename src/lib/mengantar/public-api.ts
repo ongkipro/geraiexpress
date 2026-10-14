@@ -136,7 +136,7 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
   };
 }
 
-async function readBounded(response: Response): Promise<string> {
+export async function readBounded(response: Response): Promise<string> {
   const declared = Number(response.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > MAX_BYTES) throw new MengantarError("malformed");
   if (!response.body) return "";
