@@ -29,6 +29,11 @@ const COURIERS: Record<string, string> = {
   pos: "pos",
 };
 
+// Couriers seen refusing drop-off orders (sandbox, T-020: anteraja). GeraiExpress dispatches
+// drop-off only, so these are not offered.
+// lazy: one sandbox observation; replace with a per-outlet pickup mode once scheduled pickup exists.
+export const DROP_OFF_UNSUPPORTED = new Set(["anteraja"]);
+
 export type MengantarErrorCode =
   | "not_allowed" // 403: key/IP not permitted (the sandbox answers this for unlisted callers)
   | "rejected" // provider answered success:false (unknown area, invalid key, ...)
@@ -65,6 +70,8 @@ export type AreaOption = {
   subdistrict: string;
   zip: string;
 };
+
+export type PickupAddress = { id: string; areaId: string; name: string; address: string; area: string; hidden: boolean };
 
 export type EstimateRequest = {
   originAreaId: string;
@@ -148,6 +155,21 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
   }
 
   return {
+    // The seller's saved pickup addresses (an outlet points at one; create-order needs its id).
+    // Contact person and phone stay at the provider.
+    async listPickupAddresses(): Promise<PickupAddress[]> {
+      const data = await getData("/address", {});
+      if (!Array.isArray(data)) throw new MengantarError("malformed");
+      return data.flatMap((row) => {
+        if (!isRecord(row) || typeof row._id !== "string" || !AREA_ID.test(row._id)
+          || typeof row.PICKUP_AUTOFILL !== "string" || !AREA_ID.test(row.PICKUP_AUTOFILL)) return [];
+        const address = text(row.PICKUP_ADDRESS);
+        const area = [row.PICKUP_SUBDISTRICT, row.PICKUP_DISTRICT, row.PICKUP_CITY].map(text).filter(Boolean).join(", ");
+        if (address.length < 5 || area.length < 3) return [];
+        return [{ id: row._id, areaId: row.PICKUP_AUTOFILL, name: text(row.PICKUP_NAME), address, area, hidden: row.isHide === true }];
+      });
+    },
+
     // The provider's area index (origin/destination ids for estimate and create-order).
     async searchAreas(keyword: string): Promise<AreaOption[]> {
       const term = keyword.trim();

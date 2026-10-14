@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { formatIdr, formatWeight, formatWib } from "@/lib/format";
+import { courierName, formatIdr, formatWeight, formatWib } from "@/lib/format";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/workspace";
 import { PrintButton } from "./print-button";
@@ -46,7 +46,7 @@ export default async function LabelPage({ params }: { params: Promise<{ id: stri
         </div>
         <p className="mb-3 border-b border-foreground pb-2 text-center font-semibold">CONTOH — BUKAN LABEL KURIR</p>
         <div className="flex items-baseline justify-between gap-2">
-          <span className="font-semibold">{quote ? `${quote.courier} ${quote.service}` : "—"}</span>
+          <span className="font-semibold">{quote ? `${courierName(quote.courier)} ${quote.service}` : "—"}</span>
           <span className="tabular">{formatWeight(s.weight_grams)}</span>
         </div>
         <p className="my-3 text-center text-xl font-semibold tracking-wider tabular" data-testid="label-awb">{s.awb}</p>

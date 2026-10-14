@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { friendlyError } from "@/lib/errors";
-import { formatIdr, formatWeight, formatWib } from "@/lib/format";
+import { courierName, etaLabel, formatIdr, formatWeight, formatWib } from "@/lib/format";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/workspace";
 import { reconcileAction, requestLabelAction } from "@/modules/shipments/actions";
@@ -86,6 +86,7 @@ export default async function ShipmentPage({
           contacts={options}
           quotes={(quotes ?? []) as QuoteOption[]}
           idempotencyKey={crypto.randomUUID()}
+          live={!ws.isDemo}
         />
       </div>
     );
@@ -101,7 +102,7 @@ export default async function ShipmentPage({
   const pickup = (s.pickup_snapshot ?? {}) as { outlet?: string; address?: string; area?: string };
   const facts: [string, React.ReactNode][] = [
     ["Resi", s.awb ? <span className="tabular font-semibold">{s.awb}{s.is_simulated ? " (simulasi)" : ""}</span> : "Belum terbit"],
-    ["Layanan", quote ? `${quote.courier} ${quote.service} · ${quote.eta_days}` : "—"],
+    ["Layanan", quote ? `${courierName(quote.courier)} ${quote.service} · ${etaLabel(quote.eta_days)}` : "—"],
     ["Ongkir pelanggan", <span className="tabular" key="c">{formatIdr(s.customer_charge_idr)}</span>],
     ["Pengirim", `${s.sender_name ?? "—"} · ${s.sender_phone ?? "—"}`],
     ["Penerima", `${s.recipient_name ?? "—"} · ${s.recipient_phone ?? "—"}`],

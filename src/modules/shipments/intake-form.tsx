@@ -11,8 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { formatIdr } from "@/lib/format";
+import { courierName, etaLabel, formatIdr } from "@/lib/format";
 import { confirmShipmentAction, saveDraftAction, type ConfirmState, type DraftState } from "./actions";
+import { AreaPicker } from "./area-picker";
 import type { DraftField, DraftValues } from "./draft";
 
 export type ContactOption = {
@@ -36,6 +37,8 @@ type Props = {
   contacts: ContactOption[];
   quotes: QuoteOption[];
   idempotencyKey: string;
+  // A connected real gerai: recipient area comes from Mengantar and quotes are live (T-023).
+  live: boolean;
 };
 
 export function IntakeForm(props: Props) {
@@ -75,14 +78,14 @@ export function IntakeForm(props: Props) {
       [`${role}_name`]: c.name,
       [`${role}_phone`]: c.phone,
       ...(role === "recipient" && address
-        ? { recipient_address: address.address_line, recipient_area: address.area, recipient_postal_code: address.postal_code ?? "" }
+        ? { recipient_address: address.address_line, recipient_area: address.area, recipient_area_id: "", recipient_postal_code: address.postal_code ?? "" }
         : {}),
     }));
   };
   const pickAddress = (addressId: string) => {
     const a = props.contacts.find((x) => x.id === recipientContact)?.addresses.find((x) => x.id === addressId);
     if (!a) return;
-    setValues((v) => ({ ...v, recipient_address: a.address_line, recipient_area: a.area, recipient_postal_code: a.postal_code ?? "" }));
+    setValues((v) => ({ ...v, recipient_address: a.address_line, recipient_area: a.area, recipient_area_id: "", recipient_postal_code: a.postal_code ?? "" }));
     setDirty(true);
   };
 
@@ -177,10 +180,23 @@ export function IntakeForm(props: Props) {
             {field("recipient_name", "Nama penerima")}
             {field("recipient_phone", "No. HP penerima", { type: "tel", inputMode: "tel" })}
             {field("recipient_address", "Alamat lengkap", { textarea: true })}
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_140px]">
-              {field("recipient_area", "Kecamatan / kota", { hint: "Simulasi: wilayah ditulis bebas" })}
-              {field("recipient_postal_code", "Kode pos", { inputMode: "numeric" })}
-            </div>
+            {props.live ? (
+              <>
+                <AreaPicker label="Wilayah penerima" areaId={values.recipient_area_id} areaText={values.recipient_area}
+                  error={err.recipient_area}
+                  onChange={(next) => {
+                    setValues((v) => ({ ...v, recipient_area_id: next.areaId, recipient_area: next.areaText,
+                      recipient_postal_code: next.postalCode ?? v.recipient_postal_code }));
+                    setDirty(true);
+                  }} />
+                <div className="sm:max-w-[160px]">{field("recipient_postal_code", "Kode pos", { inputMode: "numeric" })}</div>
+              </>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_140px]">
+                {field("recipient_area", "Kecamatan / kota", { hint: "Simulasi: wilayah ditulis bebas" })}
+                {field("recipient_postal_code", "Kode pos", { inputMode: "numeric" })}
+              </div>
+            )}
             {!recipientContact ? (
               <label className="flex min-h-11 items-center gap-3">
                 <Checkbox name="save_recipient" /> Simpan sebagai kontak penerima
@@ -234,10 +250,10 @@ export function IntakeForm(props: Props) {
                     q.id === quoteId && "ring-2 ring-ring")}>
                   <input type="radio" name="quote" value={q.id} checked={q.id === quoteId} onChange={() => setQuoteId(q.id)} className="sr-only" />
                   <span className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">{q.service}</span>
+                    <span className="font-semibold">{q.is_simulated ? q.service : courierName(q.courier)}</span>
                     {q.id === quoteId ? <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" aria-hidden="true" />Dipilih</span> : null}
                   </span>
-                  <span className="text-sm text-muted-foreground">{q.courier} · {q.eta_days}</span>
+                  <span className="text-sm text-muted-foreground">{q.is_simulated ? q.courier : q.service} · {etaLabel(q.eta_days)}</span>
                   <span className="tabular text-xl">{formatIdr(q.normal_tariff_idr)}</span>
                   {q.is_simulated ? <span className="text-sm text-muted-foreground">Harga contoh (simulasi)</span> : null}
                 </label>
@@ -262,7 +278,7 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
     ["Alamat tujuan", [v.recipient_address, v.recipient_area, v.recipient_postal_code].filter(Boolean).join(", ")],
     ["Pickup", props.outlet.name],
     ["Paket", `${v.item_description} · ${v.weight_grams} g`],
-    ["Layanan", `${props.quote.courier} ${props.quote.service} (${props.quote.eta_days})`],
+    ["Layanan", `${courierName(props.quote.courier)} ${props.quote.service} (${etaLabel(props.quote.eta_days)})`],
   ];
   return (
     <Dialog>
@@ -272,10 +288,10 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Konfirmasi pengiriman {props.reference}</DialogTitle>
-          <DialogDescription>
+          <DialogDescription data-testid={props.quote.is_simulated ? undefined : "live-issuance-pending"}>
             {props.quote.is_simulated
               ? "Ini simulasi: tidak ada pesanan Mengantar, saldo atau resi sungguhan yang dibuat."
-              : "Mengonfirmasi akan membuat pesanan di akun Mengantar gerai ini."}
+              : "Ongkir ini langsung dari Mengantar. Penerbitan resi langsung belum diaktifkan di versi ini, jadi konfirmasi belum bisa membuat pesanan."}
           </DialogDescription>
         </DialogHeader>
         <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
@@ -296,7 +312,7 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
           <input type="hidden" name="idempotency_key" value={props.idempotencyKey} />
           <DialogFooter className="gap-3">
             <DialogClose asChild><Button type="button" variant="outline">Kembali</Button></DialogClose>
-            <Button type="submit" disabled={pending} aria-busy={pending}>{pending ? "Menerbitkan…" : "Konfirmasi & terbitkan resi"}</Button>
+            <Button type="submit" disabled={pending || !props.quote.is_simulated} aria-busy={pending}>{pending ? "Menerbitkan…" : "Konfirmasi & terbitkan resi"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

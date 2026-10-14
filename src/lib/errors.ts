@@ -33,6 +33,17 @@ const MESSAGES: Record<string, string> = {
   invalid_partner_id: "Partner ID hanya boleh berisi huruf, angka, titik, garis bawah dan tanda hubung.",
   too_many_invitations: "Terlalu banyak undangan yang masih menunggu. Cabut yang tidak dipakai dulu.",
   demo_requires_anonymous_session: "Mode demo hanya untuk sesi demo.",
+  invalid_input: "Periksa kembali isian yang ditandai.",
+  // T-023 live Mengantar (raised by the Worker, not the database).
+  mengantar_not_configured: "Koneksi Mengantar di server belum disiapkan. Hubungi admin GeraiExpress.",
+  mengantar_no_key: "Akun Mengantar gerai ini belum terhubung. Admin gerai bisa menyimpan kunci API di Pengaturan.",
+  mengantar_key_unreadable: "Kunci API Mengantar tersimpan tidak bisa dipakai. Admin gerai perlu menyimpannya ulang di Pengaturan.",
+  mengantar_unavailable: "Mengantar sedang tidak bisa dihubungi. Coba lagi sebentar lagi.",
+  mengantar_key_refused: "Mengantar menolak akses dengan kunci ini (kunci salah atau server belum diizinkan). Periksa kunci di akun Mengantar, lalu simpan lagi.",
+  mengantar_data_unreadable: "Data dari Mengantar tidak bisa dibaca. Coba lagi; jika berulang, hubungi admin GeraiExpress.",
+  mengantar_refused: "Mengantar menolak permintaan ini. Periksa wilayah, berat dan alamat pickup.",
+  pickup_not_set: "Alamat pickup Mengantar outlet ini belum dipilih. Admin gerai bisa memilihnya di Pengaturan.",
+  pickup_not_found: "Alamat pickup itu tidak ditemukan di akun Mengantar gerai ini. Muat ulang lalu pilih lagi.",
 };
 
 export function friendlyError(error: { message?: string; code?: string } | null | undefined): string {

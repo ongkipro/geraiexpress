@@ -19,7 +19,7 @@ test("real tenant settings never claim provider readiness", async ({ page }) => 
   await expect(page.getByText("Belum terhubung.", { exact: false })).toBeVisible();
   await expect(page.getByText("Simulasi")).toHaveCount(0);
   // Only the pickup-address row may be ready; every provider capability must not claim readiness.
-  for (const name of ["Akun Mengantar", "Cek ongkir & penerbitan resi", "Identitas pengirim pelanggan (dropshipper)", "Label resmi (PDF kurir)", "Pelacakan status kurir"]) {
+  for (const name of ["Akun Mengantar", "Cek ongkir", "Penerbitan resi", "Identitas pengirim pelanggan (dropshipper)", "Label resmi (PDF kurir)", "Pelacakan status kurir"]) {
     const row = page.getByRole("listitem").filter({ hasText: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`) });
     await expect(row).toHaveCount(1);
     await expect(row).not.toContainText("Siap");

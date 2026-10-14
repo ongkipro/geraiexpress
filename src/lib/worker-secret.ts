@@ -7,7 +7,9 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 // callers fail closed. Values never leave the server; callers must not log or return them.
 // TURNSTILE_SITE_KEY is public configuration read the same way (runtime, not baked at build).
 export type WorkerBindingName = "CREDENTIAL_KEY" | "MENGANTAR_PARTNER_SECRET" | "TURNSTILE_SITE_KEY"
-  | "SEND_EMAIL_HOOK_SECRET" | "MAIL_TRANSPORT" | "MAILPIT_URL" | "MAIL_FROM";
+  | "SEND_EMAIL_HOOK_SECRET" | "MAIL_TRANSPORT" | "MAILPIT_URL" | "MAIL_FROM"
+  // DEC-010 machine identity (Supabase secret key) and the Mengantar environment for live calls.
+  | "SUPABASE_SECRET_KEY" | "MENGANTAR_ENV";
 
 // Non-secret configuration (site key, mail transport, sender) is read the same way.
 export function workerSecret(name: WorkerBindingName): string | undefined {

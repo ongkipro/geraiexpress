@@ -3,7 +3,7 @@
 
 export const DRAFT_FIELDS = [
   "sender_name", "sender_phone", "recipient_name", "recipient_phone", "recipient_address",
-  "recipient_area", "recipient_postal_code", "item_description", "weight_grams", "length_cm",
+  "recipient_area", "recipient_area_id", "recipient_postal_code", "item_description", "weight_grams", "length_cm",
   "width_cm", "height_cm", "goods_value_idr",
 ] as const;
 
@@ -49,6 +49,11 @@ export function parseDraft(form: FormData): { values: DraftValues; update: Draft
     else if (!PHONE.test(v)) errors[field] = "Nomor HP 8–15 digit, contoh 081234567890.";
     else update[field] = v;
   }
+  // Mengantar area id chosen from the provider's index (connected gerai only).
+  if (values.recipient_area_id === "") update.recipient_area_id = null;
+  else if (!/^[a-f0-9]{24}$/.test(values.recipient_area_id)) errors.recipient_area = "Pilih wilayah dari hasil pencarian.";
+  else update.recipient_area_id = values.recipient_area_id;
+
   if (values.recipient_postal_code === "") update.recipient_postal_code = null;
   else if (!POSTAL.test(values.recipient_postal_code)) errors.recipient_postal_code = "Kode pos 5 digit.";
   else update.recipient_postal_code = values.recipient_postal_code;
@@ -76,6 +81,9 @@ export const REQUIRED_FOR_QUOTE: DraftField[] = [
   "recipient_area", "item_description", "weight_grams",
 ];
 
-export function missingForQuote(update: DraftUpdate): DraftField[] {
-  return REQUIRED_FOR_QUOTE.filter((f) => update[f] == null || update[f] === "");
+// A live (Mengantar) quote also needs the recipient's provider area.
+export function missingForQuote(update: DraftUpdate, live = false): DraftField[] {
+  const missing = REQUIRED_FOR_QUOTE.filter((f) => update[f] == null || update[f] === "");
+  if (live && !update.recipient_area_id && !missing.includes("recipient_area")) missing.push("recipient_area");
+  return missing;
 }

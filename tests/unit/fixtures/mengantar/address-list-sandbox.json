@@ -1,0 +1,40 @@
+{
+ "success": true,
+ "data": [
+  {
+   "RETURN_COUNTRY": "INDONESIA",
+   "isReturnDifferentFromPickup": false,
+   "isHide": false,
+   "isHideCityAndPhone": false,
+   "dontIncludeSubdistrict": false,
+   "isPlant": false,
+   "isEditDisabled": false,
+   "_id": "6acf44a4771fe2b474c055ca",
+   "PICKUP_AUTOFILL": "5fc62f60f8f44b34aa4c0dcd",
+   "PICKUP_ADDRESS": "Jl. Uji Sandbox No. 1",
+   "PICKUP_NAME": "GeraiExpress Sandbox Uji",
+   "pinpointData": null,
+   "PICKUP_DISTRICT": "KEBAYORAN BARU",
+   "PICKUP_SUBDISTRICT": "MELAWAI",
+   "PICKUP_REGION": "DKI JAKARTA",
+   "PICKUP_CITY": "JAKARTA SELATAN",
+   "PICKUP_CITY_SI": "Kota Jakarta Selatan",
+   "PICKUP_ZIP": "12160",
+   "PICKUP_DESTINATION_CODE": "CGK10202",
+   "PICKUP_DESTINATION_CODE_SI": "CGK10202",
+   "PICKUP_ORIGIN_CODE": "CGK10000",
+   "PICKUP_ORIGIN_CODE_SI": "CGK",
+   "PICKUP_SAP_CODE": "JK0903",
+   "PICKUP_FULL_AUTOFILL": "DKI JAKARTA, JAKARTA SELATAN, KEBAYORAN BARU, MELAWAI",
+   "createdAt": "2026-10-14T09:00:20.447Z",
+   "updatedAt": "2026-10-14T09:00:20.447Z",
+   "__v": 0,
+   "unsupportedOriginSicepat": false,
+   "unsupportedOriginNinja": false,
+   "isJavaIsland": true,
+   "returnIsJavaIsland": true
+  }
+ ],
+ "nowDate": "10-14-2026",
+ "now": "17"
+}

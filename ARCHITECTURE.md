@@ -61,8 +61,14 @@ Every user-driven read and write runs with the signed-in user's JWT, so the Work
 browser calling the Data API directly hit the same RLS and RPC checks (TEN-1). The one exception
 is the account dispatcher (DEC-010, T-022): it records Mengantar results through `dispatch_*`
 RPCs that only `service_role` may execute, so no user can forge a resi. It is built and proven
-against the sandbox but not yet called by any page (T-024 wires issuance); until then the
-only provider in the app is the deterministic SQL simulation for demo tenants. Per seller, at
+against the sandbox but not yet called by any page (T-024 wires issuance). Since T-023 the same
+machine identity (Worker secret `SUPABASE_SECRET_KEY`, never in `.env*` or the client bundle)
+serves two more service_role-only RPCs after the page has verified membership with the user's
+session: `machine_seller_key` (the sealed key, opened only in the Worker) and
+`record_live_quotes` (live Mengantar estimates; net cost to `private.quote_costs`). Connected
+real gerai quote live and pick recipient areas from Mengantar; demo gerai keep the SQL
+simulation. Without `MENGANTAR_ENV`/`SUPABASE_SECRET_KEY` (e.g. the preview) live features fail
+closed with an explanatory message. Per seller, at
 most one real operation is in flight (a partial unique index); a stale in-flight or unknown
 operation is reconciled by its reference, never resent.
 

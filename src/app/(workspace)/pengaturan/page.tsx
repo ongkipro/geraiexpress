@@ -4,6 +4,10 @@ import { formatWib } from "@/lib/format";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/workspace";
 import { RemoveSellerKeyForm, SellerKeyForm } from "@/modules/credentials/forms";
+import { PickupForm } from "@/modules/mengantar/pickup-form";
+import { mengantarFailure, tenantMengantar } from "@/lib/mengantar/tenant";
+import type { PickupAddress } from "@/lib/mengantar/public-api";
+import { friendlyError } from "@/lib/errors";
 
 type CredentialStatus = { configured: boolean; hint: string | null; version: number | null; created_at: string | null; latest_version: number };
 
@@ -20,20 +24,45 @@ const STATE: Record<Readiness, { label: string; Icon: typeof CheckCircle2 }> = {
 // PR-8: each capability has its own readiness; a connected account is never "all ready".
 export default async function SettingsPage() {
   const ws = await requireWorkspace();
-  const pickupReady = Boolean(ws.outlet.pickupAddress && ws.outlet.pickupArea);
   const { data: raw } = await (await supabaseServer()).rpc("seller_credential_status", { p_tenant: ws.tenant.id });
   const credential = ((raw ?? []) as CredentialStatus[])[0] ?? { configured: false, hint: null, version: null, created_at: null, latest_version: 0 };
-  // A stored key is not a verified connection: it stays "Belum diverifikasi" until a provider check exists.
-  const provider: Readiness = ws.isDemo ? "simulated" : credential.configured ? "unverified" : "blocked";
+
+  // T-023: with a stored key, the server reads the seller's saved pickup addresses through it; a
+  // successful read is the first proof the key works against Mengantar. Only for admins, who
+  // can act on it: operators see the stored state without spending provider calls.
+  let pickupOptions: PickupAddress[] | null = null;
+  let mengantarProblem: string | null = null;
+  if (!ws.isDemo && credential.configured && ws.role === "tenant_admin") {
+    const mengantar = await tenantMengantar(ws.tenant.id);
+    if (!mengantar.ok) mengantarProblem = friendlyError({ message: `mengantar_${mengantar.reason}` });
+    else {
+      try {
+        pickupOptions = await mengantar.client.listPickupAddresses();
+      } catch (error) {
+        mengantarProblem = friendlyError({ message: mengantarFailure(error) });
+      }
+    }
+  }
+  const keyWorks = pickupOptions !== null;
+  // Demo outlets ship from free text; real outlets need the Mengantar pickup address.
+  // A pickup that no longer exists in the seller's account is not ready.
+  const pickupReady = ws.isDemo ? Boolean(ws.outlet.pickupAddress && ws.outlet.pickupArea)
+    : Boolean(ws.outlet.mengantarPickupId) && (pickupOptions === null || pickupOptions.some((a) => a.id === ws.outlet.mengantarPickupId));
+  const provider: Readiness = ws.isDemo ? "simulated" : keyWorks ? "ready" : credential.configured ? "unverified" : "blocked";
+  const quoting: Readiness = ws.isDemo ? "simulated" : keyWorks && pickupReady ? "ready" : "blocked";
   const rows: { name: string; state: Readiness; detail: string }[] = [
     { name: "Alamat pickup outlet", state: pickupReady ? "ready" : "blocked",
-      detail: pickupReady ? `${ws.outlet.pickupAddress}, ${ws.outlet.pickupArea}` : "Isi alamat pickup sebelum cek ongkir." },
+      detail: pickupReady ? `${ws.outlet.pickupAddress}, ${ws.outlet.pickupArea}`
+        : ws.isDemo ? "Isi alamat pickup sebelum cek ongkir." : "Admin gerai memilih alamat pickup dari akun Mengantar." },
     { name: "Akun Mengantar", state: provider,
       detail: ws.isDemo ? "Demo memakai penyedia simulasi; tidak terhubung ke Mengantar."
-        : credential.configured ? `Kunci API berakhiran …${credential.hint} tersimpan terenkripsi (${formatWib(credential.created_at)}). Belum diverifikasi ke Mengantar.`
+        : keyWorks ? `Terhubung: kunci berakhiran …${credential.hint} berhasil membaca akun Mengantar.`
+        : credential.configured ? `Kunci API berakhiran …${credential.hint} tersimpan terenkripsi (${formatWib(credential.created_at)}). ${mengantarProblem ?? "Belum diverifikasi ke Mengantar."}`
         : "Belum terhubung. Admin gerai bisa menyimpan kunci API akun Mengantar milik bisnis ini." },
-    { name: "Cek ongkir & penerbitan resi", state: provider,
-      detail: ws.isDemo ? "Harga dan resi adalah contoh." : "Butuh akun Mengantar yang terhubung dan terverifikasi." },
+    { name: "Cek ongkir", state: quoting,
+      detail: ws.isDemo ? "Harga adalah contoh." : quoting === "ready" ? "Ongkir langsung dari Mengantar dengan kunci gerai ini." : "Butuh akun Mengantar yang terhubung dan alamat pickup." },
+    { name: "Penerbitan resi", state: ws.isDemo ? "simulated" : "blocked",
+      detail: ws.isDemo ? "Resi adalah contoh." : "Penerbitan resi langsung ke Mengantar belum diaktifkan di versi ini." },
     { name: "Identitas pengirim pelanggan (dropshipper)", state: ws.isDemo ? "simulated" : "unverified",
       detail: "Nama/HP pelanggan di resi resmi butuh izin dropshipper di akun Mengantar." },
     { name: "Label resmi (PDF kurir)", state: ws.isDemo ? "simulated" : "unverified",
@@ -73,7 +102,7 @@ export default async function SettingsPage() {
           <h2 id="mengantar-heading" className="text-xl">Akun Mengantar (kunci API sendiri)</h2>
           <p className="text-sm text-muted-foreground">
             Hubungkan akun penjual Mengantar yang sudah dimiliki bisnis ini. GeraiExpress tidak pernah meminta kata sandi Mengantar.
-            Kunci baru dipakai setelah fitur verifikasi dan pengiriman langsung diaktifkan.
+            Kunci dipakai server untuk membaca alamat pickup dan cek ongkir; penerbitan resi langsung menyusul.
           </p>
           {credential.configured && credential.version ? (
             <div className="flex flex-col gap-2 rounded-md bg-muted p-4">
@@ -82,6 +111,22 @@ export default async function SettingsPage() {
             </div>
           ) : null}
           <SellerKeyForm latestVersion={credential.latest_version} replacing={credential.configured} />
+        </section>
+      ) : null}
+
+      {ws.role === "tenant_admin" && !ws.isDemo && credential.configured ? (
+        <section aria-labelledby="pickup-heading" className="flex flex-col gap-3 rounded-lg bg-card p-6 ring-1 ring-border">
+          <h2 id="pickup-heading" className="text-xl">Alamat pickup Mengantar</h2>
+          <p className="text-sm text-muted-foreground">
+            Pilih alamat pickup {ws.outlet.name} dari alamat yang tersimpan di akun Mengantar. Alamat baru dibuat atau diubah di aplikasi Mengantar.
+          </p>
+          {pickupOptions === null ? (
+            <p role="alert" className="rounded-md bg-muted p-3"><span aria-hidden="true">⚠ </span>{mengantarProblem}</p>
+          ) : pickupOptions.length === 0 ? (
+            <p className="rounded-md bg-muted p-3">Akun Mengantar ini belum punya alamat pickup. Tambahkan dulu di aplikasi Mengantar.</p>
+          ) : (
+            <PickupForm addresses={pickupOptions} current={ws.outlet.mengantarPickupId} />
+          )}
         </section>
       ) : null}
 

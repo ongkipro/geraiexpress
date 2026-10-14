@@ -97,9 +97,13 @@ test("real tenant without a provider cannot quote and is told why", async ({ pag
   await page.getByLabel("Nama penerima").fill("Penerima A");
   await page.getByLabel("No. HP penerima").fill("081211112222");
   await page.getByLabel("Alamat lengkap").fill("Jl. Tujuan A No. 9");
-  await page.getByLabel("Kecamatan / kota").fill("Kec. Tujuan, Kota A");
+  // A real gerai picks the recipient's area from Mengantar (T-023); without a key it cannot.
+  await expect(page.getByLabel("Kecamatan / kota")).toHaveCount(0);
+  await page.getByLabel("Wilayah penerima").fill("Sukatani");
+  await page.getByRole("button", { name: "Cari" }).click();
+  await expect(page.getByRole("status").filter({ hasText: /Akun Mengantar gerai ini belum terhubung/ })).toBeVisible();
   await page.getByRole("button", { name: "Simpan & cek ongkir" }).click();
-  await expect(page.getByText(/Akun Mengantar gerai ini belum terhubung/)).toBeVisible();
+  await expect(page.getByText("Lengkapi data yang ditandai sebelum cek ongkir.")).toBeVisible();
 });
 
 async function quotedDraft(page: import("@playwright/test").Page) {

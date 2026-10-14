@@ -159,3 +159,22 @@ describe("Mengantar Public API area search", () => {
     expect(calls).toHaveLength(1);
   });
 });
+
+describe("Mengantar seller pickup addresses (T-023)", () => {
+  it("returns id, area, name and address, never the contact person or phone", async () => {
+    const { impl, calls } = fakeFetch(fixture("address-list-sandbox.json"));
+    const list = await createMengantarPublicClient("sandbox", KEY, impl).listPickupAddresses();
+    expect(new URL(calls[0]).pathname).toBe(`/api/public/${KEY}/address`);
+    expect(list).toEqual([{ id: "6acf44a4771fe2b474c055ca", areaId: "5fc62f60f8f44b34aa4c0dcd", name: "GeraiExpress Sandbox Uji",
+      address: "Jl. Uji Sandbox No. 1", area: "MELAWAI, KEBAYORAN BARU, JAKARTA SELATAN", hidden: false }]);
+  });
+
+  it("skips rows without a usable id, area or address", async () => {
+    const body = JSON.parse(fixture("address-list-sandbox.json"));
+    const good = body.data[0];
+    body.data = [good, { ...good, _id: "x" }, { ...good, PICKUP_AUTOFILL: null }, { ...good, PICKUP_ADDRESS: "" }];
+    const { impl } = fakeFetch(JSON.stringify(body));
+    expect(await createMengantarPublicClient("sandbox", KEY, impl).listPickupAddresses()).toHaveLength(1);
+  });
+});
+

@@ -20,6 +20,9 @@ printf 'SUPABASE_URL=%s\nSUPABASE_PUBLISHABLE_KEY=%s\n' "$url" "$key" > .env.loc
 # the local Mailpit capture only.
 hook="$(sed -n 's/^GE_SEND_EMAIL_HOOK_SECRET=//p' supabase/.env 2>/dev/null | head -1)"
 mailpit="$(node -e 'const s=JSON.parse(process.argv[1]);process.stdout.write(s.MAILPIT_URL||s.INBUCKET_URL||"")' "$json")"
-printf 'NEXTJS_ENV=development\nSUPABASE_URL=%s\nSUPABASE_PUBLISHABLE_KEY=%s\nCREDENTIAL_KEY=%s\nTURNSTILE_SITE_KEY=1x00000000000000000000AA\nSEND_EMAIL_HOOK_SECRET=%s\nMAIL_TRANSPORT=mailpit\nMAILPIT_URL=%s\n' "$url" "$key" "$cred" "$hook" "$mailpit" > .dev.vars
+# DEC-010: the local stack's secret key is the dispatcher's machine identity; like CREDENTIAL_KEY
+# it goes only into .dev.vars (a binding), never .env.local. Live Mengantar calls use the sandbox.
+secret="$(node -e 'const s=JSON.parse(process.argv[1]);process.stdout.write(s.SECRET_KEY||s.SERVICE_ROLE_KEY)' "$json")"
+printf 'NEXTJS_ENV=development\nSUPABASE_URL=%s\nSUPABASE_PUBLISHABLE_KEY=%s\nCREDENTIAL_KEY=%s\nTURNSTILE_SITE_KEY=1x00000000000000000000AA\nSEND_EMAIL_HOOK_SECRET=%s\nMAIL_TRANSPORT=mailpit\nMAILPIT_URL=%s\nSUPABASE_SECRET_KEY=%s\nMENGANTAR_ENV=sandbox\n' "$url" "$key" "$cred" "$hook" "$mailpit" "$secret" > .dev.vars
 chmod 600 .env.local .dev.vars
 echo "dev-env: wrote .env.local and .dev.vars for $url"

@@ -12,7 +12,11 @@ export type Workspace = {
   isDemo: boolean;
   role: "tenant_admin" | "operator";
   tenant: { id: string; name: string };
-  outlet: { id: string; name: string; pickupAddress: string | null; pickupArea: string | null };
+  outlet: {
+    id: string; name: string; pickupAddress: string | null; pickupArea: string | null;
+    // Mengantar saved pickup address and its area (set by a tenant admin; T-023).
+    mengantarPickupId: string | null; mengantarAreaId: string | null;
+  };
 };
 
 type MembershipRow = {
@@ -53,7 +57,7 @@ export const loadWorkspace = cache(async (): Promise<
 
   const { data: outlets } = await supabase
     .from("outlets")
-    .select("id, name, pickup_address, pickup_area")
+    .select("id, name, pickup_address, pickup_area, mengantar_pickup_address_id, mengantar_area_id")
     .eq("tenant_id", chosen.tenant_id)
     .order("created_at")
     .limit(1);
@@ -73,6 +77,8 @@ export const loadWorkspace = cache(async (): Promise<
         name: outlet.name,
         pickupAddress: outlet.pickup_address,
         pickupArea: outlet.pickup_area,
+        mengantarPickupId: outlet.mengantar_pickup_address_id,
+        mengantarAreaId: outlet.mengantar_area_id,
       },
     },
   };

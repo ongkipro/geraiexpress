@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { friendlyError } from "@/lib/errors";
+import { DROP_OFF_UNSUPPORTED } from "@/lib/mengantar/public-api";
+import { mengantarFailure, tenantMengantar } from "@/lib/mengantar/tenant";
+import { machineClient } from "@/lib/supabase/machine";
 import { requireWorkspace } from "@/lib/workspace";
 import { missingForQuote, parseDraft, type DraftField, type DraftValues } from "./draft";
 
@@ -34,8 +37,10 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
   if (Object.keys(errors).length) {
     return { error: "Periksa isian yang ditandai.", fieldErrors: errors, values };
   }
+  // A real (non-demo) gerai quotes live from Mengantar; demo gerai use the SQL simulation.
+  const live = !ws.isDemo;
   if (intent === "quote") {
-    const missing = missingForQuote(update);
+    const missing = missingForQuote(update, live);
     if (missing.length) {
       return {
         error: "Lengkapi data yang ditandai sebelum cek ongkir.",
@@ -109,12 +114,47 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
       .eq("tenant_id", ws.tenant.id).eq("shipment_id", id).eq("shipment_revision", revision)
       .gt("expires_at", new Date().toISOString());
     if (!count) {
-      const { error: qe } = await supabase.rpc("request_quotes", { p_shipment: id, p_expected_revision: revision });
-      if (qe) return { error: friendlyError(qe) + contactNote, values };
+      if (live) {
+        const quoted = await liveQuotes(ws.tenant.id, ws.outlet.mengantarAreaId, id, revision, update);
+        if (quoted.error) return { error: quoted.error + contactNote, values };
+        if (quoted.count === 0) return { error: "Tidak ada layanan Mengantar untuk rute dan berat ini." + contactNote, values };
+      } else {
+        const { error: qe } = await supabase.rpc("request_quotes", { p_shipment: id, p_expected_revision: revision });
+        if (qe) return { error: friendlyError(qe) + contactNote, values };
+      }
     }
     return { ok: "Ongkir diperbarui. Pilih layanan lalu periksa ringkasan.", warning: contactNote.trim() || undefined };
   }
   return { ok: "Draf tersimpan.", warning: contactNote.trim() || undefined };
+}
+
+// T-023: live estimate through the tenant's own seller key (membership already verified by
+// requireWorkspace), written by the machine identity so the tariff cannot be forged. The counter
+// sees the normal tariff; the net cost after the account discount stays private.
+// lazy: billable weight is the actual weight; volumetric weight and COD quotes come with T-024.
+async function liveQuotes(tenantId: string, originAreaId: string | null, shipmentId: string, revision: number,
+  update: Record<string, unknown>): Promise<{ count: number; error?: undefined } | { error: string; count?: undefined }> {
+  if (!originAreaId) return { error: friendlyError({ message: "pickup_not_set" }) };
+  const mengantar = await tenantMengantar(tenantId);
+  if (!mengantar.ok) return { error: friendlyError({ message: `mengantar_${mengantar.reason}` }) };
+  const machine = machineClient();
+  if (!machine) return { error: friendlyError({ message: "mengantar_not_configured" }) };
+  let estimates;
+  try {
+    estimates = await mengantar.client.estimate({
+      originAreaId, destinationAreaId: String(update.recipient_area_id), weightGrams: Number(update.weight_grams),
+    });
+  } catch (error) {
+    return { error: friendlyError({ message: mengantarFailure(error) }) };
+  }
+  const rows = estimates.filter((e) => !DROP_OFF_UNSUPPORTED.has(e.courier))
+    .map((e) => ({ courier: e.courier, tariff: e.tariff, net: e.netShipping, eta: (e.etaText ?? "").slice(0, 40) }));
+  const { data, error } = await machine.rpc("record_live_quotes", {
+    p_tenant: tenantId, p_shipment: shipmentId, p_expected_revision: revision, p_rows: rows,
+  });
+  // invalid_input here means Mengantar sent data we could not store, not a form problem.
+  if (error) return { error: friendlyError(error.message === "invalid_input" ? { message: "mengantar_data_unreadable" } : error) };
+  return { count: Number(data) };
 }
 
 export type ConfirmState = { error?: string };

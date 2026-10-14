@@ -28,3 +28,21 @@ export const SUBMISSION_LABEL: Record<string, string> = {
   issued: "Resi terbit",
   failed: "Gagal",
 };
+
+// Mengantar courier codes (stored as sent to create-order) → names counter staff know.
+const COURIER_NAME: Record<string, string> = {
+  JNE: "JNE", SiCepat: "SiCepat", Sap: "SAP Express", iDexpress: "ID Express", JT: "J&T Express",
+  lion: "Lion Parcel", anteraja: "AnterAja", spx: "SPX Express", pos: "Pos Indonesia",
+};
+export const courierName = (code: string) => COURIER_NAME[code] ?? code;
+
+// Mengantar's delivery estimates arrive as "1 - 2 days", "2 - 1 days", "4 HARI", "1-2 Day" or
+// "—"; show them as Indonesian day ranges ("1–2 hari"), smallest first. Anything else is shown
+// as given (simulated quotes already read "2–3 hari").
+export function etaLabel(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  const m = /^\s*(\d{1,2})\s*(?:[-–]\s*(\d{1,2}))?\s*(?:days?|hari)\s*$/i.exec(raw);
+  if (!m) return raw;
+  const [a, b] = [Number(m[1]), Number(m[2] ?? m[1])].sort((x, y) => x - y);
+  return a === b ? `${a} hari` : `${a}–${b} hari`;
+}

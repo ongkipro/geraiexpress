@@ -497,3 +497,41 @@ the shipment is queued, real, and its quote matches the revision; local refusals
 `InvalidOrderRequest`. Ceiling (per-tenant, not per-account serialization) recorded in DEC-010;
 digest/area and `awaiting_payment` labels noted for T-024. test:db 84 (dispatcher 16), unit 63,
 live sandbox 2 passed again (order sent and reconciled), shipping e2e 42.
+
+## 2026-10-14 — T-023 live quotes and area pickers (DEL-1 stage 3)
+
+Migration `20261014170000_live_quotes.sql`: `set_outlet_mengantar_pickup` (tenant admin of a real
+gerai, audited), and service_role-only `machine_seller_key` and `record_live_quotes` (revision
+guarded, replaces older quotes, net cost private, zero rows leave the draft unquoted). Worker:
+`machineClient()` from the `SUPABASE_SECRET_KEY` binding, `tenantMengantar()` opens the tenant's
+sealed key after `requireWorkspace` verified membership (`MENGANTAR_ENV` selects sandbox or
+production; any missing piece fails closed). Settings reads the seller's saved pickup addresses
+with the key (first real proof the key works) and the admin picks one; the server re-reads it
+from Mengantar before saving. Intake for real gerai: recipient area search (`/api/mengantar/area`,
+radio results; typing again clears the choice) and live quotes through the tenant key, anteraja
+filtered (refuses drop-off). Live confirmation stays disabled with an explanation until T-024.
+`pnpm dev:env` now writes `SUPABASE_SECRET_KEY` and `MENGANTAR_ENV=sandbox` into `.dev.vars` only.
+
+Visual review of the live flow screenshots (390 and 1280) found raw courier codes (`spx`, `Sap`)
+and provider ETA strings ("2 - 1 days", "4 HARI"): display now uses courier names and Indonesian
+day ranges (`courierName`, `etaLabel`, unit-tested); the confirm dialog no longer says it will
+create an order, and settings no longer says the key is unused.
+
+Verified: test:db 88 (live quotes 4), unit 67, typecheck, db lint, build, cf:build,
+check:bundle, worker smoke, opt-in `tests/e2e/live-mengantar.spec.ts` against the sandbox on
+390/768/1280 (stores the sandbox seller key through the UI, picks the pickup, searches
+"sukatani", quotes live, confirm locked, then restores outlet A and supersedes the key).
+
+Review (APPROVE with minors, all applied): settings calls Mengantar only for tenant admins;
+a replaced or removed seller key clears the outlet's Mengantar pickup (trigger on
+`private.seller_credentials`; the old account's pickup must not be reused) and a pickup missing
+from the seller's list is not "ready"; ETA truncated to the stored 40 characters and provider data
+the database refuses shows "Data dari Mengantar tidak bisa dibaca" instead of a form error;
+`record_live_quotes` checks formats before casting; the area route sends `no-store` on every
+answer; 403 copy no longer blames only the key; comments corrected. Noted for T-024: dispatch
+re-checks the pickup, saved contact addresses keep an area id. Known: `credentials.spec.ts`
+stores a fake key, so the admin settings page calls the sandbox during e2e (assertions hold
+whether the call fails or is refused). Re-verified: test:db 89, unit 67, db lint, build,
+cf:build, check:bundle, worker smoke, settings/credentials/shipping e2e 57, live e2e 3; the
+full e2e before the fixes: 176 passed, 4 skipped (the 3 opt-in live runs and one existing skip).
+
