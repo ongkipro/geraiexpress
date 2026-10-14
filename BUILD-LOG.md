@@ -169,3 +169,181 @@ recorded in ARCHITECTURE.md.
 Checks: typecheck; unit (8); mutation check (limiter forced to allow → both limit tests fail); cf:build,
 bundle scan, worker smoke (bindings listed); full e2e on Worker and next dev, 119 passed and
 1 skipped each.
+
+## 2026-10-14 — T-012 Super Admin foundation (PR-24, PR-15, PR-28)
+
+Migration `20261014120000_platform_admin.sql`: `platform_grants` (capability array, revision,
+revocation), `audit_events` (append-only by trigger, including truncate), and
+`private.platform_capable(capability)`, which requires an active grant, the capability, a
+non-anonymous identity and `aal2` in the JWT, all read on every call. RPCs: tenant directory
+(non-demo, counts only), suspend/reactivate with reason and expected state, admin list,
+grant/change and revoke with expected revision; writes lock the grant set and assert that an
+access governor with a verified TOTP factor remains. TOTP enabled in `config.toml`; seed adds
+two governors with fixture TOTP secrets, an audit/monitoring admin without a factor and
+Gerai Uji C.
+
+UI: `/verifikasi-2fa` (enrol with QR + manual key, or challenge; factor chosen server-side;
+`MFA_LIMITER`), `/admin` (directory and lifecycle), `/admin/akses`, `/admin/audit`; non-holders
+get 404; admins without tenant governance land on their first permitted page; sign-in now
+routes through `/`, which sends a platform-only identity to `/admin`. Visual pass: destructive
+lifecycle/revoke triggers were full-width grey blocks repeating long names; now compact
+secondary controls with the target name for screen readers.
+
+Review (CHANGES_REQUIRED, fixed): (1) MAJOR race: write RPCs checked authority before taking
+the grant lock, so a governor revoked mid-call could re-grant themselves (reproduced by the
+reviewer with two transactions); now lock first (FOR UPDATE on the grant set, FOR SHARE on the
+caller's grant for lifecycle) and a psql two-transaction test proves refusal, mutation-checked.
+(2) MAJOR doc overclaim: `MFA_LIMITER` does not bound direct Auth MFA calls; ARCHITECTURE now
+records the brute-force residual and a remote gate. Minors: TOFU enrolment, factor unenrol/user
+deletion outside the guard and the never-seed-remote warning documented; audit page now shows
+actor, target, change and filters (PR-28) via `platform_audit`.
+
+Observed: Supabase accepts the same TOTP code twice within its window (recorded as a residual).
+Checks: `pnpm test:db` 46 passed; mutation checks (aal2 removed → denial test fails;
+final-governor guard removed → guard test fails; check-before-lock → concurrency test fails); platform e2e 18 passed on next dev; build,
+cf:build, bundle scan, worker smoke; full e2e on Worker and next dev (see `.delivery`).
+
+## 2026-10-14 — T-013 registration and gerai application (PR-29, PR-30, PR-15)
+
+Migration `20261014130000_registration.sql`: `private.settings.registration_open` (default
+closed; the Auth hook allows real accounts only while open; governors toggle it with an audited
+reason), `tenant_applications` (one open per identity, revisioned, partial drafts, own-read RLS),
+applicant RPCs (save, submit, withdraw, `my_account_state`) requiring a verified non-anonymous
+identity, and Super Admin RPCs (list, review with reason; approval provisions one active tenant,
+outlet and `tenant_admin` membership; replays hit `stale_state`).
+
+Found while building: anyone could `signUp` with another person's email and their own password;
+the hook cannot tell that from an OTP signup and Auth gives OTP-created users a random hash too
+(verified by probing). An insert-time guard was tried and dropped for that reason. Fix: a
+`BEFORE UPDATE` trigger discards the password at the email's first confirmation, so only the
+verified owner's later password works (test: attacker password refused after the owner
+verifies; mutation-checked).
+
+UI: `/daftar` (email → code; generic reply), `/daftar/kata-sandi`, `/daftar/gerai` (draft,
+submit, withdraw, review states), `/admin/pengajuan` (status tabs, decisions with reason; after a
+decision the page moves to the resulting tab with a confirmation, because the row leaves the
+submitted list), registration switch on `/admin`. Root routing: no password → set password;
+application → its page. Bahasa Indonesia OTP template (`supabase/templates/otp.html`), applied
+after restarting the local stack. `OTP_LIMITER` 3/60 s per visitor.
+
+Review (APPROVE with minors, all fixed): throttled-vs-sent replies leaked account existence
+while closed (now one generic reply; the Auth API residual is documented); attacker-planted
+`user_metadata` survived verification — clearing it in the trigger did not work because Auth
+rewrote metadata from memory on the next update (observed), so the hook now refuses signups
+with metadata; template comment corrected; applicants can no longer read `reviewed_by`;
+self-decision refused. New tests: signup-code confirmation path, metadata refusal, single
+membership after approval. `pnpm test:db` 55 passed.
+
+E2E note: React resets a form after its action; the password test waits for the reset before
+retyping (a human cannot hit this race).
+
+## 2026-10-14 — T-014 staff invitations and member management (PR-31, PR-32, DEC-008)
+
+Migration `20261014140000_invitations.sql`: `tenant_invitations` with RPC-only access; invite
+(admin of a real tenant, lock then re-check, no duplicate pending, expired pending closed
+first), revoke, list (only unexpired), `my_invitations` and `accept_invitation` (verified
+invited email only; unknown and foreign ids look the same; issuer must still be an active
+admin; tenant active; one membership). Member list, role change and deactivation with a
+last-admin guard. The Auth hook also admits an email holding a pending invitation while
+registration is closed. `reconcile_shipment` now re-checks the role after a share lock on the
+caller's membership (T-010 follow-up).
+
+UI: `/anggota` (admins of real gerai: members with role/deactivate, pending invitations,
+invite with role and share-the-link guidance; nav item only for admins), `/undangan`
+(accept), `/daftar` keeps code entry visible when closed for invited staff, `/masuk` links it,
+root and password step route to `/undangan` when invitations exist.
+
+Bugs found by the browser pass: role labels exported from a `"use client"` module were client
+references in server pages (labels blank) — moved to `labels.ts`; expired invitations were
+listed as pending — now filtered; the opened member panel pushed its trigger off the right edge.
+E2E races fixed in tests (typing before hydration after client navigation).
+
+Review (APPROVE, minors addressed): 20-pending cap per gerai, NULL role refused, invite and
+expired-replacement audits carry the email, concurrent mutual demotion test added, invitation
+existence via the Auth API recorded as a residual for T-016.
+
+Checks: `pnpm test:db` 62 passed; mutation checks (role re-check after lock removed, issuer
+check removed, last-admin guard removed → each targeted test fails); members + registration e2e
+24 passed; full suites on both runtimes recorded in `.delivery`.
+
+## 2026-10-14 — T-015 Mengantar credential storage (PR-18 storage, PR-26, SEC-3)
+
+Design check against the canonical Partner study: the Partner Secret is a Worker secret binding
+with no database projection, so the owner's idea of entering Mengantar credentials in Super
+Admin was split: seller API keys (BYOK, DEC-006) are entered by the gerai's admin and sealed;
+the Partner ID (not secret) is set in Super Admin; the Partner Secret is set with
+`wrangler secret put` and Super Admin only shows whether it is present.
+
+Migration `20261014150000_credentials.sql`: `private.seller_credentials` (ciphertext, IV, key
+version, 4-char hint, monotonic version, one active), store/remove RPCs behind the locked
+tenant-admin check (demo refused), member status projection, platform integration list and
+Partner ID setting (audited). `src/lib/credential-crypto.ts` (AES-256-GCM, AAD tenant+version,
+unit-tested incl. wrong tenant/version/key), `worker-secret.ts`, `/pengaturan` admin section,
+`/admin/integrasi`. `pnpm dev:env` generates and keeps a local `CREDENTIAL_KEY` (umask 077).
+
+Review (CHANGES_REQUIRED, fixed): MAJOR — `pnpm dev:env` had put `CREDENTIAL_KEY` in
+`.env.local`; OpenNext bakes `.env*` into `.open-next/cloudflare/next-env.mjs` and mirrors it into
+`process.env`, and `workerSecret()` fell back to `process.env`, so a production build made on a
+dev machine without the real secret would have sealed with the laptop key and reported it as
+installed. Now the key is only in `.dev.vars` (a Cloudflare binding, also under `next dev`), the
+fallback is gone, `check:bundle` fails on baked secret names (it failed on the old build, passes
+on the new one), and `dev:env` chmods both env files to 600 and validates a reused key. Minors:
+removal/replacement now clears ciphertext and IV (constraint ties them to the active row),
+removal message no longer overclaims, shorter hint for short keys, tests for suspended-gerai
+admin and operator removal.
+
+Fixed while testing: `to_jsonb(NULL)` is SQL NULL, so clearing the Partner ID violated NOT NULL.
+Checks: unit 11, `pnpm test:db` 66 (mutation: store authority removed → denial test fails),
+credentials + settings e2e 15 on next dev; full suites in `.delivery`.
+
+## 2026-10-14 — T-016 Turnstile CAPTCHA on Auth entry points (SEC-5)
+
+`[auth.captcha]` enabled (Turnstile; Cloudflare's documented always-pass test secret locally);
+password sign-in, anonymous demo sign-in and OTP pass the widget token; DB test clients attach
+the documented dummy token; `tests/db/captcha.test.ts` proves each entry point (incl. signUp) is
+refused without one. Site key read at runtime from the `TURNSTILE_SITE_KEY` binding.
+
+Found in the browser: (1) the e2e fixture sent a fake `CF-Connecting-IP` to every origin and
+Cloudflare refused the Turnstile script (ERR_BLOCKED_BY_ORB) — the header is now added only for
+the app's origin; (2) clicks before verification completed were swallowed: the verifying
+frame overflows its box and covered the submit button (no event reached the document) — the
+widget now sits below the button and uses `appearance: "interaction-only"`; (3) a disabled
+submit button drops out of the Tab order — it now stays focusable with `aria-disabled` and
+explains the wait. Scope note: CAPTCHA does not stop one anonymous session from triggering
+email-change mail; recorded as an owner decision (mail architecture).
+
+Review (CHANGES_REQUIRED, fixed): MAJOR — the Turnstile test secret was literal in
+`config.toml`, so a `supabase config push` would have made a real project's CAPTCHA always pass;
+the secret is now `env(GE_AUTH_CAPTCHA_SECRET)` from gitignored `supabase/.env`, written by
+`pnpm db:start` (`scripts/supabase-local-env.sh`), verified by restarting the stack (GoTrue got
+the value; captcha test passes), and the docs forbid `config push`. Minors: captcha failures now
+say so (not "wrong password" / "code sent"), delivery outages (5xx) are reported, the test also
+covers recovery and resend, the wait hint is a persistent live region, and every extra e2e
+browser context gets its own visitor IP.
+
+## 2026-10-14 — T-017 Auth email through the Worker's Send Email Hook (DEC-009)
+
+The owner accepted the recommendation to close the T-016 residual with a Send Email Hook
+(DEC-009; ARCH-3 updated). `POST /api/auth/send-email` verifies the Standard Webhooks signature
+(WebCrypto HMAC, ±5 min), refuses anonymous identities and unused action types, renders
+Bahasa Indonesia code mail, and delivers through `MAIL_TRANSPORT` (local Mailpit API only,
+loopback-guarded; anything else fails closed). Supabase templates were removed (one source of
+mail text). Local plumbing: `[auth.hook.send_email]` with the secret from gitignored
+`supabase/.env` (generated by `pnpm db:start`), `pnpm dev:env` passes it and the Mailpit URL to
+`.dev.vars`, and `pnpm dev:hook-relay` listens only on the docker0 address because the dev
+servers bind 127.0.0.1.
+
+Observed: a `supabase stop` piped to /dev/null had not actually restarted the stack, so the
+first test still used the native mailer (sender `admin@email.com`); after a confirmed restart the
+sender is `no-reply@geraiexpress.local` and the Worker logs `auth_mail_sent`. Anonymous email
+change now logs `auth_mail_refused anonymous_identity` and Mailpit receives nothing. Disabling
+the anonymous rule end to end still sent nothing (the payload has no deliverable address), so the
+rule is mutation-checked in the unit test, where removing it fails.
+
+Review (APPROVE with minors, fixed): hook decisions now answer HTTP 200 with an error object, the
+shape Auth reads (verified: Auth logs "403: Email tidak dapat dikirim untuk akun ini." instead of a
+generic failure) and that avoids hook retries re-sending delivered messages; an email change
+without a current address is refused even if the anonymous flag were missing (e2e + unit);
+replay inside the 5-minute window is recorded as a `// lazy:` ceiling (id store with the
+production transport); null payload and `[::1]` loopback nits fixed. Mail-related e2e 30 passed on
+both runtimes after the change; `pnpm test:db` 68.

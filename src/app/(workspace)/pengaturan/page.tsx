@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { CheckCircle2, CircleSlash, FlaskConical, HelpCircle } from "lucide-react";
+import { formatWib } from "@/lib/format";
+import { supabaseServer } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/workspace";
+import { RemoveSellerKeyForm, SellerKeyForm } from "@/modules/credentials/forms";
+
+type CredentialStatus = { configured: boolean; hint: string | null; version: number | null; created_at: string | null; latest_version: number };
 
 export const metadata: Metadata = { title: "Pengaturan" };
 
@@ -16,12 +21,17 @@ const STATE: Record<Readiness, { label: string; Icon: typeof CheckCircle2 }> = {
 export default async function SettingsPage() {
   const ws = await requireWorkspace();
   const pickupReady = Boolean(ws.outlet.pickupAddress && ws.outlet.pickupArea);
-  const provider: Readiness = ws.isDemo ? "simulated" : "blocked";
+  const { data: raw } = await (await supabaseServer()).rpc("seller_credential_status", { p_tenant: ws.tenant.id });
+  const credential = ((raw ?? []) as CredentialStatus[])[0] ?? { configured: false, hint: null, version: null, created_at: null, latest_version: 0 };
+  // A stored key is not a verified connection: it stays "Belum diverifikasi" until a provider check exists.
+  const provider: Readiness = ws.isDemo ? "simulated" : credential.configured ? "unverified" : "blocked";
   const rows: { name: string; state: Readiness; detail: string }[] = [
     { name: "Alamat pickup outlet", state: pickupReady ? "ready" : "blocked",
       detail: pickupReady ? `${ws.outlet.pickupAddress}, ${ws.outlet.pickupArea}` : "Isi alamat pickup sebelum cek ongkir." },
     { name: "Akun Mengantar", state: provider,
-      detail: ws.isDemo ? "Demo memakai penyedia simulasi; tidak terhubung ke Mengantar." : "Belum terhubung. Penghubungan akun penjual akan dibuka setelah kebijakan pemilik akun disetujui." },
+      detail: ws.isDemo ? "Demo memakai penyedia simulasi; tidak terhubung ke Mengantar."
+        : credential.configured ? `Kunci API berakhiran …${credential.hint} tersimpan terenkripsi (${formatWib(credential.created_at)}). Belum diverifikasi ke Mengantar.`
+        : "Belum terhubung. Admin gerai bisa menyimpan kunci API akun Mengantar milik bisnis ini." },
     { name: "Cek ongkir & penerbitan resi", state: provider,
       detail: ws.isDemo ? "Harga dan resi adalah contoh." : "Butuh akun Mengantar yang terhubung dan terverifikasi." },
     { name: "Identitas pengirim pelanggan (dropshipper)", state: ws.isDemo ? "simulated" : "unverified",
@@ -57,6 +67,23 @@ export default async function SettingsPage() {
           })}
         </ul>
       </section>
+
+      {ws.role === "tenant_admin" && !ws.isDemo ? (
+        <section aria-labelledby="mengantar-heading" className="flex flex-col gap-3 rounded-lg bg-card p-6 ring-1 ring-border">
+          <h2 id="mengantar-heading" className="text-xl">Akun Mengantar (kunci API sendiri)</h2>
+          <p className="text-sm text-muted-foreground">
+            Hubungkan akun penjual Mengantar yang sudah dimiliki bisnis ini. GeraiExpress tidak pernah meminta kata sandi Mengantar.
+            Kunci baru dipakai setelah fitur verifikasi dan pengiriman langsung diaktifkan.
+          </p>
+          {credential.configured && credential.version ? (
+            <div className="flex flex-col gap-2 rounded-md bg-muted p-4">
+              <p data-testid="seller-key-status">Tersimpan: kunci berakhiran <span className="font-semibold">…{credential.hint}</span> (versi {credential.version}).</p>
+              <RemoveSellerKeyForm version={credential.version} />
+            </div>
+          ) : null}
+          <SellerKeyForm latestVersion={credential.latest_version} replacing={credential.configured} />
+        </section>
+      ) : null}
 
       {ws.isDemo ? (
         <section aria-labelledby="demo-heading" className="flex flex-col gap-2 rounded-lg bg-card p-6 ring-1 ring-border">

@@ -1,5 +1,5 @@
 // PR-2 / UX-1: save, search, edit and reuse contacts within the current tenant only.
-import { expect, test } from "./fixtures";
+import { actAsVisitor, expect, randomVisitorIp, test } from "./fixtures";
 import { expectNoHorizontalOverflow, signIn, startDemo } from "./helpers";
 
 test("create a contact with an address, find it, edit it", async ({ page }) => {
@@ -46,6 +46,7 @@ test("another tenant's contact is not found", async ({ page }) => {
 
 test("a stale edit from another tab is a visible conflict that keeps the typed values", async ({ browser }) => {
   const context = await browser.newContext();
+  await actAsVisitor(context, test.info().project.use.baseURL!, randomVisitorIp());
   const first = await context.newPage();
   await startDemo(first);
   await first.goto("/kontak");

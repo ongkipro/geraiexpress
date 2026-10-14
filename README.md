@@ -30,6 +30,8 @@ pnpm install
 pnpm db:start            # local Supabase (Auth, Postgres, Data API) with migrations + seed
 pnpm dev:env             # writes gitignored .env.local and .dev.vars from the local stack
 pnpm dev -p 3100 -H 127.0.0.1   # Next.js dev server → http://127.0.0.1:3100
+pnpm dev:hook-relay      # lets local Auth (Docker) call the app's Send Email Hook (DEC-009);
+                         # without it no Auth email (codes) is delivered
 ```
 
 Run in the Cloudflare Workers runtime (workerd) instead of the Node dev server:
@@ -51,7 +53,20 @@ marked as such. **Atur ulang demo** restores the examples; **Keluar** ends the s
 
 Local test accounts (seeded fixtures, local stack only, password `geraiexpress-local-dev`):
 `owner-a@geraiexpress.test`, `operator-a@geraiexpress.test`, `owner-b@geraiexpress.test`,
-`no-access@geraiexpress.test`, `multi@geraiexpress.test` (two gerai → choose one).
+`no-access@geraiexpress.test`, `multi@geraiexpress.test` (two gerai → choose one),
+`owner-c@geraiexpress.test` (Gerai Uji C, used by platform lifecycle tests).
+
+Credentials (local): `pnpm dev:env` also writes a local `CREDENTIAL_KEY` (kept across runs) used
+to seal seller API keys saved under `/pengaturan`; the Partner Secret is not needed locally.
+
+Registration (local): `/daftar` sends a 6-digit code to the local mail capture at
+http://127.0.0.1:54324 (Mailpit); public registration is open only because `seed.sql` opens it.
+Approve applications as a Super Admin under `/admin/pengajuan`.
+
+Super Admin fixtures (open `/masuk`, then `/verifikasi-2fa`): `admin@geraiexpress.test` and
+`admin-2@geraiexpress.test` have a verified TOTP factor whose local-only secrets are in
+`tests/totp.ts` (add them to an authenticator app or compute codes with `totp()`);
+`admin-new@geraiexpress.test` has no factor and walks through enrolment.
 
 ## Checks
 

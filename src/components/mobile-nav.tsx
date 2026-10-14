@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { WorkspaceNav } from "@/components/workspace-nav";
+import { WorkspaceNav, type NavItem } from "@/components/workspace-nav";
 
-export function MobileNav({ children }: { children: React.ReactNode }) {
+export function MobileNav({ children, items }: { children: React.ReactNode; items?: NavItem[] }) {
   const [open, setOpen] = useState(false);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -19,7 +19,7 @@ export function MobileNav({ children }: { children: React.ReactNode }) {
         <SheetHeader className="p-0">
           <SheetTitle>Menu</SheetTitle>
         </SheetHeader>
-        <WorkspaceNav onNavigate={() => setOpen(false)} />
+        <WorkspaceNav items={items} onNavigate={() => setOpen(false)} />
         <div className="mt-auto">{children}</div>
       </SheetContent>
     </Sheet>

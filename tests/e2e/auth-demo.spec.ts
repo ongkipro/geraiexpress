@@ -1,5 +1,5 @@
 // PR-1, PR-13, PR-21, UX-3, NFR-4: entry, scope, demo isolation and sign-out in a real browser.
-import { expect, test } from "./fixtures";
+import { actAsVisitor, expect, randomVisitorIp, test } from "./fixtures";
 import { randomInt } from "node:crypto";
 import { FIXTURE_PASSWORD, expectNoHorizontalOverflow, expectTouchTargets, signIn, signOut, startDemo } from "./helpers";
 
@@ -73,7 +73,9 @@ test("demo opens a labelled sample workspace with seeded examples", async ({ pag
 
 test("two demo visitors are isolated from each other", async ({ browser }) => {
   const a = await browser.newContext();
+  await actAsVisitor(a, test.info().project.use.baseURL!, randomVisitorIp());
   const b = await browser.newContext();
+  await actAsVisitor(b, test.info().project.use.baseURL!, randomVisitorIp());
   const pa = await a.newPage();
   const pb = await b.newPage();
   await startDemo(pa);
@@ -184,7 +186,8 @@ test("demo entry is limited per visitor (RATE-1)", async ({ browser }) => {
   const baseURL = test.info().project.use.baseURL;
   await freshLimitWindow();
   for (let i = 0; i < 6; i++) {
-    const context = await browser.newContext({ baseURL, extraHTTPHeaders: { "cf-connecting-ip": ip } });
+    const context = await browser.newContext({ baseURL });
+    await actAsVisitor(context, baseURL!, ip);
     const page = await context.newPage();
     await page.goto("/masuk");
     await page.getByRole("button", { name: "Coba demo" }).click();

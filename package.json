@@ -12,10 +12,11 @@
     "check:bundle": "node scripts/check-client-bundle.mjs",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "smoke:worker": "bash scripts/worker-smoke.sh",
-    "db:start": "supabase start",
+    "db:start": "bash scripts/supabase-local-env.sh && supabase start",
     "db:reset": "supabase db reset",
     "test:db": "vitest run tests/db",
     "dev:env": "bash scripts/dev-env.sh",
+    "dev:hook-relay": "node scripts/auth-hook-relay.mjs",
     "test:unit": "vitest run tests/unit",
     "test:e2e": "playwright test"
   },

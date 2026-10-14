@@ -24,17 +24,20 @@ export async function signInAction(_: SignInState, form: FormData): Promise<Sign
   if (!email || !password) return { error: "Isi email dan kata sandi.", email };
   if (!(await withinLimit("SIGN_IN_LIMITER"))) return { error: TOO_MANY, email };
   const supabase = await supabaseServer();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  // One message for every failure so the form does not reveal which emails exist.
+  const captchaToken = String(form.get("cf-turnstile-response") ?? "");
+  const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
+  // A failed security check is not about the account; every other failure gets one message so
+  // the form does not reveal which emails exist.
+  if (error?.code === "captcha_failed") return { error: "Verifikasi keamanan gagal atau kedaluwarsa. Coba lagi.", email };
   if (error) return { error: "Email atau kata sandi tidak cocok.", email };
   (await cookies()).delete(TENANT_COOKIE);
-  redirect("/pengiriman");
+  redirect("/");
 }
 
 export type DemoState = { error?: string };
 
 // PR-21 / IAM-4: each visitor gets an anonymous session and an isolated, seeded demo tenant.
-export async function startDemoAction(): Promise<DemoState> {
+export async function startDemoAction(_: DemoState, form: FormData): Promise<DemoState> {
   if (!(await withinLimit("DEMO_LIMITER"))) return { error: TOO_MANY };
   const supabase = await supabaseServer();
   const { data: current } = await supabase.auth.getUser();
@@ -43,8 +46,9 @@ export async function startDemoAction(): Promise<DemoState> {
     return { error: "Anda sedang masuk dengan akun gerai. Keluar dulu untuk mencoba demo." };
   }
   if (!current.user) {
-    const { error } = await supabase.auth.signInAnonymously();
-    if (error) return { error: "Demo belum bisa dibuka. Coba lagi sebentar lagi." };
+    const captchaToken = String(form.get("cf-turnstile-response") ?? "");
+    const { error } = await supabase.auth.signInAnonymously({ options: { captchaToken } });
+    if (error) return { error: error.code === "captcha_failed" ? "Verifikasi keamanan gagal atau kedaluwarsa. Coba lagi." : "Demo belum bisa dibuka. Coba lagi sebentar lagi." };
   }
   const { data: tenant, error } = await supabase.rpc("start_demo");
   if (error) return { error: friendlyError(error) };

@@ -96,7 +96,7 @@ existing connection has its own capability/security gates.
 - Acceptance: The actual Supabase SMTP client negotiates Cloudflare implicit TLS, controlled recipients receive all enabled Auth message types, expected failure states remain recoverable and the application stores no Auth password or mail credential in public data.
 - Constraints: PR-29 through PR-33, TD-11, SEC-5, PRIV-3; eligibility, sender domain and beta acceptance unresolved.
 - Evidence: Individual vendor capabilities retrieved; composed runtime/network/delivery untested.
-- Change history: 2026-10-13 — Added in the registration and documentation-completeness review.
+- Change history: 2026-10-13 — Added in the registration and documentation-completeness review. 2026-10-14 — DEC-009: Auth mail is delivered by a Send Email Hook on the Worker (refuses anonymous identities, app-owned templates); Cloudflare Email Sending becomes that hook's production transport instead of Supabase's SMTP client.
 
 Candidate native path: Supabase Auth custom SMTP → Cloudflare Email Sending
 SMTP → applicant inbox. Cloudflare currently documents `smtp.mx.cloudflare.net`
@@ -112,7 +112,7 @@ quota and sender reputation before public signup. Email Routing alone is not
 arbitrary-recipient transactional sending. The built-in Supabase testing mailer
 has recipient/volume restrictions and is not the production path.
 
-Prefer this native SMTP composition over maintaining an Auth email-hook Worker.
+Superseded by DEC-009 (2026-10-14): native SMTP sends before the database can refuse an anonymous identity's email change, so a demo session could drain the mail quota; the Worker hook refuses such messages before any send. The Cloudflare Email Sending prerequisites above still apply to the hook's production transport.
 If it fails its compatibility proof, keep public signup gated and revise the
 mail design within Cloudflare + Supabase; do not silently add another provider
 or disable inbox verification. Local development uses native captured mail;
@@ -183,7 +183,7 @@ Partner signing/quota authority stays separate from each seller's Public API
 operations even if code shares a deployment. Queue transport remains optional;
 no diagram arrow implies a distributed transaction or exactly-once delivery.
 The Partner egress composition remains the independent ARCH-2 production gate.
-Auth email remains ARCH-3's native SMTP composition, not an application mail relay.
+Auth email is delivered by the Worker's Send Email Hook (DEC-009); it is not a general application mail relay.
 
 ### Proposed code organization
 

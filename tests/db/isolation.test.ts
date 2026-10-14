@@ -3,7 +3,8 @@
 // same Data API and RPC surface a browser can call directly.
 import { beforeAll, describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { IDS, client, demoVisitor, signIn, sql } from "./helpers";
+import { IDS, client, demoVisitor, mailCode, signIn, sql } from "./helpers";
+import { mailCount } from "../mail";
 
 let ownerA: SupabaseClient;
 let operatorA: SupabaseClient;
@@ -194,6 +195,9 @@ describe("registration gate (PR-29 pending)", () => {
     const id = data.user!.id;
     const email = `convert-${Date.now()}@geraiexpress.test`;
     expect((await anon.auth.updateUser({ email })).error).not.toBeNull();
+    // DEC-009: the Worker's Send Email Hook refuses anonymous identities, so no mail went out at all.
+    await new Promise((r) => setTimeout(r, 500));
+    expect(await mailCount(email)).toBe(0);
     expect((await anon.auth.updateUser({ phone: "+6281200000000" })).error).not.toBeNull();
     expect((await anon.auth.updateUser({ password: "convert-password-123" })).error).not.toBeNull();
     // No pending change was stored, so no confirmation link exists for an inbox owner to click.
@@ -225,10 +229,46 @@ describe("registration gate (PR-29 pending)", () => {
     expect(sql(`update auth.users set last_sign_in_at = now() where id = '${id}' returning is_anonymous`)).toContain("t");
   });
 
-  it("public email signup is refused while anonymous demo sign-in works", async () => {
-    const { error } = await client().auth.signUp({ email: `probe-${Date.now()}@geraiexpress.test`, password: "probe-password-123" });
-    expect(error).not.toBeNull();
-    const anon = await client().auth.signInAnonymously();
-    expect(anon.error).toBeNull();
+  it("while registration is closed, new real accounts are refused and demo sign-in still works", async () => {
+    sql(`update private.settings set value = 'false' where key = 'registration_open'`);
+    try {
+      const email = `closed-${Date.now()}@geraiexpress.test`;
+      expect((await client().auth.signInWithOtp({ email, options: { shouldCreateUser: true } })).error).not.toBeNull();
+      expect((await client().auth.signUp({ email, password: "probe-password-123" })).error).not.toBeNull();
+      expect(sql(`select count(*) from auth.users where email = '${email}'`)).toBe("0");
+      expect((await client().auth.signInAnonymously()).error).toBeNull();
+    } finally {
+      sql(`update private.settings set value = 'true' where key = 'registration_open'`);
+    }
+  });
+
+  it("a password pre-planted on someone else's email dies when the owner verifies (SEC-5)", async () => {
+    const email = `preplant-${Date.now()}@geraiexpress.test`;
+    // Self-asserted profile data is refused outright; the attacker falls back to a bare password.
+    expect((await client().auth.signUp({ email, password: "attacker-pass-123", options: { data: { role: "tenant_admin", planted: true } } })).error).not.toBeNull();
+    expect((await client().auth.signInWithOtp({ email, options: { shouldCreateUser: true, data: { planted: true } } })).error).not.toBeNull();
+    expect(sql(`select count(*) from auth.users where email = '${email}'`)).toBe("0");
+    await new Promise((r) => setTimeout(r, 1200));
+    expect((await client().auth.signUp({ email, password: "attacker-pass-123" })).error).toBeNull();
+    expect((await client().auth.signInWithPassword({ email, password: "attacker-pass-123" })).error).not.toBeNull();
+    // The owner proves inbox control with a code (Auth allows one mail per address per second locally).
+    await new Promise((r) => setTimeout(r, 1200));
+    const owner = client();
+    expect((await owner.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })).error).toBeNull();
+    expect((await owner.auth.verifyOtp({ email, token: await mailCode(email), type: "email" })).error).toBeNull();
+    // The planted password no longer works; the owner has no password until they set one.
+    expect((await client().auth.signInWithPassword({ email, password: "attacker-pass-123" })).error).not.toBeNull();
+    expect(((await owner.rpc("my_account_state")).data as { has_password: boolean }[])[0].has_password).toBe(false);
+    expect((await owner.auth.getUser()).data.user?.user_metadata).not.toHaveProperty("planted");
+    expect((await owner.auth.updateUser({ password: "owner-pass-12345" })).error).toBeNull();
+    expect((await client().auth.signInWithPassword({ email, password: "owner-pass-12345" })).error).toBeNull();
+  });
+
+  it("the signup confirmation code path discards a planted password too (SEC-5)", async () => {
+    const email = `preplant-signup-${Date.now()}@geraiexpress.test`;
+    expect((await client().auth.signUp({ email, password: "attacker-pass-123" })).error).toBeNull();
+    const owner = client();
+    expect((await owner.auth.verifyOtp({ email, token: await mailCode(email), type: "signup" })).error).toBeNull();
+    expect((await client().auth.signInWithPassword({ email, password: "attacker-pass-123" })).error).not.toBeNull();
   });
 });

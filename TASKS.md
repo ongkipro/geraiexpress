@@ -40,15 +40,30 @@ narrative is in [BUILD-LOG.md](BUILD-LOG.md).
 
 T-008 was inserted after T-006 so the closing documentation reflects the final database.
 
+## Completed slice — platform administration and onboarding (local only)
+
+Owner request (2026-10-14): develop and refine everything that needs no further owner decision,
+adding any gap found as a task. Accepted policy: DEC-006 to DEC-008. Everything stays local;
+public registration is closed by default outside local development until the mail path (PR-33)
+is proved, and no cloud resource, Mengantar call or real credential is involved.
+
+| Task | Requirement | Risk | Result | Done-when evidence |
+|---|---|---|---|---|
+| T-012 Super Admin foundation: platform grants, TOTP `aal2`, tenant directory and lifecycle, access governance with final-admin guard, append-only audit | PR-24, PR-15, PR-28, IAM-7, TEN-4, DEC-008 | R3 | PASS, security-reviewed | DB denial matrix (tenant, demo, aal1, revoked, wrong capability), final-admin guard, audit immutability, e2e 2FA enrol/challenge and lifecycle |
+| T-013 Registration and gerai application with Super Admin review | PR-29, PR-30, PR-15, DEC-007, TEN-5 | R3 | PASS, security-reviewed | email OTP via local mail capture, resumable application, approve/reject/corrections, closed-by-default gate |
+| T-014 Staff invitations and member management | PR-31, PR-32, DEC-007, DEC-008, IAM-2 | R3 | PASS, security-reviewed | email-bound single-use 7-day invites, wrong-email/expired/revoked denial, last-admin guard, role re-check after lock |
+| T-015 Mengantar credentials: sealed BYOK seller-key storage (no readback), Partner ID setting, Partner Secret as Worker binding (readiness only) | PR-18 (storage), PR-26, IAM-3, SEC-3, DATA-4 | R3 | PASS, security-reviewed | Worker-side encryption with a Worker secret, ciphertext-only storage, operator/foreign denial, readiness without secret projection |
+| T-016 Turnstile CAPTCHA on Auth entry points: password and demo sign-in, OTP, signup, recovery, resend (gap found 2026-10-14: an anonymous session can make Auth send email-change mail to any address before the T-009 trigger refuses the change, and OTP requests also send mail, so the project mail quota can be drained) | SEC-5, RATE-1, PR-33 | R3 | PASS, security-reviewed | Cloudflare test keys locally; Auth captcha enforced for password and anonymous sign-in, OTP, signup, recovery and resend; real keys are an owner/Cloudflare setup step |
+| T-017 Auth email via the Worker's Send Email Hook (DEC-009): signed hook, anonymous refusal, Bahasa Indonesia code mail, transport binding (Mailpit locally, fail closed otherwise) | PR-33, SEC-5, ARCH-3 | R3 | PASS, security-reviewed | unit signature/policy tests (mutation-checked), hook e2e on both runtimes, anonymous email change sends no mail, full e2e with codes through the hook |
+
 ## Next candidates (not started; each needs its owner decision or gate)
 
 Owner decisions DEC-005 to DEC-008 (adapter, CTX-9, CTX-34, roles) were accepted on
 2026-10-14 and the verified slice was committed and pushed on owner request.
 
 1. Enforce DEC-008 operator limits in RLS/RPC as each remaining gated action (contact archive,
-   export, member management) is built; each needs an operator-denied test. When roles become
-   editable, role-gated RPCs such as `reconcile_shipment` must re-check the role after taking the
-   row lock (today only a superuser can change roles).
+   export) is built; each needs an operator-denied test and a role re-check after its row lock
+   (member management and `reconcile_shipment` already do this, T-014).
 2. Remote Supabase project + Cloudflare preview with isolated demo data (DEL-1 stage 2 hosting;
    needs provisioning/deploy approval; size the project's Auth limits for Worker egress per ARCHITECTURE.md).
 3. Mengantar sandbox contract proof (DEL-1 stage 3; needs sandbox credentials; ownership per DEC-006).

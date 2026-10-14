@@ -67,3 +67,15 @@ export async function sessionUserId(page: Page): Promise<string> {
 export function localSql(statement: string): string {
   return execFileSync("docker", ["exec", "supabase_db_geraiexpress", "psql", "-U", "postgres", "-tA", "-v", "ON_ERROR_STOP=1", "-c", statement], { encoding: "utf8" }).trim();
 }
+
+// PR-24: platform sign-in completes the TOTP challenge with the local fixture secret.
+import { FIXTURE_TOTP, totp } from "../totp";
+export async function signInAdmin(page: Page, email: keyof typeof FIXTURE_TOTP = "admin@geraiexpress.test") {
+  await signIn(page, email);
+  await expect(page).toHaveURL(/\/verifikasi-2fa$/);
+  await page.getByLabel("Kode 6 digit").fill(totp(FIXTURE_TOTP[email]));
+  await page.getByRole("button", { name: "Verifikasi" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+}
+
+export { mailCode } from "../mail";

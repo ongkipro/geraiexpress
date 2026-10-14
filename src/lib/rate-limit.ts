@@ -9,7 +9,7 @@ import { allowUnlimited, visitorKey } from "@/lib/visitor-key";
 // limits each visitor (CF-Connecting-IP, set by Cloudflare) before calling Auth, and the project's
 // Auth limits are sized for aggregate traffic. Limits live in wrangler.jsonc.
 type Limiter = { limit(options: { key: string }): Promise<{ success: boolean }> };
-export type LimitedAction = "SIGN_IN_LIMITER" | "DEMO_LIMITER";
+export type LimitedAction = "SIGN_IN_LIMITER" | "DEMO_LIMITER" | "MFA_LIMITER" | "OTP_LIMITER";
 
 export async function withinLimit(action: LimitedAction): Promise<boolean> {
   const key = visitorKey((await headers()).get("cf-connecting-ip"));

@@ -1,6 +1,6 @@
 // PR-4 / PR-5 / PR-6 / PR-7 / PR-9 / UX-1 / UX-3: contact reuse → draft → simulated quote →
 // explicit confirmation → sample label, plus unknown-outcome recovery and foreign access.
-import { expect, test } from "./fixtures";
+import { actAsVisitor, expect, randomVisitorIp, test } from "./fixtures";
 import { expectNoHorizontalOverflow, localSql, sessionUserId, signIn, startDemo } from "./helpers";
 
 test("complete simulated counter flow with saved contacts", async ({ page }) => {
@@ -133,6 +133,7 @@ test("double confirmation creates one operation", async ({ page }) => {
 
 test("confirming from a second, stale tab returns the original order", async ({ browser }) => {
   const context = await browser.newContext();
+  await actAsVisitor(context, test.info().project.use.baseURL!, randomVisitorIp());
   const first = await context.newPage();
   await startDemo(first);
   await quotedDraft(first);

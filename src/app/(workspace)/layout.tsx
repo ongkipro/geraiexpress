@@ -1,11 +1,19 @@
 import { Button } from "@/components/ui/button";
 import { MobileNav } from "@/components/mobile-nav";
 import { WorkspaceNav } from "@/components/workspace-nav";
+
+const BASE_ITEMS = [
+  { href: "/pengiriman", label: "Pengiriman" },
+  { href: "/pengiriman/baru", label: "Buat pengiriman" },
+  { href: "/kontak", label: "Kontak" },
+];
 import { resetDemoAction, signOutAction } from "@/lib/auth-actions";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const ws = await requireWorkspace();
+  // DEC-008: member management is a tenant-admin page of a real gerai.
+  const items = [...BASE_ITEMS, ...(ws.role === "tenant_admin" && !ws.isDemo ? [{ href: "/anggota", label: "Anggota" }] : []), { href: "/pengaturan", label: "Pengaturan" }];
 
   const scope = (
     <div className="flex min-w-0 flex-col">
@@ -35,14 +43,14 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
       <aside className="flex flex-col gap-8 p-5 lg:sticky lg:top-0 lg:h-dvh">
         <p className="text-sm text-muted-foreground">GeraiExpress</p>
         {scope}
-        <WorkspaceNav />
+        <WorkspaceNav items={items} />
         <div className="mt-auto">{sessionActions}</div>
       </aside>
       </div>
 
       <div className="flex min-w-0 flex-col">
         <header className="print:hidden sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-2 backdrop-blur lg:hidden">
-          <MobileNav>{sessionActions}</MobileNav>
+          <MobileNav items={items}>{sessionActions}</MobileNav>
           {scope}
         </header>
         {ws.isDemo ? (

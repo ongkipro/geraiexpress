@@ -46,6 +46,16 @@ const walk = (dir) => {
 };
 roots.forEach(walk);
 
+// T-015: OpenNext copies .env* values into the Worker script (next-env.mjs). A Worker secret must
+// come only from its binding, never from a value baked in at build time.
+const bakedEnv = ".open-next/cloudflare/next-env.mjs";
+if (existsSync(bakedEnv)) {
+  const text = readFileSync(bakedEnv, "utf8");
+  for (const name of ["CREDENTIAL_KEY", "MENGANTAR_PARTNER_SECRET"]) {
+    if (text.includes(name)) hits.push(`${bakedEnv}: ${name} baked into the Worker build (use a Worker secret)`);
+  }
+}
+
 if (files === 0) {
   console.error(`check-client-bundle: FAIL (no scannable files in ${roots.join(", ")})`);
   process.exit(1);

@@ -11,37 +11,42 @@ Independent-Review-Head: UNSET
 
 ## Current state
 
-The DEL-1 local foundation and synthetic demo preview are implemented and locally verified.
-Next.js 16.3.8 runs on Cloudflare Workers through `@opennextjs/cloudflare` 1.20.10 (proved in
-workerd via `wrangler dev`), against a local Supabase stack with fresh migrations, RLS and
-seeded synthetic fixtures. The demo (“Coba demo”) gives every visitor an isolated sample gerai
-with contacts, shipments, simulated quotes/issuance and a watermarked sample label.
+The DEL-1 local foundation and synthetic demo preview are implemented and locally verified,
+and the platform/onboarding slice T-009 to T-017 is complete locally: anonymous demo identities
+are locked (T-009), recovery is admin-only (T-010), Auth entry points have per-visitor limits
+(T-011) and Turnstile CAPTCHA (T-016), a Super Admin workspace with TOTP, tenant lifecycle,
+access governance and audit exists (T-012), registration with application review (T-013),
+staff invitations and member management (T-014), sealed BYOK Mengantar key storage (T-015), and
+Auth email goes through the Worker's Send Email Hook that refuses anonymous identities (T-017).
+Every task finished `PASS` in its own delivery-ledger run with executed checks, mutation checks
+and an approved independent security review; evidence is in `.delivery`.
 
-Tasks T-001 to T-006 (with T-003b) and T-008 each finished `PASS` in their own delivery-ledger
-run with executed checks and an approved independent review; the closing run T-007 (settings,
-system map, documentation) records its own result in `.delivery`. The slice was committed and pushed
-to the private GitHub repository on owner request (2026-10-14). Reviews are bound to the
-surface recorded in `.delivery`.
+Last full verification (2026-10-14): `pnpm test:db` 68, `pnpm test:unit` 16, typecheck, db lint,
+build, cf:build, `check:bundle`, worker smoke, and Playwright 176 passed / 1 skipped on both the
+Worker (wrangler dev) and next dev.
 
 Nothing is provisioned or deployed. No Mengantar call, real account, real email or customer
 data exists. Simulation output is labelled as such everywhere it appears.
 
 ## How to run it
 
-See README.md → "Run locally". Demo access: open `/masuk` and choose **Coba demo**.
+See README.md → "Run locally" (now includes `pnpm dev:hook-relay` for Auth email). Demo access:
+open `/masuk` and choose **Coba demo**. Super Admin fixtures and TOTP secrets: README.md.
 
 ## Active work
 
-None. The slice is complete; see TASKS.md "Next candidates".
+None. See TASKS.md "Next candidates".
 
 ## Owner decisions needed next
 
-Accepted 2026-10-14: DEC-005 (OpenNext 1.x, pinned), DEC-006 (CTX-9), DEC-007 (CTX-34),
-DEC-008 (roles). Still open:
+Accepted 2026-10-14: DEC-005 to DEC-009. Still open:
 
-- Permission to provision a remote Supabase project and a Cloudflare preview, plus the Auth
-  rate-limit approach for Worker egress.
-- Terms/Privacy, retention, mail sender domain and Mengantar sandbox credentials.
+- Permission to provision a remote Supabase project and a Cloudflare preview; at that point the
+  remote settings listed in ARCHITECTURE.md (captcha secret, hook URI/secret, limits, Turnstile
+  keys) are applied deliberately, never by `supabase config push`.
+- Cloudflare Email Sending eligibility and sending domain (the hook's production transport;
+  until then production Auth email fails closed), Mengantar sandbox credentials, Terms/Privacy
+  and retention.
 
 ## Implementation gates
 
