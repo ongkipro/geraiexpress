@@ -535,3 +535,74 @@ whether the call fails or is refused). Re-verified: test:db 89, unit 67, db lint
 cf:build, check:bundle, worker smoke, settings/credentials/shipping e2e 57, live e2e 3; the
 full e2e before the fixes: 176 passed, 4 skipped (the 3 opt-in live runs and one existing skip).
 
+
+## 2026-10-14 — T-024 real issuance, reconciliation UI and cron sweep (TD-3, DEC-010)
+
+Owner: continue, audit, refine, review. Scope kept to issuance; COD (two-pass fee) and API
+pay-unpaid split to T-025 so COD is applied exactly once and payment keeps its batch review.
+
+Migration `20261014180000_issuance.sql`: `confirm_shipment` creates a real queued operation
+(refuses missing pickup, area, goods value or key; a simulated quote on a real shipment is
+stale; digest now includes the area id); the one-create-per-shipment index excludes only
+definite refusals (`private.definitely_not_created`), so `reopen_shipment` can return such a
+shipment to draft while "not created"/error items keep blocking; `dispatch_due`,
+`dispatch_begin_payment_check`, `last_checked_at` throttling; `dispatch_release` marks its time;
+contact addresses keep `area_id`, cleared by a trigger when the area text changes. Dispatcher:
+pickup re-check before sending (missing → `PICKUP_NOT_FOUND`, lookup failure → release),
+`checkPayment`, `sweep`; `machine-deps.ts` builds deps from bindings for actions and cron.
+Worker entry `custom-worker.ts` (verified pattern: opennext.js.org custom worker) with cron
+`*/5`; the preview sets no crons. UI: confirm for connected gerai creates and pays a real order
+(warning text), detail page per state (queued → "Kirim sekarang", awaiting payment → "Periksa
+pembayaran", unknown → admin reconcile, definite refusal → "Ubah & coba lagi", other failures
+→ do not recreate), Mengantar order id shown, real labels from the Mengantar app.
+
+Found while verifying: the first cron runs in workerd claimed and released undeliverable fixture
+operations on every run (now throttled 10 minutes, and certain refusals are not due); a hot
+function patch did not apply, so the DB was reset instead of trusting it.
+
+Verified: test:db 95 (issuance 6), unit, typecheck, db lint, live e2e against the sandbox
+(1280 issued sandbox order `261014CE0FZ7`, unpaid → "Periksa pembayaran" → still unpaid; one
+operation only), cron in local workerd (`/__scheduled`: sweeps of 13 then 3 — the remainder are
+busy sellers retried by design; an unpaid order's check time advanced).
+
+Review (CHANGES_REQUIRED) and the integration audit (owner request), all addressed in the
+unapplied-elsewhere migration (local DB reset): payment checks key on the shipment's unpaid
+state, so reconciled or corrected unpaid orders also get their resi; provider-error failures can
+be re-checked by the admin and the sweep (hourly for 24 hours, like "not created"), and an admin
+can close an unresolved failure after 30 minutes and a re-check (`close_failed_operation`,
+reason audited, then reopenable; a late result for a closed operation is refused by design);
+the charged price is stored and a difference from the customer charge becomes a
+`price_mismatch` event; an operation queued for over 6 hours fails as `QUOTE_STALE` without
+sending (reopenable); unknown reconciliation stops after 7 days and keeps `DUPLICATE_ORDERS`;
+partial index for `dispatch_due`; `reopen_shipment` locks in the dispatcher's order; real
+shipments cannot get sample labels; area missing at confirm says so; quotes use the shipment's
+outlet; the cron logs `disabled`/`failed` and awaits the sweep; actions log `dispatch_action`;
+seller keys are validated with the client's shape at storage; `check:bundle` refuses a baked
+`SUPABASE_SECRET_KEY`; settings warn before replacing a key with open orders; STATUS, TASKS,
+RELEASE (production gates) and OBSERVABILITY updated. A test-run outlet leak into fixture tenant
+A was cleaned and the test changed to use a draft of outlet A.
+
+Re-verified: test:db 100 (twice), unit 71, typecheck, db lint, operator/admin reconcile e2e
+(3 viewports), live sandbox e2e (order `2610148AL7NW` unpaid; quote from the shipment's outlet).
+
+Re-review approved; the re-audit closed the HIGH findings and left three MEDIUM. Two were fixed:
+the price is recorded on every path (reconciled, corrected, payment upgrade), and
+`dispatch_stuck_counts` (service_role) feeds `dispatch_sweep.stuck`. The third, an admin closing
+a failure that later turns out to be a real order, is an accepted limit (it rests on the admin's
+statement; a late result is refused and the operation is reopenable). A final review of that delta
+(CHANGES_REQUIRED, then approved) fixed: a price difference was reported twice for an order created
+unpaid and paid later (now once per price; mutation-checked); an unreadable price returns null and
+logs `priceUnknown` instead of silently skipping the check; `stuck.queued` counts operations
+queued over 6 hours that cannot be sent (key revoked, gerai inactive). The COD price comparison is
+noted on T-025. Test isolation: the due-list test throttles earlier tests' operations so repeated
+runs do not fill its 50-row page; issuance tests remove the shipments they add to fixture tenant A.
+
+Local plumbing reminder: `pnpm test:db` needs `next dev -H 127.0.0.1 -p 3100` and the auth hook
+relay (`AUTH_HOOK_RELAY_HOST=10.0.0.1 pnpm dev:hook-relay` when docker0 is down); without `-H`,
+Next blocks 127.0.0.1 dev resources and e2e logins time out.
+
+Final verification: test:db 103 (twice, and once from a fresh reset), unit 72, typecheck, db lint,
+full e2e on next dev (179 passed, 4 opt-in skipped), build, cf:build, check:bundle PASS, worker
+smoke PASS, cron in local workerd (log carries `priceUnknown` and `stuck.queued`). The opt-in live
+sandbox e2e was not re-run after the final price follow-ups (database-only change, covered by DB
+and unit tests).

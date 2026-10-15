@@ -61,6 +61,7 @@ is proved, and no cloud resource, Mengantar call or real credential is involved.
 | T-021 Mengantar order adapter: create one drop-off order judged per item (issued / unpaid / failed / rejected / unknown outcome), GeraiExpress reference as `destinationMark`, reconciliation by ORDER_ID and by reference scan | DEL-1 stage 3, TD-3, PR-10 | R3 | PASS | unit (sandbox fixtures, mutation-checked), live sandbox adapter run (rejected, unpaid, both reconciliations) |
 | T-022 Account dispatcher core (DEC-010): migration (Mengantar ids on outlets/shipments, operation result fields, one in-flight real operation per tenant, `awaiting_payment`, service_role-only `dispatch_claim`/`dispatch_begin_reconcile`/`dispatch_record`) and `src/lib/mengantar/dispatcher.ts` (dispatch, reconcile by reference); not wired to the UI | TD-3, DEC-010, DATA-2 | R3 | PASS | test:db 84 (dispatcher 16), unit 63 (dispatcher 11, mutation-checked), live: dispatcher on the local DB against the sandbox (order sent, lost answer reconciled, never-sent → not created), shipping e2e 42 |
 | T-023 Live quotes and area pickers: machine identity in the Worker (`SUPABASE_SECRET_KEY`, `MENGANTAR_ENV` bindings), tenant admin picks the outlet's Mengantar pickup address (re-read from Mengantar), recipient area search in intake, live estimates written by `record_live_quotes` (service_role only; net cost private), courier names and day ranges for display; live issuance stays locked until T-024 | PR-3, PR-4, UX line 187, DEC-010 | R3 | PASS | test:db 89 (live quotes 5), unit 67, build/cf:build/check:bundle/worker smoke, full e2e on next dev (176), opt-in live e2e against the sandbox on 390/768/1280 with screenshots reviewed |
+| T-024 Real issuance: confirm creates a real queued operation and the server action dispatches it (pickup re-checked at Mengantar first); reopen after a definite refusal only; admin reconciliation and payment check through the dispatcher; cron sweep in a custom Worker entry (queued, stale/unknown, unpaid; throttled; certain refusals skipped); contact addresses keep the Mengantar area; status, failure and info texts | TD-3, DEC-010, PR-5, PR-6 | R3 | PASS | see BUILD-LOG T-024 |
 
 ## Next candidates (not started; each needs its owner decision or gate)
 
@@ -73,25 +74,22 @@ Owner decisions DEC-005 to DEC-008 (adapter, CTX-9, CTX-34, roles) were accepted
 2. Preview hardening: a real Turnstile widget (enable Auth captcha), Cloudflare Email Sending
    as the hook transport (codes on the preview), and a Super Admin bootstrap on the preview; demo/anonymous cleanup, frame/HSTS headers, and
    the email rate limit re-check (RELEASE.md residuals).
-3. Live quotes (after T-019): store a provider area id on outlets and recipient addresses (area
-   search in the address form), then quote through the tenant's sealed BYOK key in the Worker and
-   write quotes via a server-only RPC, keeping simulated quotes for the demo. Needs the account
-   dispatcher's key-opening path (TD-3) and a decision on caching/rate limits for estimates.
-4. T-024 issuance wiring: confirm_shipment creates real operations for connected tenants, the
-   server action runs the dispatcher with the machine identity (bindings exist since T-023),
-   reconciliation UI and a sweep for stale operations, COD amount on shipments,
-   pay-unpaid as a batch command; add `recipient_area_id` to the confirmation input digest and
-   status labels for `awaiting_payment`; validate dispatch inputs before confirmation (a refused
-   real operation ends the shipment); re-check the outlet pickup against Mengantar before dispatch
-   (the pickup RPC trusts its admin caller); keep a Mengantar area id on saved contact addresses so
-   repeat recipients need no new area search; if `dispatch_release` itself fails the operation drifts to
-   unknown and could be concluded "not created" — the sweep must surface it, not fail it silently.
-   Label PDF needs Mengantar to whitelist the account;
-   webhooks need a public URL and the callback secret.
+3. T-025 COD and payment: COD amount on shipments (two-pass estimate: shipping, then COD fee on
+   goods + shipping), customer charge with the COD fee applied exactly once, COD create proven on
+   the sandbox; pay-unpaid as a batch command with full batch review (03-TECHNICAL-DESIGN
+   "Payment recovery"); store the provider's refusal text with a rejected operation; compare
+   Mengantar's price for a COD order (`estimatedPrice` includes the COD fee) against the charge
+   with that fee, or every COD order is flagged `price_mismatch`.
+4. Mengantar label PDF (needs Mengantar to whitelist the seller account) and webhooks (public
+   URL + callback secret); production release gates (ARCH-2 egress for Partner, Terms/Privacy,
+   the production checklist in RELEASE.md from the 2026-10-14 integration audit).
+5. Audit leftovers (2026-10-14): volumetric weight in quotes once Mengantar's billable-weight rule
+   is known; capture the price of unpaid orders when they are paid; tests for the cron handler and
+   `tenantMengantar`; Partner client wiring for seller creation in the app (PR-17–PR-20).
 
 ## Deferred (owner decision or external gate)
 
 Real registration/invitations (PR-29–PR-33, DEC-007; needs ARCH-3 mail),
-seller onboarding/BYOK (PR-17–PR-20, DEC-006; needs Partner access/egress),
-live quotes/issuance/labels (sandbox credentials), Super Admin workspace
+Partner seller creation in the app (PR-17–PR-20, DEC-006; needs Partner egress), Mengantar
+label PDF (whitelist), Super Admin workspace
 (PR-15, PR-23–PR-28, bootstrap per DEC-008), CSV/export/overview.

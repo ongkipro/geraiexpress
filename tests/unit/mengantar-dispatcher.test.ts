@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { credentialAad, sealCredential } from "../../src/lib/credential-crypto";
-import { dispatchOperation, providerPhone, reconcileOperation, type Rpc } from "../../src/lib/mengantar/dispatcher";
+import { checkPayment, dispatchOperation, providerPhone, reconcileOperation, sweep, type Rpc } from "../../src/lib/mengantar/dispatcher";
 
 const SEAL_KEY = Buffer.alloc(32, 9).toString("base64");
 const SELLER_KEY = "API-UNITTESTKEY0001";
@@ -31,14 +31,19 @@ function fakeRpc(first: { data?: unknown; error?: { message: string } | null }, 
   return { rpc, calls, recorded: () => calls.filter((c) => c.fn === "dispatch_record").map((c) => c.args) };
 }
 
+// The seller's pickup list (GET /address) answers from the sandbox fixture unless overridden;
+// every other request gets the given replies in order. `urls` lists only the non-pickup calls.
 function fakeFetch(...bodies: { status?: number; body: unknown }[]) {
   const urls: string[] = [];
+  let pickups: { status?: number; body: unknown } = { body: fixture("address-list-sandbox.json") };
+  const reply = (b: { status?: number; body: unknown }) =>
+    new Response(typeof b.body === "string" ? b.body : JSON.stringify(b.body), { status: b.status ?? 200, headers: { "content-type": "application/json" } });
   const impl = (async (url: string | URL | Request) => {
+    if (new URL(String(url)).pathname.endsWith("/address")) return reply(pickups);
     urls.push(String(url));
-    const b = bodies[Math.min(urls.length - 1, bodies.length - 1)];
-    return new Response(typeof b.body === "string" ? b.body : JSON.stringify(b.body), { status: b.status ?? 200, headers: { "content-type": "application/json" } });
+    return reply(bodies[Math.min(urls.length - 1, bodies.length - 1)]);
   }) as typeof fetch;
-  return { impl, urls };
+  return { impl, urls, setPickups: (b: { status?: number; body: unknown }) => { pickups = b; } };
 }
 
 const deps = (rpc: Rpc, fetchImpl: typeof fetch) => ({ rpc, environment: "sandbox" as const, credentialKey: SEAL_KEY, fetchImpl });
@@ -51,14 +56,14 @@ describe("dispatchOperation (TD-3)", () => {
     expect(await dispatchOperation("op-1", deps(r.rpc, f.impl))).toEqual({ status: "recorded", outcome: "issued" });
     expect(r.calls[0]).toEqual({ fn: "dispatch_claim", args: { p_operation: "op-1", p_env: "sandbox" } });
     expect(f.urls).toEqual([`https://sandbox.mengantar.com/api/public/${SELLER_KEY}/order`]);
-    expect(r.recorded()).toEqual([{ p_operation: "op-1", p_attempt: 3, p_outcome: "issued", p_order_id: "261014LJ9GP7", p_tracking: "JO6844983511", p_batch: "26101416Q0L7LJ" }]);
+    expect(r.recorded()).toEqual([{ p_operation: "op-1", p_attempt: 3, p_outcome: "issued", p_order_id: "261014LJ9GP7", p_tracking: "JO6844983511", p_batch: "26101416Q0L7LJ", p_price: 93000 }]);
   });
 
   it("records unpaid, provider error items, refusals and unknown outcomes truthfully", async () => {
     const unpaid = fixture("order-create-jt-unpaid.json");
     unpaid.data[0].destinationMark = REF;
     const cases: [unknown, { status?: number; body: unknown }, Record<string, unknown>][] = [
-      [{}, { body: unpaid }, { p_outcome: "unpaid", p_order_id: "261014H0JAFR", p_batch: "26101416827JYE" }],
+      [{}, { body: unpaid }, { p_outcome: "unpaid", p_order_id: "261014H0JAFR", p_batch: "26101416827JYE", p_price: 111600 }],
       [{}, { body: fixture("order-create-jne-item-error.json") }, { p_outcome: "failed", p_batch: "26101416ZI8BP1", p_record_id: "6acf44a4771fe2b474c055fd", p_code: "PROVIDER_ERROR_ITEM" }],
       [{}, { status: 400, body: { success: false, message: "Ekspedisi tidak mendukung Drop Off" } }, { p_outcome: "rejected", p_code: "PROVIDER_REJECTED" }],
       [{}, { status: 403, body: { success: false, message: "Not allowed" } }, { p_outcome: "rejected", p_code: "NOT_ALLOWED" }],
@@ -105,6 +110,28 @@ describe("dispatchOperation (TD-3)", () => {
     }
   });
 
+  it("sends nothing for an operation that waited too long (the database failed it as stale)", async () => {
+    const r = fakeRpc({ data: { stale: true } });
+    const f = fakeFetch({ body: issuedBody() });
+    expect(await dispatchOperation("op-1", deps(r.rpc, f.impl))).toEqual({ status: "recorded", outcome: "quote_stale" });
+    expect(f.urls).toEqual([]);
+    expect(r.recorded()).toEqual([]);
+  });
+
+  it("passes the database's price flags through: mismatch, unreadable, matching", async () => {
+    const run = async (price_mismatch: boolean | null) => {
+      const rpc: Rpc = async (fn) => {
+        if (fn === "dispatch_claim") return { data: await payload(), error: null };
+        if (fn === "dispatch_record") return { data: { state: "succeeded", replayed: false, price_mismatch }, error: null };
+        return { data: null, error: null };
+      };
+      return dispatchOperation("op-1", deps(rpc, fakeFetch({ body: issuedBody() }).impl));
+    };
+    expect(await run(true)).toEqual({ status: "recorded", outcome: "issued", priceMismatch: true });
+    expect(await run(null)).toEqual({ status: "recorded", outcome: "issued", priceUnknown: true });
+    expect(await run(false)).toEqual({ status: "recorded", outcome: "issued" });
+  });
+
   it("does nothing when the claim is refused, and reports a lost record without resending", async () => {
     const busy = fakeRpc({ error: { message: "account_busy" } });
     const f = fakeFetch({ body: issuedBody() });
@@ -112,8 +139,24 @@ describe("dispatchOperation (TD-3)", () => {
     expect(f.urls).toEqual([]);
     const lost = fakeRpc({ data: await payload() }, "connection reset");
     const g = fakeFetch({ body: issuedBody() });
-    expect(await dispatchOperation("op-1", deps(lost.rpc, g.impl))).toEqual({ status: "record_failed", outcome: "issued" });
+    expect(await dispatchOperation("op-1", deps(lost.rpc, g.impl))).toEqual({ status: "record_failed", outcome: "issued", reason: "connection reset" });
     expect(g.urls).toHaveLength(1);
+  });
+
+  it("re-checks the outlet pickup at Mengantar before sending", async () => {
+    const gone = fakeRpc({ data: await payload() });
+    const f = fakeFetch({ body: issuedBody() });
+    f.setPickups({ body: { success: true, data: [] } });
+    await dispatchOperation("op-1", deps(gone.rpc, f.impl));
+    expect(f.urls).toEqual([]); // no order sent
+    expect(gone.recorded()).toEqual([{ p_operation: "op-1", p_attempt: 3, p_outcome: "rejected", p_code: "PICKUP_NOT_FOUND" }]);
+    // The pickup check itself failing sent nothing either: the operation goes back to the queue.
+    const down = fakeRpc({ data: await payload() });
+    const g = fakeFetch({ body: issuedBody() });
+    g.setPickups({ status: 502, body: "bad gateway" });
+    expect(await dispatchOperation("op-1", deps(down.rpc, g.impl))).toEqual({ status: "not_claimed", reason: "mengantar_unavailable" });
+    expect(g.urls).toEqual([]);
+    expect(down.calls.at(-1)?.fn).toBe("dispatch_release");
   });
 
   it("formats Indonesian mobile numbers for Mengantar", () => {
@@ -138,10 +181,10 @@ describe("reconcileOperation (TD-3 step 5)", () => {
 
   it("records the order found by reference: unpaid, or issued with its resi", async () => {
     let res = await run([order(), older]);
-    expect(res.recorded).toEqual([{ p_operation: "op-1", p_attempt: 3, p_outcome: "unpaid", p_order_id: "261014LKLL3E", p_batch: "26101416OJ04NF", p_code: "RECONCILED" }]);
+    expect(res.recorded).toEqual([{ p_operation: "op-1", p_attempt: 3, p_outcome: "unpaid", p_order_id: "261014LKLL3E", p_batch: "26101416OJ04NF", p_code: "RECONCILED", p_price: null }]);
     expect(res.urls.every((u) => !u.includes("/order?") || u.includes("courier=JT"))).toBe(true);
-    res = await run([order({ isPaid: true, cnote_no: "JO6948371799" }), older]);
-    expect(res.recorded[0]).toMatchObject({ p_outcome: "issued", p_tracking: "JO6948371799", p_order_id: "261014LKLL3E" });
+    res = await run([order({ isPaid: true, cnote_no: "JO6948371799", estimatedPrice: 97994 }), older]);
+    expect(res.recorded[0]).toMatchObject({ p_outcome: "issued", p_tracking: "JO6948371799", p_order_id: "261014LKLL3E", p_price: 97994 });
   });
 
   it("concludes 'not created' only after a complete scan, and 'failed' for an error item", async () => {
@@ -170,3 +213,36 @@ describe("reconcileOperation (TD-3 step 5)", () => {
     expect(f.urls).toEqual([]);
   });
 });
+
+describe("checkPayment and sweep (T-024)", () => {
+  const unpaidPayload = async (over: Record<string, unknown> = {}) => ({ ...(await payload()), provider_order_id: "261014H0JAFR", provider_batch: "26101416827JYE", ...over });
+  const found = (over: Record<string, unknown>) => ({ success: true, data: [{ ORDER_ID: "261014H0JAFR", batch: "26101416827JYE", destinationMark: REF, status: "active", isPaid: false, cnote_no: null, createdAt: "2026-10-14T09:12:10Z", ...over }] });
+
+  it("records the resi once the seller has paid, and nothing while still unpaid", async () => {
+    const paid = fakeRpc({ data: await unpaidPayload() });
+    const f = fakeFetch({ body: found({ isPaid: true, cnote_no: "JO6948371799" }) });
+    expect(await checkPayment("op-1", deps(paid.rpc, f.impl))).toEqual({ status: "recorded", outcome: "issued" });
+    expect(new URL(f.urls[0]).searchParams.get("order_id")).toBe("261014H0JAFR");
+    expect(paid.recorded()).toEqual([{ p_operation: "op-1", p_attempt: 3, p_outcome: "issued", p_order_id: "261014H0JAFR", p_tracking: "JO6948371799", p_batch: "26101416827JYE", p_price: null }]);
+    const still = fakeRpc({ data: await unpaidPayload() });
+    expect(await checkPayment("op-1", deps(still.rpc, fakeFetch({ body: found({}) }).impl))).toEqual({ status: "inconclusive", reason: "still_unpaid" });
+    expect(still.recorded()).toEqual([]);
+    const other = fakeRpc({ data: await unpaidPayload({ provider_env: "production" }) });
+    expect(await checkPayment("op-1", deps(other.rpc, fakeFetch({ body: found({ isPaid: true, cnote_no: "JO1234567" }) }).impl))).toEqual({ status: "inconclusive", reason: "wrong_environment" });
+  });
+
+  it("runs each due item with the matching step and survives one failing", async () => {
+    const calls: string[] = [];
+    const rpc: Rpc = async (fn, args) => {
+      calls.push(`${fn}:${String(args.p_operation ?? "")}`);
+      if (fn === "dispatch_due") return { data: [{ operation_id: "a", action: "dispatch" }, { operation_id: "b", action: "reconcile" }, { operation_id: "c", action: "payment" }], error: null };
+      return { data: null, error: { message: "nothing" } };
+    };
+    const summary = await sweep(deps(rpc, fakeFetch({ body: {} }).impl));
+    expect(summary.checked).toBe(3);
+    expect(calls).toEqual(["dispatch_due:", "dispatch_claim:a", "dispatch_begin_reconcile:b", "dispatch_begin_payment_check:c", "dispatch_stuck_counts:"]);
+    const broken: Rpc = async () => ({ data: null, error: { message: "down" } });
+    expect(await sweep(deps(broken, fakeFetch({ body: {} }).impl))).toEqual({ checked: 0, failed: true, results: [] });
+  });
+});
+

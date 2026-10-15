@@ -82,7 +82,7 @@ describe("create order (T-021)", () => {
 
   it("reports an unpaid order (no resi yet) separately", async () => {
     expect(await clientFor({ body: fixture("order-create-jt-unpaid.json") }).api.createOrder(request))
-      .toEqual({ outcome: "unpaid", orderId: "261014H0JAFR", batch: "26101416827JYE" });
+      .toEqual({ outcome: "unpaid", orderId: "261014H0JAFR", batch: "26101416827JYE", tariffWithFees: 111600 });
   });
 
   it("treats success:true with an error item as a failed attempt, not an order", async () => {
@@ -160,7 +160,7 @@ describe("order reconciliation (T-021)", () => {
   it("finds one order by ORDER_ID and reads its reference and state", async () => {
     const { api, calls } = clientFor({ body: fixture("order-find-by-id.json") });
     expect(await api.findOrder("261014H0JAFR")).toEqual({
-      orderId: "261014H0JAFR", batch: "26101416827JYE", reference: REF, trackingNumber: null, status: "active", paid: false, createdAt: "2026-10-14T09:12:10.231Z",
+      orderId: "261014H0JAFR", batch: "26101416827JYE", price: 111600, reference: REF, trackingNumber: null, status: "active", paid: false, createdAt: "2026-10-14T09:12:10.231Z",
     });
     expect(new URL(calls[0].url).searchParams.get("order_id")).toBe("261014H0JAFR");
     expect(await clientFor({ body: fixture("order-find-unknown-id.json") }).api.findOrder("ZZZZZZZZZZZZ")).toBeNull();
@@ -206,7 +206,7 @@ describe("order reconciliation (T-021)", () => {
     const error = { ...row("x", "2026-10-14T09:10:00Z", REF), ORDER_ID: undefined, status: "error", cnote_no: null };
     const { api } = clientFor({ body: { success: true, data: [error] } }, { body: { success: true, data: [] } });
     expect(await api.findOrdersByReference({ reference: REF, courier: "JT", notBefore: new Date("2026-10-14T09:00:00Z") }))
-      .toEqual([{ orderId: null, batch: null, reference: REF, trackingNumber: null, status: "error", paid: true, createdAt: "2026-10-14T09:10:00Z" }]);
+      .toEqual([{ orderId: null, batch: null, price: null, reference: REF, trackingNumber: null, status: "error", paid: true, createdAt: "2026-10-14T09:10:00Z" }]);
   });
 
   it("does not claim 'not found' when the scan could not reach the attempt time", async () => {

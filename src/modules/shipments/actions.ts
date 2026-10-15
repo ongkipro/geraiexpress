@@ -2,11 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase/server";
+import { env, supabaseServer } from "@/lib/supabase/server";
 import { friendlyError } from "@/lib/errors";
 import { DROP_OFF_UNSUPPORTED } from "@/lib/mengantar/public-api";
 import { mengantarFailure, tenantMengantar } from "@/lib/mengantar/tenant";
 import { machineClient } from "@/lib/supabase/machine";
+import { workerSecret } from "@/lib/worker-secret";
+import { checkPayment, dispatchOperation, reconcileOperation, type DispatchSummary } from "@/lib/mengantar/dispatcher";
+import { dispatcherDeps } from "@/lib/mengantar/machine-deps";
 import { requireWorkspace } from "@/lib/workspace";
 import { missingForQuote, parseDraft, type DraftField, type DraftValues } from "./draft";
 
@@ -81,7 +84,7 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
     if (role === "recipient" && update.recipient_address && update.recipient_area) {
       const { error: ae } = await supabase.from("contact_addresses").insert({
         tenant_id: ws.tenant.id, contact_id: contact.id, label: "Utama", address_line: update.recipient_address,
-        area: update.recipient_area, postal_code: update.recipient_postal_code, is_primary: true,
+        area: update.recipient_area, area_id: update.recipient_area_id ?? null, postal_code: update.recipient_postal_code, is_primary: true,
       });
       if (ae) return "failed";
     }
@@ -115,7 +118,10 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
       .gt("expires_at", new Date().toISOString());
     if (!count) {
       if (live) {
-        const quoted = await liveQuotes(ws.tenant.id, ws.outlet.mengantarAreaId, id, revision, update);
+        // Quote from the shipment's own outlet (dispatch uses the same outlet's pickup).
+        const { data: origin } = await supabase.from("shipments").select("outlets(mengantar_area_id)")
+          .eq("tenant_id", ws.tenant.id).eq("id", id).maybeSingle<{ outlets: { mengantar_area_id: string | null } | null }>();
+        const quoted = await liveQuotes(ws.tenant.id, origin?.outlets?.mengantar_area_id ?? null, id, revision, update);
         if (quoted.error) return { error: quoted.error + contactNote, values };
         if (quoted.count === 0) return { error: "Tidak ada layanan Mengantar untuk rute dan berat ini." + contactNote, values };
       } else {
@@ -159,11 +165,41 @@ async function liveQuotes(tenantId: string, originAreaId: string | null, shipmen
 
 export type ConfirmState = { error?: string };
 
+// DEC-010: the dispatcher's machine identity, from Worker bindings. Null => fail closed (the
+// operation stays queued and the cron sweep or "Kirim sekarang" sends it later).
+function machineDeps() {
+  return dispatcherDeps({
+    SUPABASE_URL: env("SUPABASE_URL"),
+    SUPABASE_SECRET_KEY: workerSecret("SUPABASE_SECRET_KEY"),
+    CREDENTIAL_KEY: workerSecret("CREDENTIAL_KEY"),
+    MENGANTAR_ENV: workerSecret("MENGANTAR_ENV"),
+  });
+}
+
+// The newest create operation of a shipment the caller can see (RLS: members only).
+async function shipmentOperation(shipmentId: string, tenantId: string) {
+  const { data } = await (await supabaseServer()).from("provider_operations")
+    .select("id, state, result_code, is_simulated").eq("tenant_id", tenantId).eq("shipment_id", shipmentId)
+    .eq("kind", "create_order").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  return data as { id: string; state: string; result_code: string | null; is_simulated: boolean } | null;
+}
+
+// Counts-only log of an interactive dispatch step (the cron logs its own), then the page flag.
+const outcomeFlag = (step: string, summary: DispatchSummary) => {
+  console.log(JSON.stringify({ event: "dispatch_action", step, status: summary.status,
+    outcome: "outcome" in summary ? summary.outcome : undefined, reason: "reason" in summary ? summary.reason : undefined,
+    priceMismatch: "priceMismatch" in summary ? summary.priceMismatch : undefined,
+    priceUnknown: "priceUnknown" in summary ? summary.priceUnknown : undefined }));
+  return summary.status === "recorded" ? `hasil=${summary.outcome}`
+    : summary.status === "record_failed" ? "hasil=unknown"
+    : `info=${encodeURIComponent(summary.reason)}`;
+};
+
 export async function confirmShipmentAction(_: ConfirmState, form: FormData): Promise<ConfirmState> {
   await requireWorkspace();
   const id = String(form.get("shipment_id"));
   const supabase = await supabaseServer();
-  const { error } = await supabase.rpc("confirm_shipment", {
+  const { data, error } = await supabase.rpc("confirm_shipment", {
     p_shipment: id,
     p_quote: String(form.get("quote_id")),
     p_expected_revision: Number(form.get("revision")),
@@ -171,15 +207,76 @@ export async function confirmShipmentAction(_: ConfirmState, form: FormData): Pr
   });
   if (error) return { error: friendlyError(error) };
   revalidatePath("/pengiriman");
-  redirect(`/pengiriman/${id}?terbit=1`);
+  const result = data as { operation_id: string; state: string; simulated: boolean; replayed: boolean };
+  if (result.simulated) redirect(`/pengiriman/${id}?terbit=1`);
+  // A real order: send it now with the machine identity (TD-3). A replayed confirmation never
+  // sends again; it shows the original operation's state.
+  if (result.replayed || result.state !== "queued") redirect(`/pengiriman/${id}`);
+  const deps = machineDeps();
+  if (!deps) redirect(`/pengiriman/${id}?info=mengantar_not_configured`);
+  redirect(`/pengiriman/${id}?${outcomeFlag("confirm", await dispatchOperation(result.operation_id, deps))}`);
 }
 
-export async function reconcileAction(form: FormData) {
-  await requireWorkspace();
+// A queued real operation that was not sent (busy seller, missing configuration): send it now.
+export async function dispatchQueuedAction(form: FormData) {
+  const ws = await requireWorkspace();
   const id = String(form.get("shipment_id"));
+  const op = await shipmentOperation(id, ws.tenant.id);
+  if (!op || op.is_simulated || op.state !== "queued") redirect(`/pengiriman/${id}?galat=nothing_to_dispatch`);
+  const deps = machineDeps();
+  if (!deps) redirect(`/pengiriman/${id}?info=mengantar_not_configured`);
+  redirect(`/pengiriman/${id}?${outcomeFlag("dispatch", await dispatchOperation(op.id, deps))}`);
+}
+
+// DEC-008: resolving an unknown outcome is a tenant-admin action. Demo shipments keep the SQL
+// simulation; real ones look the original order up at Mengantar by reference (never resend).
+export async function reconcileAction(form: FormData) {
+  const ws = await requireWorkspace();
+  const id = String(form.get("shipment_id"));
+  const op = await shipmentOperation(id, ws.tenant.id);
+  if (op && !op.is_simulated) {
+    if (ws.role !== "tenant_admin") redirect(`/pengiriman/${id}?galat=admin_required`);
+    const deps = machineDeps();
+    if (!deps) redirect(`/pengiriman/${id}?info=mengantar_not_configured`);
+    const summary = await reconcileOperation(op.id, deps);
+    if (summary.status === "not_reconcilable") redirect(`/pengiriman/${id}?galat=${encodeURIComponent(summary.reason)}`);
+    redirect(`/pengiriman/${id}?${outcomeFlag("reconcile", summary)}`);
+  }
   const supabase = await supabaseServer();
   const { error } = await supabase.rpc("reconcile_shipment", { p_shipment: id });
   redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : "?rekonsiliasi=1"}`);
+}
+
+// An unpaid Mengantar order: has the seller paid it in the Mengantar app yet?
+export async function checkPaymentAction(form: FormData) {
+  const ws = await requireWorkspace();
+  const id = String(form.get("shipment_id"));
+  const op = await shipmentOperation(id, ws.tenant.id);
+  if (!op || op.is_simulated) redirect(`/pengiriman/${id}?galat=nothing_to_check`);
+  const deps = machineDeps();
+  if (!deps) redirect(`/pengiriman/${id}?info=mengantar_not_configured`);
+  const summary = await checkPayment(op.id, deps);
+  if (summary.status === "not_reconcilable") redirect(`/pengiriman/${id}?galat=${encodeURIComponent(summary.reason)}`);
+  redirect(`/pengiriman/${id}?${outcomeFlag("payment", summary)}`);
+}
+
+// After a definite refusal (nothing created at Mengantar) the counter fixes the draft and retries.
+export async function reopenAction(form: FormData) {
+  await requireWorkspace();
+  const id = String(form.get("shipment_id"));
+  const { error } = await (await supabaseServer()).rpc("reopen_shipment", { p_shipment: id });
+  redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : ""}`);
+}
+
+// A tenant admin closes an unresolved failure after checking the Mengantar app (audited; the
+// database re-checks the role, age and that a re-check ran). The shipment can then be reopened.
+export async function closeFailedAction(form: FormData) {
+  await requireWorkspace();
+  const id = String(form.get("shipment_id"));
+  const { error } = await (await supabaseServer()).rpc("close_failed_operation", {
+    p_shipment: id, p_reason: String(form.get("reason") ?? ""),
+  });
+  redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : "?info=closed"}`);
 }
 
 export async function requestLabelAction(form: FormData) {

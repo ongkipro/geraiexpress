@@ -27,6 +27,11 @@ describe("credential sealing (SEC-3)", () => {
     expect(validApiKey("short")).toBe(false);
     expect(validApiKey("has spaces in it 1234567")).toBe(false);
     expect(validApiKey("mk_live_ABCDEFGHIJKLMNOP1234")).toBe(true);
+    expect(validApiKey("API-JBI26J1J2VFOOXXX")).toBe(true); // Mengantar's own key shape
+    // Anything the Mengantar client would refuse is refused at storage (T-024 audit).
+    expect(validApiKey("mk_live_ABCDEFGHIJ/../KLMNOP")).toBe(false);
+    expect(validApiKey("mk_live_ABCDEFGHIJKLMNOP!234")).toBe(false);
+    expect(validApiKey("x".repeat(129))).toBe(false);
     expect(credentialHint("mk_live_ABCDEFGHIJKLMNOP1234")).toBe("1234");
     expect(credentialHint("short_key_123456")).toBe("56");
   });

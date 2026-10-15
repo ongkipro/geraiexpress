@@ -21,15 +21,27 @@ Auth email goes through the Worker's Send Email Hook that refuses anonymous iden
 Every task finished `PASS` in its own delivery-ledger run with executed checks, mutation checks
 and an approved independent security review; evidence is in `.delivery`.
 
-Last full verification (2026-10-14): `pnpm test:db` 68, `pnpm test:unit` 16, typecheck, db lint,
-build, cf:build, `check:bundle`, worker smoke, and Playwright 176 passed / 1 skipped on both the
-Worker (wrangler dev) and next dev.
+The Mengantar integration T-019 to T-024 is complete locally and proven against the Mengantar
+sandbox: read client (area search, estimates), Partner client and a Partner-registered sandbox
+seller, order adapter with reconciliation, the account dispatcher (DEC-010: machine identity,
+one in-flight order per seller, no resend), live quotes and area pickers, and real issuance with
+reconciliation, payment checks and a cron sweep (custom Worker entry). Connected real gerai
+quote and issue through their own Mengantar key; demo gerai stay simulated. An independent
+audit of the whole integration (2026-10-14) found it sound for sandbox and a supervised pilot
+and listed production gates (below and RELEASE.md). COD and API payment are T-025.
+
+Last full verification (2026-10-14, T-024): `pnpm test:db` 103 (twice), `pnpm test:unit` 72,
+typecheck, db lint, build, cf:build, `check:bundle`, worker smoke, Playwright on next dev (179
+passed, 4 opt-in skipped), and the cron sweep in local workerd; the opt-in live sandbox e2e last
+ran before the final price follow-ups (order issued unpaid, payment check).
 
 A synthetic-data preview is deployed (T-018, 2026-10-14): Worker `geraiexpress-preview` at
 https://geraiexpress-preview.ongki.workers.dev on Supabase project `geraiexpress-preview`
-(RELEASE.md). Auth email, Auth CAPTCHA and Super Admin are intentionally off there. Production
-is not provisioned. No Mengantar call, real account, real email or customer data exists.
-Simulation output is labelled as such everywhere it appears.
+(RELEASE.md). Auth email, Auth CAPTCHA, Super Admin and live Mengantar (no machine identity
+or `MENGANTAR_ENV`) are intentionally off there; the preview predates T-019..T-024. Production
+is not provisioned. Mengantar has been called only with the owner's sandbox credentials and,
+read-only, the owner's production key; no customer data exists. Simulation output is labelled
+as such everywhere it appears.
 
 ## How to run it
 
@@ -46,9 +58,11 @@ Accepted 2026-10-14: DEC-005 to DEC-009. Still open:
 
 - Preview hardening inputs: a real Turnstile widget (site key + secret) to enable Auth
   CAPTCHA, and who bootstraps the first Super Admin on the preview.
-- Mengantar sandbox works end to end (T-020): Partner ID `ongkirich`, a Partner-registered
-  sandbox seller, and a sandbox order issued and simulated to DELIVERED. Label PDF generation
-  needs Mengantar to whitelist the account (403 today).
+- Before a real gerai issues in production (audit 2026-10-14): one supervised production order
+  to confirm price and resi, Mengantar's billable-weight and goods-value/insurance rules, the
+  label PDF whitelist (403 today), production Worker vars/secrets (`SUPABASE_URL`,
+  `SUPABASE_SECRET_KEY`, `MENGANTAR_ENV=production`, a new `CREDENTIAL_KEY`) with a production
+  deploy script, Workers Paid (cron subrequests), and alerts on the `dispatch_sweep` log.
 - Cloudflare Email Sending eligibility and sending domain (the hook's production transport;
   until then production Auth email fails closed), Terms/Privacy
   and retention.

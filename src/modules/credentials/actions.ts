@@ -17,7 +17,7 @@ export async function storeSellerKeyAction(_: CredentialState, form: FormData): 
   if (ws.role !== "tenant_admin" || ws.isDemo) return { error: "Hanya admin gerai yang dapat menghubungkan akun Mengantar." };
   const apiKey = String(form.get("api_key") ?? "").trim();
   if (form.get("owner_confirm") !== "on") return { error: "Konfirmasi bahwa akun Mengantar ini milik bisnis Anda." };
-  if (!validApiKey(apiKey)) return { error: "Kunci API tidak valid. Salin ulang dari dashboard Mengantar (16–256 karakter, tanpa spasi)." };
+  if (!validApiKey(apiKey)) return { error: "Kunci API tidak valid. Salin ulang dari dashboard Mengantar (16–128 karakter: huruf, angka, - atau _)." };
   const sealingKey = workerSecret("CREDENTIAL_KEY");
   if (!sealingKey) return { error: "Penyimpanan kunci belum dikonfigurasi di server. Hubungi tim GeraiExpress." };
   const expected = Number(form.get("latest_version") ?? 0);

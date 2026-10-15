@@ -27,7 +27,7 @@ export async function sealCredential(plaintext: string, aad: string, keyB64: str
   return { ciphertext: b64(new Uint8Array(sealed)), iv: b64(iv), keyVersion: CREDENTIAL_KEY_VERSION };
 }
 
-// For the future account dispatcher (TD-3); never called on a human-facing path.
+// Opened only inside the Worker (tenantMengantar, the dispatcher); never returned or logged.
 export async function openCredential(sealed: { ciphertext: string; iv: string }, aad: string, keyB64: string): Promise<string> {
   const key = await importKey(keyB64, "decrypt");
   const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(sealed.iv), additionalData: encoder.encode(aad) }, key, unb64(sealed.ciphertext));
@@ -42,5 +42,7 @@ export function credentialHint(apiKey: string): string {
 
 // Mengantar does not publish a key format we can rely on; accept a bounded printable token.
 export function validApiKey(apiKey: string): boolean {
-  return /^[!-~]{16,256}$/.test(apiKey);
+  // The same shape the Mengantar client accepts (the key becomes a URL path segment), so a key
+  // that can be stored can always be used.
+  return /^[A-Za-z0-9_-]{16,128}$/.test(apiKey);
 }

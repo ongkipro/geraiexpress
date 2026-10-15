@@ -21,6 +21,7 @@ const shot = async (page: import("@playwright/test").Page, name: string) => {
 test("a connected gerai picks its Mengantar pickup, searches the recipient area and gets live quotes", async ({ page }) => {
   test.setTimeout(120_000);
   const before = localSql(`select coalesce(pickup_address, '') || '|' || coalesce(pickup_area, '') from public.outlets where id = '${OUTLET_A}'`);
+  const startedAt = localSql("select now()");
   try {
     await signIn(page, "owner-a@geraiexpress.test");
     await page.goto("/pengaturan");
@@ -41,7 +42,7 @@ test("a connected gerai picks its Mengantar pickup, searches the recipient area 
     const pickupRow = page.getByRole("listitem").filter({ hasText: /^Alamat pickup outlet/ });
     await expect(pickupRow).toContainText("MELAWAI");
     await expect(page.getByRole("listitem").filter({ hasText: /^Cek ongkir/ })).toContainText("Siap");
-    await expect(page.getByRole("listitem").filter({ hasText: /^Penerbitan resi/ })).not.toContainText("Siap");
+    await expect(page.getByRole("listitem").filter({ hasText: /^Penerbitan resi/ })).toContainText("Siap");
     await expectNoHorizontalOverflow(page);
     await shot(page, "settings");
 
@@ -76,14 +77,39 @@ test("a connected gerai picks its Mengantar pickup, searches the recipient area 
     await expect(services).not.toContainText(" days");
     await shot(page, "quotes");
 
-    // Live issuance is not enabled yet (T-024): the dialog says so and cannot submit.
+    // The confirm dialog warns that this creates and pays a real Mengantar order.
+    await services.getByRole("radio", { name: /J&T Express/ }).check({ force: true });
     await page.getByRole("button", { name: "Periksa & konfirmasi" }).click();
-    await expect(page.getByTestId("live-issuance-pending")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Konfirmasi & terbitkan resi" })).toBeDisabled();
+    await expect(page.getByTestId("live-issuance-warning")).toContainText("pesanan Mengantar sungguhan");
     await shot(page, "confirm");
     // The net provider cost never reaches the page.
     expect(await page.content()).not.toMatch(/net_shipping|netShipping/);
+
+    // T-024: issue for real on one viewport only (each run creates one sandbox order). The
+    // sandbox seller has no balance, so the order is created unpaid: no resi yet.
+    if (test.info().project.name !== "desktop-1280") return;
+    await page.getByRole("button", { name: "Konfirmasi & terbitkan resi" }).click();
+    await expect(page.getByTestId("dispatch-result")).toBeVisible({ timeout: 45_000 });
+    const result = await page.getByTestId("dispatch-result").innerText();
+    expect(result).toMatch(/Resi Mengantar sudah terbit|saldo Mengantar belum cukup/);
+    await expect(page.getByText(/ID pesanan Mengantar/)).toBeVisible();
+    const shipmentPath = new URL(page.url()).pathname;
+    if (/saldo/.test(result)) {
+      await expect(page.getByText("Menunggu pembayaran").first()).toBeVisible();
+      await page.getByRole("button", { name: "Periksa pembayaran" }).click();
+      await expect(page.getByTestId("dispatch-info")).toContainText("belum menerima pembayaran");
+    }
+    await shot(page, "issued");
+    // Confirming the same shipment again (back button, double submit) can never create a second order.
+    const reference = (await page.getByRole("heading", { level: 1 }).innerText()).trim();
+    expect(localSql(`select count(*) from public.provider_operations o join public.shipments s on s.id = o.shipment_id where s.reference = '${reference}'`)).toBe("1");
+    await page.goto(shipmentPath);
+    await expect(page.getByRole("button", { name: "Periksa & konfirmasi" })).toHaveCount(0);
   } finally {
+    // Remove this run's local drafts/shipments from fixture tenant A (the sandbox order, if one
+    // was created, stays at Mengantar's sandbox).
+    localSql(`update public.shipments set selected_quote_id = null where tenant_id = '00000000-0000-4000-b000-00000000000a' and created_at >= '${startedAt}';
+      delete from public.shipments where tenant_id = '00000000-0000-4000-b000-00000000000a' and created_at >= '${startedAt}'`);
     const [address, area] = before.split("|");
     localSql(`update public.outlets set mengantar_pickup_address_id = null, mengantar_area_id = null,
       pickup_address = nullif('${address.replace(/'/g, "''")}', ''), pickup_area = nullif('${area.replace(/'/g, "''")}', '')

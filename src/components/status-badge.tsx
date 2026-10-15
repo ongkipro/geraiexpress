@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CircleDashed, Clock, FileText, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, Clock, FileText, Wallet, XCircle } from "lucide-react";
 import { SUBMISSION_LABEL } from "@/lib/format";
 
 // UI-2: status uses neutral surfaces, text and distinct icons; never color alone.
@@ -8,6 +8,7 @@ const ICONS = {
   queued: Clock,
   in_flight: Clock,
   unknown: AlertTriangle,
+  awaiting_payment: Wallet,
   issued: CheckCircle2,
   failed: XCircle,
 } as const;

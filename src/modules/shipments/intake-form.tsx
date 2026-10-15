@@ -22,7 +22,7 @@ export type ContactOption = {
   phone: string;
   is_sender: boolean;
   is_recipient: boolean;
-  addresses: { id: string; label: string | null; address_line: string; area: string; postal_code: string | null }[];
+  addresses: { id: string; label: string | null; address_line: string; area: string; area_id: string | null; postal_code: string | null }[];
 };
 export type QuoteOption = { id: string; courier: string; service: string; normal_tariff_idr: number; eta_days: string; is_simulated: boolean };
 
@@ -78,14 +78,14 @@ export function IntakeForm(props: Props) {
       [`${role}_name`]: c.name,
       [`${role}_phone`]: c.phone,
       ...(role === "recipient" && address
-        ? { recipient_address: address.address_line, recipient_area: address.area, recipient_area_id: "", recipient_postal_code: address.postal_code ?? "" }
+        ? { recipient_address: address.address_line, recipient_area: address.area, recipient_area_id: address.area_id ?? "", recipient_postal_code: address.postal_code ?? "" }
         : {}),
     }));
   };
   const pickAddress = (addressId: string) => {
     const a = props.contacts.find((x) => x.id === recipientContact)?.addresses.find((x) => x.id === addressId);
     if (!a) return;
-    setValues((v) => ({ ...v, recipient_address: a.address_line, recipient_area: a.area, recipient_area_id: "", recipient_postal_code: a.postal_code ?? "" }));
+    setValues((v) => ({ ...v, recipient_address: a.address_line, recipient_area: a.area, recipient_area_id: a.area_id ?? "", recipient_postal_code: a.postal_code ?? "" }));
     setDirty(true);
   };
 
@@ -288,10 +288,10 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Konfirmasi pengiriman {props.reference}</DialogTitle>
-          <DialogDescription data-testid={props.quote.is_simulated ? undefined : "live-issuance-pending"}>
+          <DialogDescription data-testid={props.quote.is_simulated ? undefined : "live-issuance-warning"}>
             {props.quote.is_simulated
               ? "Ini simulasi: tidak ada pesanan Mengantar, saldo atau resi sungguhan yang dibuat."
-              : "Ongkir ini langsung dari Mengantar. Penerbitan resi langsung belum diaktifkan di versi ini, jadi konfirmasi belum bisa membuat pesanan."}
+              : "Mengonfirmasi membuat pesanan Mengantar sungguhan dari akun gerai ini dan membayarnya dari saldo Mengantar. Pesanan tidak bisa dibatalkan dari GeraiExpress."}
           </DialogDescription>
         </DialogHeader>
         <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
@@ -312,7 +312,7 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
           <input type="hidden" name="idempotency_key" value={props.idempotencyKey} />
           <DialogFooter className="gap-3">
             <DialogClose asChild><Button type="button" variant="outline">Kembali</Button></DialogClose>
-            <Button type="submit" disabled={pending || !props.quote.is_simulated} aria-busy={pending}>{pending ? "Menerbitkan…" : "Konfirmasi & terbitkan resi"}</Button>
+            <Button type="submit" disabled={pending} aria-busy={pending}>{pending ? "Menerbitkan…" : "Konfirmasi & terbitkan resi"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -68,7 +68,18 @@ session: `machine_seller_key` (the sealed key, opened only in the Worker) and
 `record_live_quotes` (live Mengantar estimates; net cost to `private.quote_costs`). Connected
 real gerai quote live and pick recipient areas from Mengantar; demo gerai keep the SQL
 simulation. Without `MENGANTAR_ENV`/`SUPABASE_SECRET_KEY` (e.g. the preview) live features fail
-closed with an explanatory message. Per seller, at
+closed with an explanatory message.
+
+T-024 wires issuance: `confirm_shipment` creates a real queued operation for a connected gerai
+and the confirming server action runs `dispatchOperation` at once (pickup re-checked at
+Mengantar, one order, judged result). A definite refusal (400/403/local, pickup gone) can be
+reopened and confirmed again; any failure that may still become an order blocks a second
+operation (partial unique index). Admins reconcile unknown outcomes through the dispatcher, and
+anyone checks an unpaid order's payment. The Worker entry is `custom-worker.ts` (OpenNext
+handler + `scheduled`): a cron every 5 minutes runs `sweep()` over `dispatch_due()` — queued
+operations nobody sent, stale in-flight/unknown ones, unpaid orders — throttled by
+`last_checked_at` and skipping claims that would certainly be refused. Real labels come from
+the Mengantar app until Mengantar whitelists label generation; COD and API payment are T-025. Per seller, at
 most one real operation is in flight (a partial unique index); a stale in-flight or unknown
 operation is reconciled by its reference, never resent.
 

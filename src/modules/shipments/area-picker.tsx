@@ -11,8 +11,8 @@ type Area = { id: string; province: string; city: string; district: string; subd
 export const areaLabel = (a: Area) => [a.subdistrict, a.district, a.city].filter(Boolean).join(", ");
 
 // T-023: the recipient's Mengantar area for a connected gerai. The operator searches, then picks
-// one result; choosing a saved contact or address clears the choice (it has no area id), so a
-// live quote never uses a stale area. Results are a radio group (not a combobox) so keyboard and
+// one result; choosing a saved contact or address takes that address's saved area (or clears
+// the choice when it has none), so a live quote never uses a stale area. Results are a radio group (not a combobox) so keyboard and
 // screen-reader use stay simple. Client-only: imported by the intake form.
 export function AreaPicker(props: {
   label: string;

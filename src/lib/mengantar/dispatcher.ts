@@ -34,7 +34,9 @@ type Payload = {
 
 export type DispatchSummary =
   | { status: "not_claimed" | "not_reconcilable"; reason: string }
-  | { status: "recorded"; outcome: string }
+  // priceMismatch: Mengantar's price differs from the customer charge (a shipment event too);
+  // priceUnknown: the order's price was not readable, so it could not be compared.
+  | { status: "recorded"; outcome: string; priceMismatch?: true; priceUnknown?: true }
   // The provider effect may have happened but the result could not be stored: the operation stays
   // in flight and is reconciled once stale.
   | { status: "record_failed"; outcome: string }
@@ -62,7 +64,7 @@ function orderRequest(p: Payload): CreateOrderRequest | null {
   const phone = providerPhone(p.recipient.phone);
   if (!p.courier || !p.pickup_address_id || !p.recipient.area_id || !p.recipient.address || !p.recipient.name
     || !phone || !p.weight_grams || !p.item_description || !p.goods_value_idr) return null;
-  // lazy: COD shipments need a COD amount on the shipment (T-024); until then every real order is
+  // lazy: COD shipments need a COD amount on the shipment (T-025); until then every real order is
   // non-COD with the declared goods value.
   return {
     courier: p.courier,
@@ -79,11 +81,10 @@ function orderRequest(p: Payload): CreateOrderRequest | null {
 export async function dispatchOperation(operationId: string, deps: DispatcherDeps): Promise<DispatchSummary> {
   const claim = await deps.rpc("dispatch_claim", { p_operation: operationId, p_env: deps.environment });
   if (claim.error) return { status: "not_claimed", reason: claim.error.message };
+  // Waited too long in the queue: the database failed it (reopenable) without sending anything.
+  if ((claim.data as { stale?: boolean }).stale) return { status: "recorded", outcome: "quote_stale" };
   const p = claim.data as Payload;
-  const record = async (outcome: string, extra: Record<string, unknown> = {}): Promise<DispatchSummary> => {
-    const { error } = await deps.rpc("dispatch_record", { p_operation: operationId, p_attempt: p.attempt, p_outcome: outcome, ...extra });
-    return error ? { status: "record_failed", outcome } : { status: "recorded", outcome };
-  };
+  const record = (outcome: string, extra: Record<string, unknown> = {}) => recordResult(deps, operationId, p.attempt, outcome, extra);
 
   // A key that cannot be opened (missing, or a wrong CREDENTIAL_KEY deploy) is our problem, not
   // the shipment's: nothing was sent, so the operation goes back to the queue.
@@ -96,12 +97,22 @@ export async function dispatchOperation(operationId: string, deps: DispatcherDep
   const request = orderRequest(p);
   if (!request) return record("rejected", { p_code: "INPUT_INCOMPLETE" });
 
+  // The outlet's pickup must still exist in this seller's account (the admin RPC trusts its
+  // caller, and an address can be deleted at Mengantar). A failed check sent nothing: release.
+  try {
+    const pickups = await client.listPickupAddresses();
+    if (!pickups.some((a) => a.id === request.pickupAddressId)) return record("rejected", { p_code: "PICKUP_NOT_FOUND" });
+  } catch {
+    const { error } = await deps.rpc("dispatch_release", { p_operation: operationId, p_attempt: p.attempt });
+    return error ? { status: "record_failed", outcome: "released" } : { status: "not_claimed", reason: "mengantar_unavailable" };
+  }
+
   try {
     const result = await client.createOrder(request);
     if (result.outcome === "issued") {
-      return record("issued", { p_order_id: result.orderId, p_tracking: result.trackingNumber, p_batch: result.batch });
+      return record("issued", { p_order_id: result.orderId, p_tracking: result.trackingNumber, p_batch: result.batch, p_price: result.tariffWithFees });
     }
-    if (result.outcome === "unpaid") return record("unpaid", { p_order_id: result.orderId, p_batch: result.batch });
+    if (result.outcome === "unpaid") return record("unpaid", { p_order_id: result.orderId, p_batch: result.batch, p_price: result.tariffWithFees });
     return record("failed", { p_batch: result.batch, p_record_id: result.providerRecordId, p_code: "PROVIDER_ERROR_ITEM" });
   } catch (error) {
     if (error instanceof MengantarError) {
@@ -125,9 +136,8 @@ export async function reconcileOperation(operationId: string, deps: DispatcherDe
   const client = await sellerClient(p, deps);
   if (!client) return { status: "inconclusive", reason: "credential_unavailable" };
   const record = async (outcome: string, extra: Record<string, unknown> = {}): Promise<DispatchSummary> => {
-    const { error } = await deps.rpc("dispatch_record", { p_operation: operationId, p_attempt: p.attempt, p_outcome: outcome, ...extra });
-    if (error?.message === "too_early") return { status: "inconclusive", reason: "too_early" };
-    return error ? { status: "record_failed", outcome } : { status: "recorded", outcome };
+    const summary = await recordResult(deps, operationId, p.attempt, outcome, extra);
+    return summary.status === "record_failed" && summary.reason === "too_early" ? { status: "inconclusive", reason: "too_early" } : summary;
   };
 
   let matches;
@@ -144,10 +154,73 @@ export async function reconcileOperation(operationId: string, deps: DispatcherDe
   if (live.length === 1) {
     const m = live[0];
     if (!m.orderId || !m.batch) return { status: "inconclusive", reason: "incomplete_order" };
-    if (m.paid && m.trackingNumber) return record("issued", { p_order_id: m.orderId, p_tracking: m.trackingNumber, p_batch: m.batch, p_code: "RECONCILED" });
-    if (!m.paid && !m.trackingNumber) return record("unpaid", { p_order_id: m.orderId, p_batch: m.batch, p_code: "RECONCILED" });
+    if (m.paid && m.trackingNumber) return record("issued", { p_order_id: m.orderId, p_tracking: m.trackingNumber, p_batch: m.batch, p_code: "RECONCILED", p_price: m.price });
+    if (!m.paid && !m.trackingNumber) return record("unpaid", { p_order_id: m.orderId, p_batch: m.batch, p_code: "RECONCILED", p_price: m.price });
     return { status: "inconclusive", reason: "incomplete_order" };
   }
   if (matches.length > 0) return record("failed", { p_code: "PROVIDER_ERROR_ITEM" });
   return record("not_created", { p_code: "NOT_CREATED" });
 }
+
+// An unpaid order (seller balance was short) gets its resi once the seller pays at Mengantar.
+export async function checkPayment(operationId: string, deps: DispatcherDeps): Promise<DispatchSummary> {
+  const begin = await deps.rpc("dispatch_begin_payment_check", { p_operation: operationId });
+  if (begin.error) return { status: "not_reconcilable", reason: begin.error.message };
+  const p = begin.data as Payload & { provider_order_id: string | null; provider_batch: string | null };
+  if (p.provider_env !== deps.environment) return { status: "inconclusive", reason: "wrong_environment" };
+  if (!p.provider_order_id || !p.provider_batch) return { status: "inconclusive", reason: "missing_attempt" };
+  const client = await sellerClient(p, deps);
+  if (!client) return { status: "inconclusive", reason: "credential_unavailable" };
+  let order;
+  try {
+    order = await client.findOrder(p.provider_order_id);
+  } catch {
+    return { status: "inconclusive", reason: "lookup_failed" };
+  }
+  if (!order || !order.paid || !order.trackingNumber) return { status: "inconclusive", reason: "still_unpaid" };
+  return recordResult(deps, operationId, p.attempt, "issued", {
+    p_order_id: p.provider_order_id, p_tracking: order.trackingNumber, p_batch: p.provider_batch, p_price: order.price,
+  });
+}
+
+async function recordResult(deps: DispatcherDeps, operationId: string, attempt: number, outcome: string,
+  extra: Record<string, unknown>): Promise<DispatchSummary & { reason?: string }> {
+  const { data, error } = await deps.rpc("dispatch_record", { p_operation: operationId, p_attempt: attempt, p_outcome: outcome, ...extra });
+  if (error) return { status: "record_failed", outcome, reason: error.message };
+  // price_mismatch: true/false once compared, null when the price was unreadable, absent on a replay.
+  const mismatch = (data as { price_mismatch?: boolean | null } | null)?.price_mismatch;
+  return { status: "recorded", outcome, ...(mismatch ? { priceMismatch: true as const } : {}), ...(mismatch === null ? { priceUnknown: true as const } : {}) };
+}
+
+export type SweepSummary = {
+  checked: number;
+  failed?: true;
+  results: { action: string; status: string; priceMismatch?: true; priceUnknown?: true }[];
+  // Operations past the sweep's re-check windows (visible to monitoring, not only per shipment).
+  stuck?: Record<string, number>;
+};
+
+// Periodic sweep (Worker cron): dispatch queued operations nobody sent, reconcile stale or
+// unknown ones, re-check unpaid orders. Bounded per run; every step is safe to repeat.
+export async function sweep(deps: DispatcherDeps, limit = 20): Promise<SweepSummary> {
+  const { data, error } = await deps.rpc("dispatch_due", { p_limit: limit });
+  // A failing due-list query is reported, not mistaken for "nothing to do".
+  if (error || !Array.isArray(data)) return { checked: 0, failed: true, results: [] };
+  const results: SweepSummary["results"] = [];
+  for (const row of data as { operation_id: string; action: string }[]) {
+    const run = row.action === "dispatch" ? dispatchOperation : row.action === "payment" ? checkPayment : reconcileOperation;
+    try {
+      const summary = await run(row.operation_id, deps);
+      results.push({
+        action: row.action, status: summary.status,
+        ...("priceMismatch" in summary && summary.priceMismatch ? { priceMismatch: true as const } : {}),
+        ...("priceUnknown" in summary && summary.priceUnknown ? { priceUnknown: true as const } : {}),
+      });
+    } catch {
+      results.push({ action: row.action, status: "error" });
+    }
+  }
+  const stuck = await deps.rpc("dispatch_stuck_counts", {});
+  return { checked: results.length, results, ...(stuck.error ? {} : { stuck: stuck.data as Record<string, number> }) };
+}
+

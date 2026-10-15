@@ -111,7 +111,7 @@ describe("record", () => {
     const issued = { p_operation: op, p_outcome: "issued", p_order_id: "261014LJ9GP7", p_tracking: "JO6844983511", p_batch: "26101416Q0L7LJ" };
     expect((await machine().rpc("dispatch_record", { ...issued, p_attempt: 2 })).error?.message).toBe("stale_attempt");
     expect((await machine().rpc("dispatch_record", { ...issued, p_attempt: 1, p_tracking: null })).error?.message).toBe("missing_identity");
-    expect((await machine().rpc("dispatch_record", { ...issued, p_attempt: 1 })).data).toEqual({ state: "succeeded", replayed: false });
+    expect((await machine().rpc("dispatch_record", { ...issued, p_attempt: 1 })).data).toEqual({ state: "succeeded", replayed: false, price_mismatch: null });
     expect(operation(op)).toBe("succeeded|1|ISSUED|261014LJ9GP7");
     expect(shipment(s)).toBe("issued|paid|JO6844983511");
     expect((await machine().rpc("dispatch_record", { ...issued, p_attempt: 1 })).data).toEqual({ state: "succeeded", replayed: true });

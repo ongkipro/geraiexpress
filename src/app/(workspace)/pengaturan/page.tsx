@@ -44,6 +44,18 @@ export default async function SettingsPage() {
     }
   }
   const keyWorks = pickupOptions !== null;
+  // Orders still being checked with the current key (T-024 audit): replacing the key would leave
+  // them to be checked by hand in the Mengantar app.
+  let openOrders = 0;
+  if (!ws.isDemo && credential.configured && ws.role === "tenant_admin") {
+    const sb = await supabaseServer();
+    const [{ count: ops }, { count: unpaid }] = await Promise.all([
+      sb.from("provider_operations").select("id", { count: "exact", head: true }).eq("tenant_id", ws.tenant.id)
+        .eq("is_simulated", false).in("state", ["queued", "in_flight", "unknown"]),
+      sb.from("shipments").select("id", { count: "exact", head: true }).eq("tenant_id", ws.tenant.id).eq("submission_state", "awaiting_payment"),
+    ]);
+    openOrders = (ops ?? 0) + (unpaid ?? 0);
+  }
   // Demo outlets ship from free text; real outlets need the Mengantar pickup address.
   // A pickup that no longer exists in the seller's account is not ready.
   const pickupReady = ws.isDemo ? Boolean(ws.outlet.pickupAddress && ws.outlet.pickupArea)
@@ -61,8 +73,8 @@ export default async function SettingsPage() {
         : "Belum terhubung. Admin gerai bisa menyimpan kunci API akun Mengantar milik bisnis ini." },
     { name: "Cek ongkir", state: quoting,
       detail: ws.isDemo ? "Harga adalah contoh." : quoting === "ready" ? "Ongkir langsung dari Mengantar dengan kunci gerai ini." : "Butuh akun Mengantar yang terhubung dan alamat pickup." },
-    { name: "Penerbitan resi", state: ws.isDemo ? "simulated" : "blocked",
-      detail: ws.isDemo ? "Resi adalah contoh." : "Penerbitan resi langsung ke Mengantar belum diaktifkan di versi ini." },
+    { name: "Penerbitan resi", state: ws.isDemo ? "simulated" : quoting,
+      detail: ws.isDemo ? "Resi adalah contoh." : quoting === "ready" ? "Resi diterbitkan langsung di akun Mengantar gerai ini dan dibayar dari saldonya." : "Butuh akun Mengantar yang terhubung dan alamat pickup." },
     { name: "Identitas pengirim pelanggan (dropshipper)", state: ws.isDemo ? "simulated" : "unverified",
       detail: "Nama/HP pelanggan di resi resmi butuh izin dropshipper di akun Mengantar." },
     { name: "Label resmi (PDF kurir)", state: ws.isDemo ? "simulated" : "unverified",
@@ -102,13 +114,18 @@ export default async function SettingsPage() {
           <h2 id="mengantar-heading" className="text-xl">Akun Mengantar (kunci API sendiri)</h2>
           <p className="text-sm text-muted-foreground">
             Hubungkan akun penjual Mengantar yang sudah dimiliki bisnis ini. GeraiExpress tidak pernah meminta kata sandi Mengantar.
-            Kunci dipakai server untuk membaca alamat pickup dan cek ongkir; penerbitan resi langsung menyusul.
+            Kunci dipakai server untuk membaca alamat pickup, cek ongkir dan menerbitkan resi.
           </p>
           {credential.configured && credential.version ? (
             <div className="flex flex-col gap-2 rounded-md bg-muted p-4">
               <p data-testid="seller-key-status">Tersimpan: kunci berakhiran <span className="font-semibold">…{credential.hint}</span> (versi {credential.version}).</p>
               <RemoveSellerKeyForm version={credential.version} />
             </div>
+          ) : null}
+          {openOrders > 0 ? (
+            <p role="note" className="rounded-md bg-muted p-3 text-sm" data-testid="open-orders-warning">
+              <span aria-hidden="true">⚠ </span>{openOrders} pengiriman masih diproses atau menunggu pembayaran dengan kunci ini. Jika kunci diganti, pengiriman itu harus diperiksa manual di aplikasi Mengantar.
+            </p>
           ) : null}
           <SellerKeyForm latestVersion={credential.latest_version} replacing={credential.configured} />
         </section>

@@ -358,7 +358,7 @@ export type CreateOrderResult =
   // Paid and handed a resi: the shipment exists.
   | { outcome: "issued"; orderId: string; trackingNumber: string; batch: string; tariffWithFees: number | null }
   // Created but not paid (insufficient balance): no resi yet; payment is a batch command (TD-3).
-  | { outcome: "unpaid"; orderId: string; batch: string }
+  | { outcome: "unpaid"; orderId: string; batch: string; tariffWithFees: number | null }
   // Mengantar recorded the attempt as an error item without ORDER_ID or resi. The provider keeps
   // that record (with a batch), so before creating again the dispatcher must confirm the batch
   // still holds only an error item.
@@ -369,6 +369,8 @@ export type CreateOrderResult =
 export type ProviderOrder = {
   orderId: string | null;
   batch: string | null;
+  // The price Mengantar charges (estimatedPrice), when readable.
+  price: number | null;
   reference: string | null;
   trackingNumber: string | null;
   status: string;
@@ -424,11 +426,9 @@ function judgeCreatedItem(item: unknown, reference: string): CreateOrderResult {
   const batch = typeof item.batch === "string" && /^[A-Z0-9]{6,24}$/.test(item.batch) ? item.batch : null;
   if (!orderId || !batch || item.status !== "active" || item.destinationMark !== reference) throw new MengantarError("unknown_outcome");
   const tracking = typeof item.cnote_no === "string" && /^[A-Za-z0-9-]{6,40}$/.test(item.cnote_no) ? item.cnote_no : null;
-  if (item.isPaid === true && tracking) {
-    const price = item.estimatedPrice;
-    return { outcome: "issued", orderId, trackingNumber: tracking, batch, tariffWithFees: typeof price === "number" && Number.isSafeInteger(price) && price > 0 ? price : null };
-  }
-  if (item.isPaid === false && (item.cnote_no === null || item.cnote_no === undefined)) return { outcome: "unpaid", orderId, batch };
+  const price = typeof item.estimatedPrice === "number" && Number.isSafeInteger(item.estimatedPrice) && item.estimatedPrice > 0 ? item.estimatedPrice : null;
+  if (item.isPaid === true && tracking) return { outcome: "issued", orderId, trackingNumber: tracking, batch, tariffWithFees: price };
+  if (item.isPaid === false && (item.cnote_no === null || item.cnote_no === undefined)) return { outcome: "unpaid", orderId, batch, tariffWithFees: price };
   throw new MengantarError("unknown_outcome");
 }
 
@@ -440,5 +440,6 @@ function parseOrder(row: unknown): ProviderOrder {
   const reference = typeof row.destinationMark === "string" && REFERENCE.test(row.destinationMark) ? row.destinationMark : null;
   const trackingNumber = typeof row.cnote_no === "string" && row.cnote_no ? row.cnote_no.slice(0, 40) : null;
   const batch = typeof row.batch === "string" && /^[A-Z0-9]{6,24}$/.test(row.batch) ? row.batch : null;
-  return { orderId, batch, reference, trackingNumber, status: row.status.slice(0, 40), paid: row.isPaid === true, createdAt: row.createdAt };
+  const price = typeof row.estimatedPrice === "number" && Number.isSafeInteger(row.estimatedPrice) && row.estimatedPrice > 0 ? row.estimatedPrice : null;
+  return { orderId, batch, price, reference, trackingNumber, status: row.status.slice(0, 40), paid: row.isPaid === true, createdAt: row.createdAt };
 }

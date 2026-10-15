@@ -25,6 +25,7 @@ export const SUBMISSION_LABEL: Record<string, string> = {
   queued: "Dalam antrean",
   in_flight: "Sedang diproses",
   unknown: "Hasil belum pasti",
+  awaiting_payment: "Menunggu pembayaran",
   issued: "Resi terbit",
   failed: "Gagal",
 };
@@ -46,3 +47,35 @@ export function etaLabel(raw: string | null | undefined): string {
   const [a, b] = [Number(m[1]), Number(m[2] ?? m[1])].sort((x, y) => x - y);
   return a === b ? `${a} hari` : `${a}–${b} hari`;
 }
+
+// T-024: why a real dispatch did not run now (info flag) — the operation is still safe.
+export const DISPATCH_INFO: Record<string, string> = {
+  account_busy: "Pesanan lain gerai ini sedang dikirim ke Mengantar. Pesanan ini menunggu di antrean dan dikirim otomatis.",
+  credential_missing: "Akun Mengantar gerai ini belum terhubung. Pesanan menunggu di antrean.",
+  credential_unavailable: "Kunci Mengantar gerai ini tidak bisa dipakai (diganti atau tidak terbaca). Admin gerai perlu memeriksanya.",
+  mengantar_unavailable: "Mengantar sedang tidak bisa dihubungi. Pesanan menunggu di antrean dan dikirim otomatis.",
+  mengantar_not_configured: "Koneksi Mengantar di server belum disiapkan. Pesanan menunggu di antrean.",
+  still_unpaid: "Mengantar belum menerima pembayaran pesanan ini.",
+  too_early: "Terlalu cepat untuk menyimpulkan. Periksa lagi beberapa menit lagi.",
+  duplicate_orders: "Ditemukan lebih dari satu pesanan Mengantar dengan referensi ini. Hubungi admin GeraiExpress sebelum melanjutkan.",
+  lookup_failed: "Mengantar sedang tidak bisa dihubungi. Periksa lagi nanti.",
+  incomplete_order: "Pesanan Mengantar ditemukan tetapi datanya belum lengkap. Periksa lagi nanti.",
+  wrong_environment: "Pesanan ini dibuat di lingkungan Mengantar lain.",
+  not_queued: "Pesanan ini sudah diproses.",
+  shipment_not_ready: "Data pengiriman belum lengkap untuk dikirim.",
+  tenant_not_active: "Gerai ini sedang tidak aktif.",
+  closed: "Percobaan ditutup. Anda bisa membuka draf lagi dan mengonfirmasi ulang.",
+};
+
+// Result codes of a failed real operation, for the operator.
+export const FAILURE_REASON: Record<string, string> = {
+  PROVIDER_REJECTED: "Mengantar menolak pesanan ini (misalnya kurir tidak melayani rute atau drop-off).",
+  NOT_ALLOWED: "Mengantar menolak akses dengan kunci gerai ini.",
+  INPUT_INVALID: "Data pengiriman tidak memenuhi syarat Mengantar.",
+  INPUT_INCOMPLETE: "Data pengiriman belum lengkap untuk Mengantar.",
+  PICKUP_NOT_FOUND: "Alamat pickup outlet sudah tidak ada di akun Mengantar. Admin gerai perlu memilih ulang di Pengaturan.",
+  PROVIDER_ERROR_ITEM: "Mengantar mencatat percobaan ini sebagai gagal.",
+  NOT_CREATED: "Pemeriksaan tidak menemukan pesanan di Mengantar.",
+  QUOTE_STALE: "Pesanan terlalu lama di antrean sehingga ongkirnya kedaluwarsa; tidak ada yang dikirim ke Mengantar.",
+  CLOSED_NOT_CREATED: "Admin gerai menutup percobaan ini setelah memastikan tidak ada pesanan di Mengantar.",
+};

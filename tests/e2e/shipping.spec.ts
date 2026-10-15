@@ -1,7 +1,8 @@
 // PR-4 / PR-5 / PR-6 / PR-7 / PR-9 / UX-1 / UX-3: contact reuse → draft → simulated quote →
 // explicit confirmation → sample label, plus unknown-outcome recovery and foreign access.
 import { actAsVisitor, expect, randomVisitorIp, test } from "./fixtures";
-import { expectNoHorizontalOverflow, localSql, sessionUserId, signIn, startDemo } from "./helpers";
+import { expectNoHorizontalOverflow, localSql, sessionUserId, signIn, signOut, startDemo } from "./helpers";
+import { randomUUID } from "node:crypto";
 
 test("complete simulated counter flow with saved contacts", async ({ page }) => {
   await startDemo(page);
@@ -207,4 +208,28 @@ test("another tenant's label is not found", async ({ page }) => {
   await signIn(page, "owner-a@geraiexpress.test");
   const res = await page.goto("/pengiriman/00000000-0000-4000-e000-00000000000b/label");
   expect(res?.status()).toBe(404);
+});
+
+// T-024 / DEC-008: an unknown real Mengantar outcome is resolved by a tenant admin; an operator
+// sees the state and is told to escalate, and gets no reconcile button.
+test("operators cannot reconcile a real unknown outcome; admins can", async ({ page }) => {
+  const id = randomUUID(), op = randomUUID();
+  localSql(`insert into public.shipments (tenant_id, outlet_id, id, reference, submission_state, is_simulated, created_by, submitted_at)
+      values ('00000000-0000-4000-b000-00000000000a', '00000000-0000-4000-c000-00000000000a', '${id}', 'GX261014-E2E${op.slice(0, 3).toUpperCase()}', 'unknown', false,
+      '00000000-0000-4000-a000-0000000000a1', now());
+    insert into public.provider_operations (tenant_id, shipment_id, id, kind, idempotency_key, input_digest, state, is_simulated, actor, provider_env, dispatched_at, attempts)
+      values ('00000000-0000-4000-b000-00000000000a', '${id}', '${op}', 'create_order', 'e2e-${op}', 'digest', 'unknown', false,
+      '00000000-0000-4000-a000-0000000000a1', 'sandbox', now(), 1)`);
+  await signIn(page, "operator-a@geraiexpress.test");
+  await page.goto(`/pengiriman/${id}`);
+  await expect(page.getByText("Hasil belum pasti").first()).toBeVisible();
+  await expect(page.getByText("Minta admin gerai memeriksa status operasi asli.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Periksa status operasi asli" })).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+  await signOut(page);
+  await signIn(page, "owner-a@geraiexpress.test");
+  await page.goto(`/pengiriman/${id}`);
+  await expect(page.getByRole("button", { name: "Periksa status operasi asli" })).toBeVisible();
+  localSql(`update public.provider_operations set state = 'failed', result_code = 'CLOSED_NOT_CREATED' where id = '${op}';
+    update public.shipments set submission_state = 'failed' where id = '${id}'`);
 });
