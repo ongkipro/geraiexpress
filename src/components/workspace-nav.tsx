@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,13 @@ const ITEMS: NavItem[] = [
   { href: "/kontak", label: "Kontak" },
   { href: "/pengaturan", label: "Pengaturan" },
 ];
+
+// Shown on the clicked item while the server renders the next page, so a slow round trip still
+// gets instant feedback (a route-level loading.js would stream and turn 404s into 200s).
+function Pending() {
+  const { pending } = useLinkStatus();
+  return <span aria-hidden className={cn("ml-auto size-2 shrink-0 rounded-full bg-primary", pending ? "motion-safe:animate-pulse" : "invisible")} />;
+}
 
 // Highlights the most specific matching item, so "/admin" is not active on "/admin/akses".
 export function WorkspaceNav({ onNavigate, items = ITEMS }: { onNavigate?: () => void; items?: NavItem[] }) {
@@ -34,6 +41,7 @@ export function WorkspaceNav({ onNavigate, items = ITEMS }: { onNavigate?: () =>
               )}
             >
               {item.label}
+              <Pending />
             </Link>
           </li>
         ))}

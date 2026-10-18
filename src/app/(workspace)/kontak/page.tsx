@@ -49,7 +49,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
               const roles = [c.is_sender && "Pengirim", c.is_recipient && "Penerima"].filter(Boolean).join(" · ");
               return (
                 <li key={c.id}>
-                  <Link href={`/kontak/${c.id}`} className="flex flex-wrap items-center justify-between gap-2 p-4">
+                  <Link href={`/kontak/${c.id}`} prefetch={false} className="flex flex-wrap items-center justify-between gap-2 p-4">
                     <span className="flex min-w-0 flex-col">
                       <span className="font-semibold text-primary">{c.name}</span>
                       <span className="text-sm text-muted-foreground">{c.phone}{area ? ` · ${area}` : ""}</span>

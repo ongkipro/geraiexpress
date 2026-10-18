@@ -27,6 +27,9 @@
   "env": {
     "preview": {
       "name": "geraiexpress-preview",
+      // Run next to the preview Supabase project (ap-southeast-1): a dashboard page makes several
+      // sequential Supabase calls, and Indonesian traffic otherwise lands in HKG.
+      "placement": { "region": "aws:ap-southeast-1" },
       // The preview has no machine identity or Mengantar environment: no sweep.
       "triggers": { "crons": [] },
       "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "geraiexpress-preview" }],

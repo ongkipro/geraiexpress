@@ -32,7 +32,7 @@ export default async function NewShipmentPage() {
           <ul className="divide-y divide-border rounded-lg bg-card ring-1 ring-border">
             {drafts.map((d) => (
               <li key={d.id}>
-                <Link href={`/pengiriman/${d.id}`} className="flex flex-wrap items-center justify-between gap-2 p-4">
+                <Link href={`/pengiriman/${d.id}`} prefetch={false} className="flex flex-wrap items-center justify-between gap-2 p-4">
                   <span className="flex min-w-0 flex-col">
                     <span className="font-semibold tabular text-primary">{d.reference}</span>
                     <span className="truncate text-sm text-muted-foreground">{d.sender_name ?? "Pengirim belum diisi"} → {d.recipient_name ?? "Penerima belum diisi"}</span>

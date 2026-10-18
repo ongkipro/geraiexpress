@@ -606,3 +606,26 @@ full e2e on next dev (179 passed, 4 opt-in skipped), build, cf:build, check:bund
 smoke PASS, cron in local workerd (log carries `priceUnknown` and `stuck.queued`). The opt-in live
 sandbox e2e was not re-run after the final price follow-ups (database-only change, covered by DB
 and unit tests).
+
+## 2026-10-15 — PERF-1 dashboard latency on the preview (NFR-4)
+
+Measured on the deployed preview from Indonesia (Playwright, demo session): every dashboard page
+waited 0.55–0.9 s for the first byte (login page ~0.17 s warm). Causes: Indonesian traffic lands
+in Cloudflare HKG while Supabase is in ap-southeast-1, and a page makes 4–5 sequential Supabase
+calls (middleware `getUser`, loader `getUser`, memberships, outlets, page queries); list rows also
+prefetched one dynamic render each (8 detail renders on the contact list alone).
+
+Changes: preview placement hint `aws:ap-southeast-1` (Worker runs next to the database); the
+middleware verifies GET/HEAD locally with `getClaims` (the preview has ES256 keys) and keeps
+`getUser` for every other method, so a revoked session's cookies are still cleared before
+RPC-only server actions (review finding; unit test `middleware.test.ts`, mutation-checked);
+page loaders keep `getUser`. Row links in shipment, contact and draft lists do not prefetch; the
+workspace nav shows a pending dot (`useLinkStatus`) on the clicked item. A route-level
+`loading.tsx` was tried and removed: streaming made foreign-tenant `notFound()` answer 200 (17
+isolation e2e failures).
+
+Verified: unit 74, typecheck, full e2e on next dev (179 passed, 4 opt-in skipped; the specs run
+before the final middleware edit re-ran: 86 passed), build, cf:build, check:bundle, worker smoke;
+nav pending state screenshotted (dot visible while pending, no layout shift). Security review:
+CHANGES_REQUIRED (revoked sessions on RPC-only actions), fixed, approved. Not yet measured on the
+preview: it needs `supabase db push` of three migrations and a preview deploy (owner approval).

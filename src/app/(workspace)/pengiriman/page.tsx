@@ -87,7 +87,7 @@ export default async function ShipmentsPage({
                 </div>
                 <div className="flex items-center gap-3">
                   <StatusBadge state={s.submission_state} />
-                  <Button asChild variant="outline" size="sm"><Link href={`/pengiriman/${s.id}`}>Periksa</Link></Button>
+                  <Button asChild variant="outline" size="sm"><Link href={`/pengiriman/${s.id}`} prefetch={false}>Periksa</Link></Button>
                 </div>
               </li>
             ))}
@@ -126,10 +126,11 @@ export default async function ShipmentsPage({
           <p role="alert" className="rounded-md bg-card p-4 ring-1 ring-border">Daftar belum bisa dimuat. Muat ulang halaman.</p>
         ) : rows && rows.length > 0 ? (
           <>
+            {/* Row links skip prefetch: each would render a dynamic page on the server. */}
             <ul className="flex flex-col divide-y divide-border rounded-lg bg-card ring-1 ring-border md:hidden">
               {rows.map((s) => (
                 <li key={s.id}>
-                  <Link href={`/pengiriman/${s.id}`} className="flex flex-col gap-2 p-4">
+                  <Link href={`/pengiriman/${s.id}`} prefetch={false} className="flex flex-col gap-2 p-4">
                     <span className="flex items-center justify-between gap-3">
                       <span className="font-semibold tabular" data-testid="shipment-ref">{s.reference}</span>
                       <StatusBadge state={s.submission_state} />
@@ -162,7 +163,7 @@ export default async function ShipmentsPage({
                   {rows.map((s) => (
                     <tr key={s.id}>
                       <td className="px-3 py-3 whitespace-nowrap">
-                        <Link href={`/pengiriman/${s.id}`} className="inline-flex min-h-11 items-center font-semibold text-primary tabular" data-testid="shipment-ref">{s.reference}</Link>
+                        <Link href={`/pengiriman/${s.id}`} prefetch={false} className="inline-flex min-h-11 items-center font-semibold text-primary tabular" data-testid="shipment-ref">{s.reference}</Link>
                       </td>
                       <td className="max-w-[220px] px-3 py-3">
                         <span className="block truncate" title={`${s.sender_name ?? "—"} → ${s.recipient_name ?? "—"}`}>{s.sender_name ?? "—"} → {s.recipient_name ?? "—"}</span>
