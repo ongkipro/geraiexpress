@@ -2,10 +2,11 @@
 
 Multi-tenant shipping-counter application using Cloudflare, Supabase and Mengantar.
 
-Status: DEL-1 local foundation, platform/onboarding slice and a synthetic-data preview
-(deployed, see Preview below). Production is not provisioned, and no real Mengantar account,
-email or customer data is used. Technical
-documentation is English; conversation and product UI are Bahasa Indonesia.
+Status: DEL-1 stages 1–3 implemented and verified locally (T-001 through T-030: local foundation,
+platform/onboarding slice, public marketing pages, Mengantar Partner sandbox seller onboarding,
+live quotes/issuance, two-pass COD pricing, and batch `pay-unpaid` recovery) with a synthetic-data
+preview deployed (see Preview below). Production is not provisioned, and no real customer data is
+used. Technical documentation is English; conversation and product UI are Bahasa Indonesia.
 
 ## Preview
 
@@ -21,7 +22,8 @@ A synthetic-data demo preview runs at https://geraiexpress-preview.ongki.workers
 - [Architecture design](docs/spec/04-SYSTEM-ARCHITECTURE.md): target system boundaries.
 - [Current status](STATUS.md), [decisions](DECISIONS.md), [work queue](TASKS.md)
   and [build history](BUILD-LOG.md): repository handoff and actual evidence.
-- [Mengantar Partner study](docs/research/geraiexpress-mengantar-partner-api.md).
+- [Mengantar Partner study](docs/research/geraiexpress-mengantar-partner-api.md) and
+  [reference pricing study](docs/research/geraiexpress-reference-pricing-review.md).
 
 ## Run locally
 
@@ -86,26 +88,29 @@ pnpm test:e2e                                 # needs a server on :3100 (or E2E_
 
 ```text
 geraiexpress/
+├── custom-worker.ts              # OpenNext Worker entry + scheduled cron (dispatch_sweep, demo_cleanup)
 ├── src/
-│   ├── app/                      # Next.js routes: masuk, akses, pilih-gerai, healthz
-│   │   └── (workspace)/          # pengiriman, kontak, pengaturan (membership required)
-│   ├── components/               # shell, status badge; ui/ = shadcn (radix, UI-2 tokens)
-│   ├── lib/                      # Supabase server client, workspace scope, auth actions
-│   ├── modules/                  # contacts/, shipments/ (actions, validation, forms)
-│   └── middleware.ts             # session refresh, private no-store responses
+│   ├── app/                      # Next.js routes: /, fitur, simulasi, cara-kerja, hubungi-kami,
+│   │   │                         # masuk, akses, pilih-gerai, daftar, undangan, verifikasi-2fa,
+│   │   │                         # admin (akses, audit, pengajuan, integrasi), api/auth/send-email, healthz
+│   │   └── (workspace)/          # pengiriman, kontak, pengaturan, anggota (membership required)
+│   ├── components/               # shell, status badge, marketing; ui/ = shadcn (radix, UI-2 tokens)
+│   ├── lib/                      # Supabase server client, workspace scope, auth/platform/registration,
+│   │   └── mengantar/            # Partner & Public API clients, account dispatcher, live quotes/orders
+│   ├── modules/                  # contacts/, credentials/, members/, shipments/ (actions, validation, forms)
+│   └── middleware.ts             # session refresh, private no-store responses, security headers
 ├── supabase/
-│   ├── migrations/               # schema, RLS, RPCs, signup gate, quote reuse
+│   ├── migrations/               # schema, RLS, RPCs, signup gate, COD, Partner onboarding, demo cleanup
 │   ├── seed.sql                  # local synthetic fixtures only
 │   └── config.toml               # local stack configuration
 ├── tests/                        # unit/, db/ (Data API/RPC), e2e/ (Playwright, 3 viewports)
 ├── scripts/                      # bundle scan, worker smoke, ui smoke, dev env
 ├── docs/                         # canonical spec pack, research, promotion manifest
 ├── .delivery/                    # delivery-ledger runs (execution evidence)
-└── AGENTS.md · STATUS.md · TASKS.md · DECISIONS.md · ARCHITECTURE.md · BUILD-LOG.md
+└── AGENTS.md · STATUS.md · TASKS.md · DECISIONS.md · ARCHITECTURE.md · BUILD-LOG.md · RELEASE.md · OBSERVABILITY.md
 ```
 
 ## Selected direction
 
 Cloudflare + Supabase; Next.js App Router on Workers via OpenNext 1.x (DEC-005). shadcn/ui with the supplied Apple-inspired palette. Customer/resi shipping uses
-normal Mengantar tariff; private seller cost uses the verified activated discount. Live
-provider integration, real registration and Super Admin remain gated (see TASKS.md).
+normal Mengantar tariff (plus two-pass `cod_fee_idr` for COD orders); private seller cost uses the verified activated discount. Sandbox Partner onboarding, live quotes/issuance, COD, registration and Super Admin are implemented and verified locally; production provisioning and live Mengantar egress remain gated (see [RELEASE.md](RELEASE.md) and [TASKS.md](TASKS.md)).

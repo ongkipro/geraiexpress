@@ -5,7 +5,7 @@
 - Updated: 2026-10-13
 - Context: `CONTEXT-RECORD.md` is the current decision and evidence owner.
 - Execution: No implementation task is marked complete by this document.
-- Review basis: Original and advanced GeraiCUAN worktree scans, bounded local tests, and current vendor documentation; CTX-11 through CTX-15.
+- Review basis: Original and advanced LegacyReference worktree scans, bounded local tests, and current vendor documentation; CTX-11 through CTX-15.
 
 ## Product and outcome
 
@@ -14,7 +14,7 @@ Mengantar courier services, issue shipments, and print the corresponding labels.
 Different outlet businesses work in isolated tenants with their own brand and
 users. Reusable sender and recipient contacts reduce repeated entry.
 
-GeraiCUAN is the reference for product workflows. Cloudflare and Supabase are
+LegacyReference is the reference for product workflows. Cloudflare and Supabase are
 the requested new infrastructure direction (CTX-1 through CTX-4).
 
 ## Product direction and intended users
@@ -130,7 +130,7 @@ self-service portal, a second shipping aggregator, a custom public API, custom
 domains, subscription billing, full cashier/accounting/COD settlement, automated
 old-data migration, and direct printer/scale/scanner hardware integrations.
 Customer receipts, scan handover, cancellation and batch printing remain useful
-GeraiCuan candidates under TD-1, with their own policy/acceptance before exposure.
+LegacyReference candidates under TD-1, with their own policy/acceptance before exposure.
 
 ## Core distinctions
 
@@ -149,7 +149,7 @@ GeraiCuan candidates under TD-1, with their own policy/acceptance before exposur
 ## Selected pricing direction — normal customer tariff, discounted seller cost
 
 The product owner selected this policy in CTX-27 and CTX-28. The
-[GeraiCuan pricing study](../research/geraiexpress-geraicuan-pricing-review.md)
+[LegacyReference pricing study](../research/geraiexpress-reference-pricing-review.md)
 remains source evidence; its historical COD Ongkir break-even and percentages
 do not override the current GeraiExpress decision.
 
@@ -242,11 +242,11 @@ The ordering below is a recommendation, not an accepted commercial or release po
 | Foundation | Tenant/user membership, restricted Super Admin access/business directory, initial demo workspace, seller onboarding/BYOK, agreement, outlet readiness, contacts and drafts | Tenant/account-owner policy, Partner access/egress plan, isolated database proof |
 | Shipping pilot | Public API areas, quotes, sender mapping, explicit issuance/recovery and provider PDF | Durable seller/key binding, permissions, current sandbox contract, per-seller coordination |
 | Operational completeness | Shipment queue/detail, tracking, print history, daily overview/brand, Super Admin monitoring/discount-readiness/recovery/audit | Each primary action has backend enforcement and observed evidence |
-| Later candidates from GeraiCUAN | CSV import/export, richer analytics, extended platform reports, RTS, finance | Explicit requirement acceptance and domain-specific contracts |
+| Later candidates from LegacyReference | CSV import/export, richer analytics, extended platform reports, RTS, finance | Explicit requirement acceptance and domain-specific contracts |
 
 Finance/COD fee percentages, tax policy, tenant pricing, free/unlimited plans,
 old retention periods, custom domains, and automatic migration are not inherited
-from GeraiCUAN by copying its source. An observed feature can be a reuse
+from LegacyReference by copying its source. An observed feature can be a reuse
 candidate without becoming a promised initial-release requirement.
 
 ## Proposed actors
@@ -294,7 +294,7 @@ screen is implemented.
 Do not sum attempts, shipments and current exceptions into one misleading total.
 No "platform revenue" is derived from COD principal or the difference between
 normal and discounted tariff without an accepted commercial/financial contract.
-Alert thresholds and response targets are not copied from GeraiCuan defaults.
+Alert thresholds and response targets are not copied from LegacyReference defaults.
 
 ### Proposed Super Admin journeys
 
@@ -806,7 +806,7 @@ remain selected. The detailed open-question register below retains accountabilit
 | Provider-approved discount assignment/activation, tenant/service eligibility, effective dates and actual net billing match | Integration owner | Before marking an assigned discount active |
 | Confirm internal cost/discount/payout visibility and whether the provider PDF meets the selected customer-document policy | Paduka Ongki | Before pricing DTO/document acceptance |
 | Current per-account/service fee base/inclusion, minimums, rounding, insurance and actual-deduction semantics | Integration owner | Before real charge calculation |
-| GeraiExpress free versus paid/commission model; no rate inherited from GeraiCuan or assumed from Partner API | Paduka Ongki | Before commercial offers |
+| GeraiExpress free versus paid/commission model; no rate inherited from LegacyReference or assumed from Partner API | Paduka Ongki | Before commercial offers |
 | What are contact retention, archive/delete, export, and support-access policies? | Paduka Ongki | Before personal-data lifecycle implementation |
 | Which cloud accounts, region, domains, expected counter volume, staffing/concurrency, printers and label media apply? | Paduka Ongki | Before infrastructure provisioning, hardware acceptance or performance commitments |
 | Select pilot outlet, baseline/target and observation period for counter workflow evaluation | Paduka Ongki | Before business-improvement claims |
@@ -817,7 +817,7 @@ remain selected. The detailed open-question register below retains accountabilit
 
 | Previous ambiguity or reference mismatch | Resolution in this draft | Remaining evidence |
 |---|---|---|
-| The first checkout was assumed to represent every GeraiCUAN worktree | CTX-14 selects the clean advanced checkout as the preferred adaptation candidate and bounds old findings to their source | Pinned checkout/digests and target-runtime checks |
+| The first checkout was assumed to represent every LegacyReference worktree | CTX-14 selects the clean advanced checkout as the preferred adaptation candidate and bounds old findings to their source | Pinned checkout/digests and target-runtime checks |
 | Provider create DTO looks like a proven live integration | TD-2 prefers the advanced nested builder/live HTTP adapter over the old flat fixture DTO, but adds provider customer identity and requires current evidence | Sanitized sandbox creation and account binding |
 | A webhook is either absent or automatically live because its route exists | TD-4 distinguishes the old 404-only route from the advanced signed but gated handler and its documented gaps | Account-specific signed capture and replay/tenant tests |
 | Existing HTML label implies courier-approved branding | PR-6 uses supported provider PDF; local branded receipt is a separate unselected option | Label permission, courier scan/routing proof, logo capability |

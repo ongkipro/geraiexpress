@@ -233,3 +233,100 @@ test("operators cannot reconcile a real unknown outcome; admins can", async ({ p
   localSql(`update public.provider_operations set state = 'failed', result_code = 'CLOSED_NOT_CREATED' where id = '${op}';
     update public.shipments set submission_state = 'failed' where id = '${id}'`);
 });
+
+test("simulated COD shipment flow computes COD fee, excludes unsupported couriers, and shows COD collection on detail and sample label (T-025)", async ({ page }) => {
+  await startDemo(page);
+  await page.goto("/pengiriman/baru");
+  await page.getByRole("button", { name: "Mulai draf baru" }).click();
+  await expect(page).toHaveURL(/\/pengiriman\/[0-9a-f-]{36}$/);
+
+  await page.getByLabel("Pilih pengirim tersimpan").selectOption({ label: "Budi Santoso (contoh) · 081200000001" });
+  await page.getByLabel("Pilih penerima tersimpan").selectOption({ label: "Sari Wulandari (contoh) · 081200000003" });
+  await page.getByLabel("Isi paket").fill("Sepatu olahraga");
+  await page.getByLabel("Berat (gram)").fill("1000");
+  await page.getByLabel("Nilai barang (Rp)").fill("100000");
+  await page.locator("#f-is_cod").click();
+
+  await page.getByRole("button", { name: "Simpan & cek ongkir" }).click();
+  await expect(page.getByText("Ongkir diperbarui")).toBeVisible();
+  await expect(page.locator("label").filter({ hasText: "Hemat" })).toHaveCount(0);
+
+  const reguler = page.locator("label").filter({ hasText: "Reguler" });
+  await expect(reguler).toContainText(/\+ biaya COD Rp/);
+  const price = (await reguler.locator(".tabular").first().textContent())!.trim();
+  await reguler.click();
+
+  await page.getByRole("button", { name: "Periksa & konfirmasi" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("COD (Bayar di Tempat)")).toBeVisible();
+  await expect(dialog.getByText("Tagihan COD ke penerima")).toBeVisible();
+  await dialog.getByRole("button", { name: "Konfirmasi & terbitkan resi" }).click();
+
+  await expect(page.getByText(/Resi simulasi sudah terbit/)).toBeVisible();
+  await expect(page.getByText("Tagihan COD ke penerima")).toBeVisible();
+  await expect(page.getByText("COD", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Siapkan label" }).click();
+  await expect(page).toHaveURL(/\/label$/);
+  await expect(page.getByRole("article", { name: "Label contoh" })).toContainText(price);
+
+  await page.goto("/pengiriman");
+  await expect(page.getByText("COD", { exact: true }).filter({ visible: true }).first()).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test("unpaid batch review card shows batch members for admin and escalation notice for operator (T-026)", async ({ page }) => {
+  const id = randomUUID(), quoteId = randomUUID(), op = randomUUID();
+  const ref = `GX261027-B${op.slice(0, 4).toUpperCase()}`;
+  try {
+    localSql(`
+      insert into public.shipments (
+        tenant_id, outlet_id, id, reference, submission_state, payment_state, is_simulated,
+        sender_name, sender_phone, recipient_name, recipient_phone, recipient_address,
+        recipient_area, recipient_area_id, recipient_postal_code, weight_grams, item_description,
+        goods_value_idr, customer_charge_idr, is_cod, cod_amount_idr, pickup_snapshot, submitted_at, created_by
+      ) values (
+        '00000000-0000-4000-b000-00000000000a', '00000000-0000-4000-c000-00000000000a', '${id}', '${ref}',
+        'awaiting_payment', 'unpaid', false,
+        'Pengirim Batch', '081234567890', 'Penerima Batch E2E', '081298765432', 'Jl. Batch Uji No. 1',
+        'KEBAYORAN BARU', '5fc63169f8f44b34aa4c2ee1', '12110', 1000, 'Paket Batch',
+        50000, 18000, true, 68000, '{"outlet":"Outlet Uji A"}'::jsonb, now(), '00000000-0000-4000-a000-0000000000a1'
+      );
+      insert into public.shipment_quotes (
+        id, tenant_id, shipment_id, shipment_revision, courier, service, normal_tariff_idr,
+        cod_supported, cod_fee_idr, customer_charge_idr, eta_days, is_simulated, expires_at
+      ) values (
+        '${quoteId}', '00000000-0000-4000-b000-00000000000a', '${id}', 1, 'JNE', 'Reguler', 16000,
+        true, 2000, 18000, '1-2', false, now() + interval '1 hour'
+      );
+      update public.shipments set selected_quote_id = '${quoteId}' where id = '${id}';
+      insert into public.provider_operations (
+        id, tenant_id, shipment_id, kind, idempotency_key, input_digest, state, is_simulated,
+        actor, provider_env, dispatched_at, attempts, provider_order_id, provider_batch, result_code, provider_price_idr
+      ) values (
+        '${op}', '00000000-0000-4000-b000-00000000000a', '${id}', 'create_order', 'e2e-batch-${op}', 'digest-${op}',
+        'succeeded', false, '00000000-0000-4000-a000-0000000000a1', 'sandbox', now(), 1,
+        'ORDE2E01', 'BATCHE2E01', 'UNPAID', 18000
+      );
+    `);
+
+    await signIn(page, "owner-a@geraiexpress.test");
+    await page.goto(`/pengiriman/${id}`);
+    const review = page.getByTestId("batch-payment-review");
+    await expect(review).toBeVisible();
+    await expect(review).toContainText("BATCHE2E01");
+    await expect(review).toContainText("ORDE2E01");
+    await expect(review.getByRole("button", { name: "Bayar batch dari saldo Mengantar" })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+
+    await signOut(page);
+    await signIn(page, "operator-a@geraiexpress.test");
+    await page.goto(`/pengiriman/${id}`);
+    await expect(page.getByTestId("batch-payment-review")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Bayar batch dari saldo Mengantar" })).toHaveCount(0);
+    await expect(page.getByText("Minta admin gerai untuk membayar batch Mengantar atau memeriksa pembayarannya.")).toBeVisible();
+  } finally {
+    localSql(`update public.shipments set selected_quote_id = null where id = '${id}';
+      delete from public.shipments where id = '${id}'`);
+  }
+});

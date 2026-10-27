@@ -10,6 +10,17 @@ export const metadata: Metadata = {
   title: "Fitur Kasir Loket Pengiriman Multi-Kurir",
   description:
     "Fitur loket GeraiExpress: cek ongkir banyak kurir, cetak resi thermal 10 x 15 cm, nota pelanggan, COD presisi, jadwal jemput kurir, dan pantau uang gerai.",
+  robots: { index: true, follow: true },
+  alternates: { canonical: "/fitur" },
+  openGraph: {
+    title: "Fitur Kasir Loket Pengiriman Multi-Kurir · GeraiExpress",
+    description:
+      "Fitur loket GeraiExpress: cek ongkir banyak kurir, cetak resi thermal 10 x 15 cm, nota pelanggan, COD presisi, jadwal jemput kurir, dan pantau uang gerai.",
+    url: "https://geraiexpress.com/fitur",
+    siteName: "GeraiExpress",
+    locale: "id_ID",
+    type: "website",
+  },
 };
 
 const FEATURE_GROUPS = [

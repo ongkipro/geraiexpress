@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createPartnerClient, PartnerError, partnerSignature } from "../../src/lib/mengantar/partner-api";
 
-const SECRET = "offline-fixture-only-secret";
+const SECRET: string = "offline-fixture-only-secret";
 const NOW = 1758790800_000;
 
 type Reply = { status: number; body?: unknown; type?: string; headers?: Record<string, string> };

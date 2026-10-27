@@ -12,7 +12,7 @@ export default {
 
   // Awaited (not waitUntil): the invocation lasts as long as the bounded sweep. Counts only in
   // logs: no references, keys or recipient data.
-  async scheduled(_event: unknown, env: MachineBindings) {
+  async scheduled(event: unknown, env: MachineBindings) {
     const deps = dispatcherDeps(env);
     if (!deps) {
       console.log(JSON.stringify({ event: "dispatch_sweep", disabled: true }));
@@ -27,6 +27,30 @@ export default {
       console.log(JSON.stringify({ event: "dispatch_sweep", checked: s.checked, failed: s.failed ?? false, tally, priceMismatch, priceUnknown, stuck: s.stuck }));
     } catch {
       console.log(JSON.stringify({ event: "dispatch_sweep", failed: true }));
+    }
+
+    const ev = event as { cron?: string; scheduledTime?: number } | null;
+    const isHourly =
+      ev?.cron === "0 * * * *" ||
+      (ev?.cron === "*/5 * * * *" && typeof ev.scheduledTime === "number" && ev.scheduledTime % 3_600_000 === 0);
+    if (isHourly) {
+      try {
+        const { data, error } = await deps.rpc("cleanup_expired_demos", { p_max_age_hours: 24 });
+        const row = (Array.isArray(data) ? data[0] : data) as
+          | { deleted_tenants?: number; deleted_users?: number }
+          | null
+          | undefined;
+        console.log(
+          JSON.stringify({
+            event: "demo_cleanup",
+            deletedTenants: row?.deleted_tenants ?? 0,
+            deletedUsers: row?.deleted_users ?? 0,
+            failed: Boolean(error),
+          }),
+        );
+      } catch {
+        console.log(JSON.stringify({ event: "demo_cleanup", deletedTenants: 0, deletedUsers: 0, failed: true }));
+      }
     }
   },
 };

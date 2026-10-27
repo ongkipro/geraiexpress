@@ -47,7 +47,7 @@ the one root `TASKS.md`; this matrix is not another execution queue.
 - Source: DATA-1 through DATA-7, TEN-1, CTX-37.
 - Statement: Maintained releases shall use a reviewed fresh Supabase migration history and compatible staged changes that preserve tenant constraints, RLS, current grants and durable provider operation identity.
 - Acceptance: A representative non-production upgrade preserves existing snapshots and pending operations, denies cross-tenant/direct access, and allows the recorded application rollback without replaying external effects.
-- Constraints: DEL-1, TD-3, TD-8, SEC-1; no automatic migration of GeraiCuan customers/users/credentials is authorized.
+- Constraints: DEL-1, TD-3, TD-8, SEC-1; no automatic migration of LegacyReference customers/users/credentials is authorized.
 - Evidence: No SQL or migration executed.
 
 Use additive changes first, then bounded resumable backfill if required, then

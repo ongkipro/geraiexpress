@@ -3,7 +3,7 @@
 - Status: Proposed behavior handoff; permissions and release scope are unresolved where marked.
 - Owner: Paduka Ongki
 - Updated: 2026-10-13
-- Sources: CTX-2, CTX-3, CTX-11; existing GeraiCUAN source routes and their actions.
+- Sources: CTX-2, CTX-3, CTX-11; existing LegacyReference source routes and their actions.
 
 ## UX-1 — Scoped operational journeys and recovery
 - Status: Proposed
@@ -178,7 +178,7 @@ Verify the first counter pilot with long Indonesian names/addresses, repeated
 contacts, route ambiguity, insufficient provider funding, interrupted requests,
 concurrent edits and reprints on the selected printer/media. Device/volume and
 customer-charge policies are explicit open decisions in the PRD, not guessed
-behavior or inherited GeraiCuan constants.
+behavior or inherited LegacyReference constants.
 
 ## UX-5 — Normal customer tariff and private discounted seller price
 - Status: Proposed

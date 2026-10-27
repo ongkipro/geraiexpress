@@ -128,6 +128,22 @@ legacy terminology.
 - **Depends On:** T-027, T-029
 - **Done when:** `pnpm test:unit`, `pnpm test:db`, `pnpm cf:build`, `pnpm check:bundle`, and `pnpm smoke:worker` verify `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and HTTPS HSTS headers in `src/middleware.ts`, expired anonymous demo tenant/user cleanup RPC, and `wrangler.jsonc` staging/production environment configuration for `geraiexpress.com` with Mengantar Sandbox (`MENGANTAR_ENV="sandbox"`) ready for owner-approved deploy.
 
+### [x] T-031 — Holistic live-readiness polish, SEO indexation, cron demo cleanup & E2E coverage
+- **Primary requirement:** DEL-1
+- **Constraints:** PR-13, PR-17, PR-22, TD-3, SEC-5, NFR-3, DEC-006, DEC-010
+- **Risk Level:** R4
+- **Allowed Paths:** `src/**`, `custom-worker.ts`, `scripts/**`, `supabase/migrations/**`, `tests/**`, `docs/**`, `RELEASE.md`, `OBSERVABILITY.md`, `ARCHITECTURE.md`, `README.md`, `STATUS.md`, `TASKS.md`, `BUILD-LOG.md`
+- **Depends On:** T-025, T-026, T-027, T-028, T-029, T-030
+- **Done when:** Public marketing pages opt in to `robots: { index: true, follow: true }` with canonical/OG metadata, `src/app/robots.ts`, and `src/app/sitemap.ts`; `custom-worker.ts` invokes `cleanup_expired_demos` on the hourly cron; `provider_operations_batch_idx` and `record_partner_seller_onboarding_outcome` status transitions are applied in migration 16; `/admin/integrasi` distinguishes Partner-managed vs BYOK modes and `/pengiriman/[id]/label` displays COD collection instructions; Playwright E2E covers COD shipment issuance, batch payment review, Partner onboarding consent, and contact archive roles; zero legacy brand references remain in the entire repository (including `docs/**`); and `security-check`, `release-manifest`, `rollback-check`, and `check-traceability.py` pass.
+
+## In progress
+
+None.
+
+## Pending
+
+None — all planned DEL-1 and T-001..T-031 tasks are complete; external/owner-gated items are listed under Deferred below.
+
 ## Deferred (owner decision or external gate)
 
 - Mengantar official label PDF (`POST /label-generation` / `GET /label-generation/{id}`, `PR-6` / `TD-4`): gated on Mengantar whitelisting the seller account (currently HTTP 403 `Not allowed` on sandbox).

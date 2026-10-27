@@ -11,7 +11,7 @@ export const IDS = {
   shipmentB: "00000000-0000-4000-e000-00000000000b",
 };
 
-const FIXTURE_PASSWORD = "geraiexpress-local-dev";
+const FIXTURE_PASSWORD: string = "geraiexpress-local-dev";
 
 // T-016: local Auth requires a Turnstile token; Cloudflare's test secret accepts its documented
 // dummy token, so every client attaches it to the captcha-protected entry points.

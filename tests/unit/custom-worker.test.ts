@@ -3,9 +3,16 @@ import type { SweepSummary } from "../../src/lib/mengantar/dispatcher";
 import type { MachineBindings } from "../../src/lib/mengantar/machine-deps";
 
 const sweepMock = vi.fn<(...args: unknown[]) => Promise<SweepSummary>>();
+const rpcMock = vi.fn<(...args: unknown[]) => Promise<{ data: unknown; error: { message: string } | null }>>();
 
 vi.mock("../../.open-next/worker.js", () => ({
   default: { fetch: vi.fn() },
+}));
+
+vi.mock("@supabase/supabase-js", () => ({
+  createClient: () => ({
+    rpc: (...args: unknown[]) => rpcMock(...args),
+  }),
 }));
 
 vi.mock("../../src/lib/mengantar/dispatcher", () => ({
@@ -21,9 +28,10 @@ const VALID_BINDINGS: MachineBindings = {
   MENGANTAR_ENV: "sandbox",
 };
 
-describe("custom-worker scheduled sweep (T-024 / T-028)", () => {
+describe("custom-worker scheduled sweep (T-024 / T-028 / T-030)", () => {
   beforeEach(() => {
     sweepMock.mockReset();
+    rpcMock.mockReset();
     vi.restoreAllMocks();
   });
 
@@ -90,12 +98,39 @@ describe("custom-worker scheduled sweep (T-024 / T-028)", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     sweepMock.mockRejectedValueOnce(new Error("unexpected rpc crash"));
 
-    await expect(worker.scheduled({}, VALID_BINDINGS)).resolves.toBeUndefined();
+    await expect(worker.scheduled({ cron: "*/5 * * * *" }, VALID_BINDINGS)).resolves.toBeUndefined();
 
+    expect(rpcMock).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(log.mock.calls[0][0]))).toEqual({
       event: "dispatch_sweep",
       failed: true,
+    });
+  });
+
+  it("invokes cleanup_expired_demos on the 0 * * * * hourly schedule and logs demo_cleanup counts", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    sweepMock.mockResolvedValueOnce({
+      checked: 0,
+      results: [],
+      stuck: { unknown: 0, failed_unresolved: 0, unpaid: 0, queued: 0 },
+    });
+    rpcMock.mockResolvedValueOnce({
+      data: [{ deleted_tenants: 2, deleted_users: 3 }],
+      error: null,
+    });
+
+    await worker.scheduled({ cron: "0 * * * *" }, VALID_BINDINGS);
+
+    expect(sweepMock).toHaveBeenCalledTimes(1);
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+    expect(rpcMock).toHaveBeenCalledWith("cleanup_expired_demos", { p_max_age_hours: 24 });
+    expect(log).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(log.mock.calls[1][0]))).toEqual({
+      event: "demo_cleanup",
+      deletedTenants: 2,
+      deletedUsers: 3,
+      failed: false,
     });
   });
 });

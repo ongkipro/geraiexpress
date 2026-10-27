@@ -109,7 +109,7 @@ Production code must also allowlist the configured host and four operations, rej
 | `externalUserId` | String, required | Stable application identifier, at most 128 characters |
 | `password` | Forbidden | Provider returns `PASSWORD_NOT_ALLOWED` |
 
-The precise Unicode interpretation of allowed name characters is not documented. Do not invent an ASCII-only validation rule. Generic international phone normalization from GeraiCuan is insufficient for this endpoint's Indonesian-specific constraints.
+The precise Unicode interpretation of allowed name characters is not documented. Do not invent an ASCII-only validation rule. Generic international phone normalization from LegacyReference is insufficient for this endpoint's Indonesian-specific constraints.
 
 | Outcome | Response contract | Local handling |
 |---|---|---|
@@ -220,7 +220,7 @@ No Partner webhook or webhook-URL provisioning endpoint exists in the documented
 
 ## 10. Integration into GeraiExpress
 
-| Concern | Proposed contract owner | Improvement over copying GeraiCuan |
+| Concern | Proposed contract owner | Improvement over copying LegacyReference |
 |---|---|---|
 | Tenant seller onboarding / existing key | PR-17, PR-18; UX-2 | Clear business-owner mapping and distinct management authority |
 | Safe key/callback lifecycle | PR-19, TD-8, SEC-3 | Durable rotation, encrypted versions, lost-response recovery |

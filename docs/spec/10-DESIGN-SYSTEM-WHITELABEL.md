@@ -14,7 +14,7 @@
 - Constraints: UX-1, UX-2, PR-13, NFR-4, TEN-1. Official label branding remains a provider capability, not a theme feature.
 - Evidence: User reference and local component patterns reviewed; no rendered GeraiExpress screen exists.
 
-Use the clean advanced GeraiCuan checkout for compatible composition candidates:
+Use the clean advanced LegacyReference checkout for compatible composition candidates:
 page headers, field/error grouping, review dialogs, state badges with text,
 local table scrolling, safe empty/error states, and focus announcements. The
 proposed runtime is Next.js under CTX-20; shadcn/ui is the selected component
@@ -219,7 +219,7 @@ and lazy loading below; no product photography is required to ship the console.
 Tenant names and validated logo assets can identify the workspace under PR-13.
 They cannot override the shared blue action/focus tokens, permissions, required
 text, or accessible state meaning. Do not show Apple logos/assets or reference
-GeraiCuan brand strings as GeraiExpress branding.
+LegacyReference brand strings as GeraiExpress branding.
 
 Application branding, a possible customer receipt, and an official courier PDF
 are separate surfaces. Supported customer sender name/phone uses the provider

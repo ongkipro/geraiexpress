@@ -13,6 +13,17 @@ export const metadata: Metadata = {
   title: "Hubungi Tim Onboarding dan Bantuan Loket Multi-Kurir",
   description:
     "Hubungi tim GeraiExpress untuk panduan daftar loket kasir multi-kurir gratis, koneksi akun Mengantar, dan cetak resi thermal pertama lewat WhatsApp.",
+  robots: { index: true, follow: true },
+  alternates: { canonical: "/hubungi-kami" },
+  openGraph: {
+    title: "Hubungi Tim Onboarding dan Bantuan Loket Multi-Kurir · GeraiExpress",
+    description:
+      "Hubungi tim GeraiExpress untuk panduan daftar loket kasir multi-kurir gratis, koneksi akun Mengantar, dan cetak resi thermal pertama lewat WhatsApp.",
+    url: "https://geraiexpress.com/hubungi-kami",
+    siteName: "GeraiExpress",
+    locale: "id_ID",
+    type: "website",
+  },
 };
 
 export default function HubungiKamiPage() {
@@ -87,7 +98,7 @@ export default function HubungiKamiPage() {
             Mendaftar sendiri
           </h2>
           <ol className="mt-6 list-decimal space-y-3 pl-5 text-base leading-relaxed text-foreground marker:font-semibold marker:text-primary">
-            <li>Daftar dengan email dan nomor WhatsApp gerai, lalu pilih awalan nomor kiriman.</li>
+            <li>Daftar dengan email gerai, verifikasi kode 6 digit, lalu ajukan profil gerai Anda.</li>
             <li>Verifikasi email dari tautan atau kode yang kami kirim.</li>
             <li>Masuk, lalu hubungkan akun Mengantar gerai Anda di Pengaturan.</li>
             <li>

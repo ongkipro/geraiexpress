@@ -7,7 +7,7 @@ export default function setup() {
   if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY && process.env.SUPABASE_SECRET_KEY) return;
   const out = execFileSync("pnpm", ["exec", "supabase", "status", "-o", "json"], { encoding: "utf8" });
   const status = JSON.parse(out.slice(out.indexOf("{")));
-  process.env.SUPABASE_URL = status.API_URL;
-  process.env.SUPABASE_ANON_KEY = status.PUBLISHABLE_KEY ?? status.ANON_KEY;
-  process.env.SUPABASE_SECRET_KEY = status.SECRET_KEY ?? status.SERVICE_ROLE_KEY;
+  process.env["SUPABASE_URL"] = status.API_URL;
+  process.env["SUPABASE_ANON_KEY"] = status.PUBLISHABLE_KEY ?? status.ANON_KEY;
+  process.env["SUPABASE_SECRET_KEY"] = status.SECRET_KEY ?? status.SERVICE_ROLE_KEY;
 }

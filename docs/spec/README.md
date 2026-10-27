@@ -6,7 +6,7 @@
 - Location: Canonical repository specification at `docs/spec/`; promoted on 2026-10-13. Original staging is a retained non-authoritative snapshot.
 
 GeraiExpress is a Cloudflare + Supabase shipping-outlet product using Mengantar
-and the relevant GeraiCUAN workflows. This pack incorporates a read-only source
+and the relevant LegacyReference workflows. This pack incorporates a read-only source
 review, identifies what can be reused, and separates old application behavior
 from current provider capabilities. It does not claim an application was built.
 
@@ -29,7 +29,7 @@ from current provider capabilities. It does not claim an application was built.
 | [Operational signals and limits](16-OBSERVABILITY-RATE-LIMITING.md) | Observable journey outcomes, private telemetry, response ownership, actual-account quotas and retry safety |
 | [UX flows](17-UX-FLOWS-SCREEN-CONTRACTS.md) | Screen jobs, primary actions, state/recovery and browser acceptance |
 | [Complete Mengantar Partner breakdown](../research/geraiexpress-mengantar-partner-api.md) | Four endpoint contracts, signing, all error codes, seller lifecycle, production egress and verification gates |
-| [GeraiCuan pricing study](../research/geraiexpress-geraicuan-pricing-review.md) | Customer/provider prices, collection modes, legacy formulas, visibility gaps, example and bounded checks |
+| [LegacyReference pricing study](../research/geraiexpress-reference-pricing-review.md) | Customer/provider prices, collection modes, legacy formulas, visibility gaps, example and bounded checks |
 | [Official source records](sources.json) | Vendor retrieval provenance and review triggers |
 | [Reference scan and executed check](reference-scan.json) | Reference revision/dirty scope, source hashes, and bounded test result |
 
@@ -96,7 +96,7 @@ batch features remain conditional until their policy/acceptance is selected.
 The planned demo can be evaluated without pretending those domains or live
 provider operations have already been implemented.
 
-GeraiCuan historical pricing remains in CTX-24 through CTX-26 and the study.
+LegacyReference historical pricing remains in CTX-24 through CTX-26 and the study.
 The owner clarified the selected GeraiExpress policy in CTX-27/CTX-28:
 **customer/resi uses normal Mengantar tariff before seller discount; seller cost
 uses the verified net tariff under its assigned discount**, with applicable

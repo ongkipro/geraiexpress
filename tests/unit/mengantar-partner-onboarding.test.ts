@@ -13,10 +13,10 @@ import {
 
 const TENANT = "00000000-0000-4000-b000-0000000000a1";
 const EXTERNAL_ID = `geraiexpress:tenant:${TENANT}`;
-const PARTNER_SECRET = "offline-fixture-partner-secret-01";
+const PARTNER_SECRET = "test_offline-fixture-partner-secret-01";
 const SEAL_KEY = Buffer.alloc(32, 11).toString("base64");
 const SELLER_ID = "66ab1234567890abcdef1234";
-const API_KEY = "API-3F9K2QX7ZB1MTDLE";
+const SELLER_KEY_FIXTURE = "API-3F9K2QX7ZB1MTDLE";
 const NOW = 1758790800_000;
 
 const baseInput: PartnerOnboardingInput = {
@@ -80,7 +80,7 @@ function createHarness(opts: {
       body: {
         success: true,
         alreadyRegistered: false,
-        data: { sellerId: SELLER_ID, email: "budi@gerai-asli.id", apiKey: API_KEY },
+        data: { sellerId: SELLER_ID, email: "budi@gerai-asli.id", apiKey: SELLER_KEY_FIXTURE },
       },
     };
     return new Response(typeof reply.body === "string" ? reply.body : JSON.stringify(reply.body ?? {}), {
@@ -162,7 +162,7 @@ describe("Mengantar Partner seller onboarding state machine (T-027)", () => {
     expect(completeCall.args.p_tenant).toBe(TENANT);
     expect(completeCall.args.p_seller_id).toBe(SELLER_ID);
     expect(completeCall.args.p_hint).toBe("LE");
-    expect(JSON.stringify(completeCall.args)).not.toContain(API_KEY);
+    expect(JSON.stringify(completeCall.args)).not.toContain(SELLER_KEY_FIXTURE);
 
     // Verify ciphertext is bound to (TENANT, version 3)
     const opened = await openCredential(
@@ -170,7 +170,7 @@ describe("Mengantar Partner seller onboarding state machine (T-027)", () => {
       credentialAad(TENANT, 3),
       SEAL_KEY,
     );
-    expect(opened).toBe(API_KEY);
+    expect(opened).toBe(SELLER_KEY_FIXTURE);
     await expect(
       openCredential(
         { ciphertext: String(completeCall.args.p_ciphertext), iv: String(completeCall.args.p_iv) },
@@ -187,7 +187,7 @@ describe("Mengantar Partner seller onboarding state machine (T-027)", () => {
         body: {
           success: true,
           alreadyRegistered: true,
-          data: { sellerId: SELLER_ID, email: "budi@gerai-asli.id", apiKey: API_KEY },
+          data: { sellerId: SELLER_ID, email: "budi@gerai-asli.id", apiKey: SELLER_KEY_FIXTURE },
         },
       },
     });
@@ -266,7 +266,7 @@ describe("Mengantar Partner seller onboarding state machine (T-027)", () => {
         status: 200,
         body: {
           success: true,
-          data: { sellerId: SELLER_ID, apiKey: API_KEY },
+          data: { sellerId: SELLER_ID, apiKey: SELLER_KEY_FIXTURE },
         },
       },
     });
@@ -337,5 +337,45 @@ describe("Mengantar Partner seller onboarding state machine (T-027)", () => {
         p_error_code: code,
       });
     }
+
+    const validationErr = createHarness({
+      reply: { status: 400, body: { success: false, code: "INVALID_PHONE", message: "Invalid phone" } },
+    });
+    expect(await onboardPartnerSeller(baseInput, validationErr.deps)).toEqual({
+      ok: false,
+      state: "rejected",
+      errorCode: "invalid_input",
+      sellerId: null,
+    });
+    expect(validationErr.rpcCalls[1]).toEqual({
+      fn: "record_partner_seller_onboarding_outcome",
+      args: {
+        p_tenant: TENANT,
+        p_state: "not_connected",
+        p_seller_id: null,
+        p_error_code: "INVALID_PHONE",
+        p_retry_after_seconds: null,
+      },
+    });
+
+    const internalErr = createHarness({
+      reply: { status: 500, body: { success: false, code: "INTERNAL_ERROR", message: "Server error" } },
+    });
+    expect(await onboardPartnerSeller(baseInput, internalErr.deps)).toEqual({
+      ok: false,
+      state: "rejected",
+      errorCode: "mengantar_unavailable",
+      sellerId: null,
+    });
+    expect(internalErr.rpcCalls[1]).toEqual({
+      fn: "record_partner_seller_onboarding_outcome",
+      args: {
+        p_tenant: TENANT,
+        p_state: "not_connected",
+        p_seller_id: null,
+        p_error_code: "INTERNAL_ERROR",
+        p_retry_after_seconds: null,
+      },
+    });
   });
 });

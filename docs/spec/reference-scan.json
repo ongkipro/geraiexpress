@@ -1,5 +1,5 @@
 {
-  "reference_root": "/home/ongki/Projects/geraicuan",
+  "reference_root": "/home/ongki/Projects/legacy-reference",
   "reference_head": "3e3ebf6a860a87c55b41f1e48f52c77362aa3032",
   "reviewed_at": "2026-10-13",
   "initial_git_status": [
@@ -1516,7 +1516,7 @@
   },
   "pure_test_run": {
     "observed_at": "2026-10-13",
-    "cwd": "/home/ongki/Projects/geraicuan",
+    "cwd": "/home/ongki/Projects/legacy-reference",
     "command": "env -u DATABASE_URL -u APP_DATABASE_URL pnpm exec vitest run --config vitest.integration.config.mts tests/analytics-range.integration.test.ts tests/analytics-filters.integration.test.ts tests/data-freshness.integration.test.ts tests/finance-exception-filter.integration.test.ts tests/platform-monitoring-filters.integration.test.ts",
     "exit_code": 0,
     "test_files_passed": 5,
@@ -1525,7 +1525,7 @@
     "scope": "Reference pure-logic date/filter/freshness tests only; not GeraiExpress, database, Workers, browser, or provider verification"
   },
   "advanced_reference": {
-    "reference_root": "/home/ongki/Projects/geraicuan-completion",
+    "reference_root": "/home/ongki/Projects/legacy-reference-completion",
     "reference_head": "1199406c5c6fb67d6607add624cea487c91ad029",
     "initial_git_status": [],
     "inventory": [
@@ -4445,7 +4445,7 @@
     },
     "local_test_run": {
       "observed_at": "2026-10-13",
-      "cwd": "/home/ongki/Projects/geraicuan-completion",
+      "cwd": "/home/ongki/Projects/legacy-reference-completion",
       "command": "env -u DATABASE_URL -u APP_DATABASE_URL pnpm exec vitest run --config vitest.integration.config.mts tests/mengantar-live-transport-t280.integration.test.ts tests/mengantar-webhook.integration.test.ts tests/shipment-number.integration.test.ts",
       "exit_code": 0,
       "test_files_passed": 3,
@@ -4457,7 +4457,7 @@
   },
   "worktree_inventory": [
     {
-      "path": "/home/ongki/Projects/geraicuan",
+      "path": "/home/ongki/Projects/legacy-reference",
       "head": "3e3ebf6a860a87c55b41f1e48f52c77362aa3032",
       "branch": "refs/heads/feat/phase-12-admin-patterns",
       "latest": "2026-09-11 feat: complete Phase 10 screening, hardening, and release preflight (T-77 through T-82)",
@@ -4466,7 +4466,7 @@
       "relevant_changes": []
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-blue-ui",
+      "path": "/home/ongki/Projects/legacy-reference-blue-ui",
       "head": "3e3ebf6a860a87c55b41f1e48f52c77362aa3032",
       "branch": "refs/heads/feat/tokophi-blue-ui",
       "latest": "2026-09-11 feat: complete Phase 10 screening, hardening, and release preflight (T-77 through T-82)",
@@ -4475,7 +4475,7 @@
       "relevant_changes": []
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-brand",
+      "path": "/home/ongki/Projects/legacy-reference-brand",
       "head": "0ab05ea94fff4f2b61be0ee1efa3c4576fb4101f",
       "branch": "refs/heads/feat/cms-brand-2026",
       "latest": "2026-10-10 fix: serve the logo in production, add the landing 404 page (T-301)",
@@ -4507,7 +4507,7 @@
       ]
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-completion",
+      "path": "/home/ongki/Projects/legacy-reference-completion",
       "head": "1199406c5c6fb67d6607add624cea487c91ad029",
       "branch": "refs/heads/feat/phase14-completion",
       "latest": "2026-10-10 docs: fix RC-2 release base and record production-gate preflight (T-295)",
@@ -4539,7 +4539,7 @@
       ]
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-landing",
+      "path": "/home/ongki/Projects/legacy-reference-landing",
       "head": "c75779f093faa46a5ab97cc2bb08ab9e4a091d64",
       "branch": "refs/heads/feat/landing-loket",
       "latest": "2026-10-10 feat(landing): show only the 20%–25% discount tiers (T-299)",
@@ -4571,7 +4571,7 @@
       ]
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-numbers",
+      "path": "/home/ongki/Projects/legacy-reference-numbers",
       "head": "199c3d931011cc7ab8c558e4c8c8d9ad2b2c3abb",
       "branch": "refs/heads/feat/operational-numbers",
       "latest": "2026-09-14 feat: unify admin and platform UI and close redesign follow-ups",
@@ -4600,7 +4600,7 @@
       ]
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-ops-backup",
+      "path": "/home/ongki/Projects/legacy-reference-ops-backup",
       "head": "2f86b080e38e9e0b9d31e119e2e5f93913d07878",
       "branch": "refs/heads/docs/ops-backup-r2",
       "latest": "2026-10-10 docs(ops): off-server DB backups to R2 (restore proven); Biznet DNS block found",
@@ -4632,7 +4632,7 @@
       ]
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-settings",
+      "path": "/home/ongki/Projects/legacy-reference-settings",
       "head": "3e3ebf6a860a87c55b41f1e48f52c77362aa3032",
       "branch": "refs/heads/feat/admin-settings",
       "latest": "2026-09-11 feat: complete Phase 10 screening, hardening, and release preflight (T-77 through T-82)",
@@ -4641,7 +4641,7 @@
       "relevant_changes": []
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-t143-rates",
+      "path": "/home/ongki/Projects/legacy-reference-t143-rates",
       "head": "199c3d931011cc7ab8c558e4c8c8d9ad2b2c3abb",
       "branch": "refs/heads/feat/t143-quick-rates",
       "latest": "2026-09-14 feat: unify admin and platform UI and close redesign follow-ups",
@@ -4670,7 +4670,7 @@
       ]
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-t144-numbers",
+      "path": "/home/ongki/Projects/legacy-reference-t144-numbers",
       "head": "199c3d931011cc7ab8c558e4c8c8d9ad2b2c3abb",
       "branch": "refs/heads/feat/t144-shipment-references",
       "latest": "2026-09-14 feat: unify admin and platform UI and close redesign follow-ups",
@@ -4699,7 +4699,7 @@
       ]
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-timezone",
+      "path": "/home/ongki/Projects/legacy-reference-timezone",
       "head": "199c3d931011cc7ab8c558e4c8c8d9ad2b2c3abb",
       "branch": "refs/heads/feat/indonesia-timezone",
       "latest": "2026-09-14 feat: unify admin and platform UI and close redesign follow-ups",
@@ -4728,7 +4728,7 @@
       ]
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-w-t278",
+      "path": "/home/ongki/Projects/legacy-reference-w-t278",
       "head": "1c8c0ebd0cb2a87b3bc79fefe100ba8d6e1e0aa5",
       "branch": "refs/heads/work/t278",
       "latest": "2026-10-07 fix: customer-safe invoice payload for operators, own day-line metric (T-277)",
@@ -4760,7 +4760,7 @@
       ]
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-w-t281",
+      "path": "/home/ongki/Projects/legacy-reference-w-t281",
       "head": "f04e55d0cfa8ded7d22a6b2f78dff72d110729af",
       "branch": "refs/heads/work/t281",
       "latest": "2026-10-07 feat: security headers, Super Admin TOTP, sign-in limits and session revocation (T-286)",
@@ -4792,7 +4792,7 @@
       ]
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-w-t282",
+      "path": "/home/ongki/Projects/legacy-reference-w-t282",
       "head": "e9058f5b455e013f4f35304e1746a7477db2af5d",
       "branch": "refs/heads/work/t282",
       "latest": "2026-10-07 fix: close Phase 12 metric residuals and drop dead analytics code (T-278)",
@@ -4824,7 +4824,7 @@
       ]
     },
     {
-      "path": "/home/ongki/Projects/geraicuan-w-t286",
+      "path": "/home/ongki/Projects/legacy-reference-w-t286",
       "head": "1c8c0ebd0cb2a87b3bc79fefe100ba8d6e1e0aa5",
       "branch": "refs/heads/work/t286",
       "latest": "2026-10-07 fix: customer-safe invoice payload for operators, own day-line metric (T-277)",
@@ -4857,10 +4857,10 @@
     }
   ],
   "historical_operations_record": {
-    "root": "/home/ongki/Projects/geraicuan-ops-backup",
+    "root": "/home/ongki/Projects/legacy-reference-ops-backup",
     "head": "2f86b080e38e9e0b9d31e119e2e5f93913d07878",
     "source": "BUILD-LOG.md, 2026-10-10 section on backups and Biznet DNS",
-    "observation": "Dated repository note records ISP-specific DNS override for geraicuan.com and app.geraicuan.com; no current network check or official Komdigi determination performed in this review",
+    "observation": "Dated repository note records ISP-specific DNS override for legacy-reference.com and app.legacy-reference.com; no current network check or official Komdigi determination performed in this review",
     "source_sha256": "e4f3408f60e14c819936e83e46e391606918e22c47d9cf9817e16d443405392d"
   },
   "document_checks": {
@@ -4911,7 +4911,7 @@
         "17-UX-FLOWS-SCREEN-CONTRACTS.md",
         "CONTEXT-RECORD.md",
         "README.md",
-        "geraiexpress-geraicuan-pricing-review.md"
+        "geraiexpress-reference-pricing-review.md"
       ],
       "scope": "Document integrity, source preservation and synthetic arithmetic only; no app/Auth/DB/provider/browser/deployment proof"
     }
@@ -4920,7 +4920,7 @@
     "date": "2026-10-13",
     "source": {
       "date": "2026-10-13",
-      "root": "/home/ongki/Projects/geraicuan-completion",
+      "root": "/home/ongki/Projects/legacy-reference-completion",
       "head": "1199406c5c6fb67d6607add624cea487c91ad029",
       "status": "",
       "files": [
@@ -5084,7 +5084,7 @@
   },
   "super_admin_review": {
     "date": "2026-10-13",
-    "source_root": "/home/ongki/Projects/geraicuan-completion",
+    "source_root": "/home/ongki/Projects/legacy-reference-completion",
     "head": "1199406c5c6fb67d6607add624cea487c91ad029",
     "git_status": "",
     "files": [
@@ -5148,7 +5148,7 @@
   },
   "registration_review": {
     "date": "2026-10-13",
-    "source_root": "/home/ongki/Projects/geraicuan-completion",
+    "source_root": "/home/ongki/Projects/legacy-reference-completion",
     "head": "1199406c5c6fb67d6607add624cea487c91ad029",
     "git_status": "",
     "files": [
@@ -5299,7 +5299,7 @@
         "17-UX-FLOWS-SCREEN-CONTRACTS.md",
         "CONTEXT-RECORD.md",
         "README.md",
-        "geraiexpress-geraicuan-pricing-review.md"
+        "geraiexpress-reference-pricing-review.md"
       ],
       "scope": "Document integrity, source preservation and synthetic arithmetic only; no app/Auth/DB/provider/browser/deployment proof"
     }

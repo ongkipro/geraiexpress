@@ -10,6 +10,17 @@ export const metadata: Metadata = {
   title: "Alur 4 Langkah Kasir Loket Pengiriman Multi-Kurir",
   description:
     "Alur kasir loket GeraiExpress: isi data pengirim, timbang paket dan cek ongkir, terima pembayaran, lalu cetak resi thermal 100 x 150 mm untuk kurir.",
+  robots: { index: true, follow: true },
+  alternates: { canonical: "/cara-kerja" },
+  openGraph: {
+    title: "Alur 4 Langkah Kasir Loket Pengiriman Multi-Kurir · GeraiExpress",
+    description:
+      "Alur kasir loket GeraiExpress: isi data pengirim, timbang paket dan cek ongkir, terima pembayaran, lalu cetak resi thermal 100 x 150 mm untuk kurir.",
+    url: "https://geraiexpress.com/cara-kerja",
+    siteName: "GeraiExpress",
+    locale: "id_ID",
+    type: "website",
+  },
 };
 
 const STEPS = [

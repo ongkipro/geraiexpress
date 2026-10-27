@@ -20,7 +20,7 @@ Disposition below means **Extract** = small logic candidate after import/limit r
 **Conditional** = useful only if its feature is accepted. No disposition means
 blind copy, runtime portability, production readiness, or adoption of old policy.
 The first matrix is the **original baseline**, relative to
-`/home/ongki/Projects/geraicuan`; it records what was inspected there, not the
+`/home/ongki/Projects/legacy-reference`; it records what was inspected there, not the
 most advanced implementation of the product. The advanced matrix that follows
 takes precedence when both provide the same capability. Fifteen worktrees were
 inventoried; their commit metadata alone is not code or runtime proof.
@@ -52,7 +52,7 @@ inventoried; their commit metadata alone is not code or runtime proof.
 
 ### Preferred advanced source and precedence
 
-Advanced paths below are relative to `/home/ongki/Projects/geraicuan-completion`,
+Advanced paths below are relative to `/home/ongki/Projects/legacy-reference-completion`,
 HEAD `1199406c5c6fb67d6607add624cea487c91ad029`. This checkout was clean; 727
 selected files were fingerprinted and the relevant flows inspected selectively.
 Sibling brand/landing/operations worktrees were inventoried and the dated
@@ -367,7 +367,7 @@ and is independent of these per-seller credential versions.
 ## TD-9 — Normal retail tariff and verified discounted provider cost
 - Status: Proposed
 - Owner: Integration owner
-- Source: CTX-24 through CTX-28; [pricing study](../research/geraiexpress-geraicuan-pricing-review.md), historical evidence only.
+- Source: CTX-24 through CTX-28; [pricing study](../research/geraiexpress-reference-pricing-review.md), historical evidence only.
 - Statement: The pricing adapter shall separately resolve normal customer shipping and account-specific discounted provider cost, apply verified COD/insurance inclusion and collection rules once, and bind each confirmed price to its current authority/assignment version.
 - Acceptance: Changing the seller discount changes private net cost without changing normal customer shipping; regular/cargo, fee inclusion, COD bases, insurance payer, rounding, unknown/mismatched discount, stale input and private-cost projection checks pass in every enabled mode.
 - Constraints: PR-22, PR-23, DATA-5, IAM-5, IAM-6, UX-5, TD-2, TD-3. Provider discount activation and actual fee/insurance capability must be verified; no hardcoded 333-bps or flat discount default.

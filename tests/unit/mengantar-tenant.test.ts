@@ -19,7 +19,7 @@ const { mengantarFailure, tenantMengantar } = await import("../../src/lib/mengan
 const TENANT_ID = "00000000-0000-4000-b000-00000000000a";
 const CREDENTIAL_KEY = Buffer.alloc(32, 7).toString("base64");
 const WRONG_KEY = Buffer.alloc(32, 9).toString("base64");
-const API_KEY = "API-TENANTUNITTEST01";
+const API_KEY = "test_API-TENANTUNITTEST01";
 
 describe("mengantarFailure (T-023 / T-028)", () => {
   it("maps MengantarError codes to stable error keys", () => {

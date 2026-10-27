@@ -63,7 +63,7 @@ and explicit bigint serialization where needed. Preserve authoritative provider
 amounts using their verified decimal precision under DATA-5, including fractional
 fees; never round evidence merely to fit a customer display. Keep internal weights
 in grams and convert once at the verified provider boundary; no float-money math. Current numeric
-limits in GeraiCUAN are candidates for validation, not approved new limits.
+limits in LegacyReference are candidates for validation, not approved new limits.
 
 Provider side effects cannot participate in a single database rollback. Durable
 intent, response persistence, and reconciliation model that uncertainty rather

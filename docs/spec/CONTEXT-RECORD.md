@@ -9,13 +9,13 @@
 ## Decision brief
 
 The requested product is a new Cloudflare + Supabase shipping-outlet application,
-using GeraiCUAN as a workflow reference and Mengantar as the courier aggregator.
+using LegacyReference as a workflow reference and Mengantar as the courier aggregator.
 The current decision is how independent outlets obtain provider access and issue
 shipments for their customers, with reusable sender and recipient contacts.
 
 - Accountable product owner: Paduka Ongki.
 - Product state: new project requested; no GeraiExpress application or cloud resource exists from this session.
-- Reference implementations: original checkout `/home/ongki/Projects/geraicuan`; preferred advanced implementation candidate `/home/ongki/Projects/geraicuan-completion`, with exact revisions and worktree inventory in `reference-scan.json`.
+- Reference implementations: original checkout `/home/ongki/Projects/legacy-reference`; preferred advanced implementation candidate `/home/ongki/Projects/legacy-reference-completion`, with exact revisions and worktree inventory in `reference-scan.json`.
 - Risk if wrong: cross-tenant contact disclosure, incorrect sender identity, charges to the wrong provider account, or duplicate shipments.
 - Deadline, volume, budget, revenue model, and acceptable uncertainty: Unknown; owned by Paduka Ongki before release planning.
 - Immediate scope: maintain the user-selected Partner integration, shadcn/ui + Apple presentation and normal-retail/net-seller pricing; cover gerai and Super Admin operations with explicit account, production-network and authorization gates before implementation.
@@ -43,8 +43,8 @@ shipments for their customers, with reusable sender and recipient contacts.
 - Evidence kind: direct-observation
 - Owner: Paduka Ongki
 - Source: User conversation, 2026-10-13.
-- Source locator: Mengantar integration and GeraiCUAN reference messages.
-- Source excerpt: "kerjasama dengan agregator mengantar multi expedsi"; "konsep mirip geraicuan kita".
+- Source locator: Mengantar integration and LegacyReference reference messages.
+- Source excerpt: "kerjasama dengan agregator mengantar multi expedsi"; "konsep mirip legacy-reference kita".
 - Statement: The product serves shipping outlets that issue and print multi-courier shipments through Mengantar, under a tenant/outlet brand and with customer sender identities.
 - Confidence: High for the job; exact branding of provider-generated labels is unverified.
 - Recheck trigger: Courier integration or label requirements change.
@@ -60,17 +60,17 @@ shipments for their customers, with reusable sender and recipient contacts.
 - Confidence: High; retention and deletion policy remain unresolved.
 - Recheck trigger: Contact access or retention policy changes.
 
-### CTX-4 — Existing GeraiCUAN is a reference, with local changes
+### CTX-4 — Existing LegacyReference is a reference, with local changes
 - Status: Observed
 - Evidence kind: direct-observation
 - Owner: Engineering owner
-- Source: `/home/ongki/Projects/geraicuan/AGENTS.md`, `package.json`, `docs/spec/02-PRD.md`, and `git status --short`, inspected 2026-10-13.
+- Source: `/home/ongki/Projects/legacy-reference/AGENTS.md`, `package.json`, `docs/spec/02-PRD.md`, and `git status --short`, inspected 2026-10-13.
 - Source locator: Repository contract, runtime dependencies, the existing product's outlet-setup/thermal-label/reusable-contact requirements, and working-tree status.
 - Source excerpt: "Next.js App Router, PostgreSQL, Drizzle, Better Auth, and Coolify are selected decisions."
-- Statement: GeraiCUAN contains relevant tenant, outlet, contact, shipment, and label workflows, but its runtime differs from the requested stack and its working tree has pre-existing changes.
+- Statement: LegacyReference contains relevant tenant, outlet, contact, shipment, and label workflows, but its runtime differs from the requested stack and its working tree has pre-existing changes.
 - Confidence: High for the inspected contract and files; this is not verification of every existing workflow.
 - Practical implication: Reuse product invariants and reviewed logic selectively. Preserve the existing checkout and do not copy its credentials, data, generated output, or runtime-specific integration wholesale.
-- Recheck trigger: GeraiCUAN source changes or a specific module is selected for reuse.
+- Recheck trigger: LegacyReference source changes or a specific module is selected for reuse.
 
 ### CTX-5 — Provider sender identity is separate from pickup
 - Status: Evidence
@@ -116,16 +116,16 @@ shipments for their customers, with reusable sender and recipient contacts.
 - Statement: Initial React + Vite proposal is superseded by the Next.js recommendation in CTX-20 after the user asked Next.js versus Astro. Workers remain the trusted provider runtime; Supabase Auth + PostgreSQL with membership-based RLS remain the identity/data direction.
 - Confidence: Medium; final runtime and hosting-region decisions require a scoped implementation check.
 - Supporting evidence: Vendor React/Vite and Supabase Workers guides; existing API-backed operator workflow.
-- Counterevidence: Existing GeraiCUAN server modules depend on Next.js and Node/PostgreSQL transactions and are not directly portable.
+- Counterevidence: Existing LegacyReference server modules depend on Next.js and Node/PostgreSQL transactions and are not directly portable.
 - Consequence: Product behavior can transfer; authorization and provider orchestration need explicit adaptation.
 - Recheck trigger: Runtime selection before scaffolding application code.
 
 ### CTX-9 — Provider account ownership
-- Status: Decision (DEC-006, owner accepted the recommended default 2026-10-14)
-- Evidence kind: inference
+- Status: Decision
+- Evidence kind: human-policy
 - Owner: Paduka Ongki
 - Source: CTX-16/CTX-17 Partner direction and contract review; exact ownership remains pending, 2026-10-13.
-- Change history: 2026-10-13 — Corrected claim classification from Decision to Proposal; no owner acceptance was evidenced. 2026-10-14 — Owner accepted the recommended default; recorded as DEC-006.
+- Change history: 2026-10-13 — Corrected claim classification from Decision to Proposal; no owner acceptance was evidenced. 2026-10-14 — Owner accepted the recommended default (DEC-006, 2026-10-14; was Unknown).
 - Statement: Confirm the legal/account owner and tenant/outlet mapping for the proposed tenant-owned seller model, with existing-account BYOK. A central platform seller would need a separate commercial decision.
 - Selected option: User selected the Partner integration direction in CTX-16. The exact tenant/account-owner/cardinality policy remains proposed; no unanswered preselected option is approval.
 - Recommended default: One partner-created seller per tenant business plus BYOK for an existing seller. This replaces the earlier both-central-and-tenant recommendation after review of the Partner contract. No silent central-account fallback.
@@ -137,7 +137,7 @@ shipments for their customers, with reusable sender and recipient contacts.
 - Status: Unknown
 - Evidence kind: none
 - Owner: Paduka Ongki
-- Source: User reports GeraiCUAN may have been blocked by Komdigi. The later worktree scan found a dated Biznet DNS-override record for `geraicuan.com` and `app.geraicuan.com` in `/home/ongki/Projects/geraicuan-ops-backup/BUILD-LOG.md`, section dated 2026-10-10; this is historical repository evidence, not a current official blocking determination.
+- Source: User reports LegacyReference may have been blocked by Komdigi. The later worktree scan found a dated Biznet DNS-override record for `legacy-reference.com` and `app.legacy-reference.com` in `/home/ongki/Projects/legacy-reference-ops-backup/BUILD-LOG.md`, section dated 2026-10-10; this is historical repository evidence, not a current official blocking determination.
 - Statement: Current reachability, official blocking status, and root cause remain unverified in this session; a historical ISP DNS symptom and affected hostnames are now identified.
 - Consequence: Hosting migration must not be presented as a proven remedy.
 - Next evidence: Current ordinary-ISP DNS/HTTP observations and authoritative domain status, if diagnosing the old service is requested. Do not infer a Komdigi action from the dated ISP observation alone.
@@ -178,7 +178,7 @@ No task queue is generated while implementation requirements remain Proposed.
 ## Open decisions and boundaries
 
 - Provider account mode: CTX-9, accepted as DEC-006 (2026-10-14).
-- Tenant versus outlet/cabang ownership and member roles: proposed to follow GeraiCUAN; confirm before IAM implementation.
+- Tenant versus outlet/cabang ownership and member roles: proposed to follow LegacyReference; confirm before IAM implementation.
 - Provider sender address versus customer address: CTX-5 supports name/phone substitution and preserved pickup; arbitrary label-address substitution is not established.
 - Tenant logo and branding on the official courier label: Unknown; distinguish the application brand, a customer receipt, and the official shipping label.
 - Contacts may serve as sender, recipient, or both: Proposal; contacts are not automatically login accounts.
@@ -192,10 +192,10 @@ No task queue is generated while implementation requirements remain Proposed.
 - Status: Observed
 - Evidence kind: direct-observation
 - Owner: Engineering owner
-- Source: Original `/home/ongki/Projects/geraicuan` checkout source inventory, imports, callers, schema, migrations, route handlers, and test definitions, inspected 2026-10-13. CTX-14 records the advanced worktree and takes precedence for reuse selection.
+- Source: Original `/home/ongki/Projects/legacy-reference` checkout source inventory, imports, callers, schema, migrations, route handlers, and test definitions, inspected 2026-10-13. CTX-14 records the advanced worktree and takes precedence for reuse selection.
 - Source locator: `reference-scan.json` and the path/symbol matrix in `03-TECHNICAL-DESIGN.md`.
 - Source excerpt: "No live Mengantar `/order` transport exists yet"; webhook `POST()` returns 404.
-- Statement: The original checkout contains reusable validation, contacts, snapshot, queue/recovery, authorization, and presentation patterns. In that checkout, order issuance is fixture-backed, the webhook is closed, labels are local HTML, and no dropshipper/provider-PDF implementation was found. These findings must not be generalized to every GeraiCUAN worktree.
+- Statement: The original checkout contains reusable validation, contacts, snapshot, queue/recovery, authorization, and presentation patterns. In that checkout, order issuance is fixture-backed, the webhook is closed, labels are local HTML, and no dropshipper/provider-PDF implementation was found. These findings must not be generalized to every LegacyReference worktree.
 - Confidence: High for inspected source; source presence and test definitions do not prove deployment or account behavior.
 - Practical implication: Extract small independent functions, adapt domain/repository invariants, and rebuild provider/auth/runtime boundaries; see TD-1.
 - Recheck trigger: Source digest changes or a different reference branch/worktree is selected.
@@ -227,7 +227,7 @@ No task queue is generated while implementation requirements remain Proposed.
 - Status: Observed
 - Evidence kind: direct-observation
 - Owner: Engineering owner
-- Source: `/home/ongki/Projects/geraicuan-completion`, branch `feat/phase14-completion`, HEAD `1199406c5c6fb67d6607add624cea487c91ad029`, clean at review.
+- Source: `/home/ongki/Projects/legacy-reference-completion`, branch `feat/phase14-completion`, HEAD `1199406c5c6fb67d6607add624cea487c91ad029`, clean at review.
 - Source locator: `reference-scan.json`, `advanced_reference`; source symbols in the advanced matrix under TD-1.
 - Source excerpt: "Deliberately not sent" includes `dropShipper`; "no real delivery has been captured yet" in the webhook route's gap note.
 - Statement: Worktree discovery found 15 related checkouts. The clean advanced checkout has a bounded HTTP client, gated live order/payment/cancellation transport, nested documented order builder, signed webhook handler, tenant brand/settings, local thermal/batch print, customer invoice, readable shipment references, and improved operator screens. Its builder omits saved-provider dropshipper identity, and its webhook notes a platform-default-only secret and no real captured delivery.
@@ -331,7 +331,7 @@ a live provider proof, or deployment verification. No reference source was edite
 - Derived from: CTX-4, CTX-14, CTX-19; SRC-CF-NEXTJS and SRC-CF-ASTRO in `sources.json`.
 - Statement: Recommend Next.js App Router for the interactive authenticated operator application and familiar reference structure, with a verified Cloudflare Workers deployment path. Astro remains a feasible content-first option; a second marketing app is not required now.
 - Confidence: Medium until a scoped compatibility/runtime check. Cloudflare currently recommends vinext, which is beta; compatible Next.js APIs are not a guarantee of every reference dependency working.
-- Trade-offs: Next.js reduces routing/component adaptation from GeraiCuan but adds adapter compatibility work. Astro supports server rendering and React islands, but a mostly interactive shipping console would still require substantial shared client state. Plain React/Vite remains technically viable; avoiding adapter dependence is its advantage.
+- Trade-offs: Next.js reduces routing/component adaptation from LegacyReference but adds adapter compatibility work. Astro supports server rendering and React islands, but a mostly interactive shipping console would still require substantial shared client state. Plain React/Vite remains technically viable; avoiding adapter dependence is its advantage.
 - Consequence: ARCH-1 now records the Next.js proposal; no Next.js-only business/auth module is copied without review. Pin the actual framework/adapter versions and verify auth, scoped reads/mutations, deep links, and queue/label flows before accepting runtime readiness.
 - Recheck trigger: Before application scaffolding or when the compatibility spike fails.
 
@@ -406,7 +406,7 @@ simulation and isolation acceptance remain prospective implementation checks.
 - Derived from: CTX-1, CTX-2, CTX-3, CTX-14, CTX-17, CTX-19, CTX-21, CTX-22.
 - Statement: Position GeraiExpress as a tenant-branded operating workspace for a shipping counter serving many customer senders: reusable contacts, account-appropriate quotes, authoritative shipment/label creation and recoverable daily operations, with owner setup/governance and a separate safe demo.
 - Confidence: High fit to the requested job; actual outlet interviews, throughput, printer/device constraints, business model, budget and quantitative targets remain unknown.
-- Supporting evidence: User-requested customer sender identities/contact reuse, current Partner/Public API ownership, and selectively inspected GeraiCuan counter workflows.
+- Supporting evidence: User-requested customer sender identities/contact reuse, current Partner/Public API ownership, and selectively inspected LegacyReference counter workflows.
 - Counterevidence: The reference's broader finance and thermal-label features do not establish demand, pricing policy or courier acceptance for GeraiExpress.
 - Consequence: Prioritize one complete counter workflow before optional reporting/finance/bulk capabilities. Platform fees, customer markup, COD accounting and custody/handover policy remain owner decisions.
 - Recheck trigger: Before accepting the live pilot scope, after an observed outlet trial, or if business/account ownership changes.
@@ -423,7 +423,7 @@ throughput target, commercial policy or production readiness was invented.
 These checks verify document structure/consistency only, not an implemented gerai
 workflow. No app, account, cloud resource, credential or live transaction changed.
 
-## GeraiCuan pricing study
+## LegacyReference pricing study
 
 ### CTX-24 — User-requested pricing study
 - Status: Observed
@@ -431,8 +431,8 @@ workflow. No app, account, cloud resource, credential or live transaction change
 - Owner: Paduka Ongki
 - Source: User conversation, 2026-10-13.
 - Source locator: Follow-up to the price/markup/COD decisions recorded in the product draft.
-- Source excerpt: "harga kau pelajari gerai cuan".
-- Statement: Study GeraiCuan's pricing behavior and use its verified findings to improve the GeraiExpress pricing proposal.
+- Source excerpt: "harga kau pelajari legacy-reference".
+- Statement: Study LegacyReference's pricing behavior and use its verified findings to improve the GeraiExpress pricing proposal.
 - Confidence: High for study scope; this request does not select new fees, markup, subscription pricing or a universal COD rate.
 - Recheck trigger: Owner selects or changes GeraiExpress commercial rules.
 
@@ -440,12 +440,12 @@ workflow. No app, account, cloud resource, credential or live transaction change
 - Status: Observed
 - Evidence kind: direct-observation
 - Owner: Engineering owner
-- Source: Preferred GeraiCuan checkout in CTX-14; selected source/spec/test fingerprints in `reference-scan.json`, pricing_review.
+- Source: Preferred LegacyReference checkout in CTX-14; selected source/spec/test fingerprints in `reference-scan.json`, pricing_review.
 - Source locator: mengantar-estimate, mengantar-cod-fee, shipment-draft-logic, shipment-estimate-options, shipment-money, cod-totals-repository, owner-money-repository, shipment-invoice-repository and invoice-sheet; reference PRD/metric contract.
 - Source excerpt: "computed, never typed"; "per-tenant customer price lists or markup" are a reference non-goal.
 - Statement: The reference separates list/normal/special/cargo prices, applies a historical 333-bps gross-up for COD, computes new COD Ongkir at deducted-shipping break-even, folds COD fee/rounding into customer Ongkir, and reports private owner shipping spread rather than goods profit. It has no free-form gerai markup/cashier and its application-use policy is free. Non-COD issuance options retain internal deducted shipping in the client payload; this must not be copied under an admin-only cost policy.
 - Confidence: High for traced source behavior, not actual current tariffs, payment receipt, customer demand or deployed security. Later invoice/collection rules supersede older reference prose.
-- Practical implication: PR-22 and TD-9 preserve separate quantities/provenance and require current provider fee inclusion/rounding proof. COD customer-goods obligations and intentional COD Ongkir earnings remain owner decisions; GeraiCuan free access does not decide GeraiExpress monetization.
+- Practical implication: PR-22 and TD-9 preserve separate quantities/provenance and require current provider fee inclusion/rounding proof. COD customer-goods obligations and intentional COD Ongkir earnings remain owner decisions; LegacyReference free access does not decide GeraiExpress monetization.
 - Recheck trigger: Source revision changes, provider contract disagrees, or GeraiExpress selects its pricing/financial scope.
 
 ### CTX-26 — Bounded pricing checks
@@ -453,7 +453,7 @@ workflow. No app, account, cloud resource, credential or live transaction change
 - Evidence kind: direct-observation
 - Owner: Engineering owner
 - Source: Executed existing local source tests and a synthetic plain-helper check, 2026-10-13.
-- Source locator: `reference-scan.json`, pricing_review; [pricing analysis](../research/geraiexpress-geraicuan-pricing-review.md).
+- Source locator: `reference-scan.json`, pricing_review; [pricing analysis](../research/geraiexpress-reference-pricing-review.md).
 - Source excerpt: "numPassedTests": 34; independent example: "checksPassed": 9.
 - Statement: Three selected reference files passed 34 checks with database variables removed; an independent synthetic example using the plain fee helper passed nine assertions. An initial broader selection failed on database-dependent nested imports and is retained as a limited result, not counted as fully passing.
 - Confidence: High for executed local arithmetic/normalization/static-render scope only; no DB, browser, Workers or live provider proof.
@@ -484,11 +484,11 @@ GeraiExpress app, database, live account or actual charge was created.
 - Evidence kind: direct-observation
 - Owner: Paduka Ongki
 - Source: User conversation, 2026-10-13.
-- Source locator: Two consecutive messages after the GeraiCuan pricing study.
+- Source locator: Two consecutive messages after the LegacyReference pricing study.
 - Source excerpt: "pakai harga real mengantar"; "bukan harga setelah diskon ya"; "biaya fee cod dan asuransi jika ada".
 - Statement: Use actual Mengantar pricing, display its normal undiscounted customer rate on the gerai's customer/resi surface, apply assigned seller/gerai discounts to the cost paid to Mengantar, and account for COD fee and insurance where applicable.
 - Confidence: High for the retail-versus-net distinction. Exact discount terms, current fee/insurance contract and upstream activation method are not supplied by these messages.
-- Practical implication: Correct any interpretation that would pass the discounted net shipping cost to the customer or reuse GeraiCuan's cost-break-even COD Ongkir as the customer price.
+- Practical implication: Correct any interpretation that would pass the discounted net shipping cost to the customer or reuse LegacyReference's cost-break-even COD Ongkir as the customer price.
 - Recheck trigger: Owner changes the retail/net or fee/insurance policy.
 
 ### CTX-28 — Customer normal tariff and seller discounted cost
@@ -513,7 +513,7 @@ and the selected policy referenced across six owner/index documents. Review
 confirmed that COD Ongkir retains normal retail shipping, seller discounts do
 not change that customer base, fee/insurance inclusion and collection channels
 are explicit, and local discount assignment is distinct from actual provider
-activation. Historic GeraiCuan formulas remain research evidence, not defaults.
+activation. Historic LegacyReference formulas remain research evidence, not defaults.
 
 Official web-tool retrieval was unavailable; this documentation update used the
 already retrieved same-day official Partner/Public contracts and did not claim
@@ -579,7 +579,7 @@ browser/database/Workers success is inferred from the document checks.
 - Confidence: High for documentation scope; not authorization for cloud provisioning, live accounts or deployment.
 - Recheck trigger: Owner changes the requested documentation or authorizes implementation.
 
-### CTX-32 — Registration patterns in the preferred GeraiCuan reference
+### CTX-32 — Registration patterns in the preferred LegacyReference reference
 - Status: Observed
 - Evidence kind: direct-observation
 - Owner: Engineering owner
@@ -603,10 +603,11 @@ browser/database/Workers success is inferred from the document checks.
 - Recheck trigger: Before Auth implementation, selected SDK/version change or signup release.
 
 ### CTX-34 — Recommended registration operating policy
-- Status: Decision (DEC-007, owner accepted the recommendation 2026-10-14; invite lifetime and additional-business rule fixed there)
-- Evidence kind: inference
+- Status: Decision
+- Evidence kind: human-policy
 - Owner: Paduka Ongki
 - Derived from: CTX-1, CTX-17, CTX-21, CTX-29, CTX-31, CTX-32, CTX-33.
+- Change history: 2026-10-14 — Owner accepted the recommendation; invite lifetime and additional-business rule fixed there (DEC-007, 2026-10-14; was Unknown).
 - Statement: Recommend email-first verification, then password setup and a resumable gerai application. Recommend manual Super Admin business approval for the initial pilot, followed by explicit tenant-owned Mengantar connection; staff join through invitations.
 - Confidence: High workflow fit; authentication UX, manual versus automatic activation, invite expiry and additional-business policy remain owner choices before implementation.
 - Supporting evidence: Avoid collecting an unverified applicant's password/business authority together; keep provider account creation behind verified identity, current tenant authority and separate provider consent.

@@ -105,4 +105,56 @@ describe("Komdigi-clean GeraiExpress marketing rebrand (T-029)", () => {
     expect(barcode.bars.length).toBeGreaterThan(30);
     expect(barcode.modules).toBeGreaterThan(150);
   });
+
+  it("publishes indexable metadata, canonical URLs, OpenGraph, robots.txt, and sitemap.xml for the 5 public marketing routes", async () => {
+    const { default: robots } = await import("../../src/app/robots");
+    const { default: sitemap } = await import("../../src/app/sitemap");
+
+    const robotsConfig = robots();
+    expect(robotsConfig.sitemap).toBe("https://geraiexpress.com/sitemap.xml");
+    expect(robotsConfig.rules).toEqual({
+      userAgent: "*",
+      allow: ["/", "/fitur", "/simulasi", "/cara-kerja", "/hubungi-kami"],
+      disallow: [
+        "/pengiriman",
+        "/kontak",
+        "/pengaturan",
+        "/anggota",
+        "/admin",
+        "/api",
+        "/masuk",
+        "/daftar",
+        "/undangan",
+        "/verifikasi-2fa",
+        "/akses",
+        "/pilih-gerai",
+      ],
+    });
+
+    const sitemapEntries = sitemap();
+    expect(sitemapEntries.map((entry) => entry.url)).toEqual([
+      "https://geraiexpress.com",
+      "https://geraiexpress.com/fitur",
+      "https://geraiexpress.com/simulasi",
+      "https://geraiexpress.com/cara-kerja",
+      "https://geraiexpress.com/hubungi-kami",
+    ]);
+
+    const marketingPages: [string, string][] = [
+      ["src/app/page.tsx", "/"],
+      ["src/app/fitur/page.tsx", "/fitur"],
+      ["src/app/simulasi/page.tsx", "/simulasi"],
+      ["src/app/cara-kerja/page.tsx", "/cara-kerja"],
+      ["src/app/hubungi-kami/page.tsx", "/hubungi-kami"],
+    ];
+
+    for (const [relPath, canonicalPath] of marketingPages) {
+      const source = readFileSync(join(ROOT_DIR, relPath), "utf8");
+      expect(source).toContain("robots: { index: true, follow: true }");
+      expect(source).toContain(`alternates: { canonical: "${canonicalPath}" }`);
+      expect(source).toContain('siteName: "GeraiExpress"');
+      expect(source).toContain('locale: "id_ID"');
+      expect(source).toContain('type: "website"');
+    }
+  });
 });

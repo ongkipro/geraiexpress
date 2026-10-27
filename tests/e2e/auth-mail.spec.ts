@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "./fixtures";
 import { mailCode } from "./helpers";
 
-const secret = readFileSync("supabase/.env", "utf8").match(/^GE_SEND_EMAIL_HOOK_SECRET=(.+)$/m)![1];
+const secret: string = readFileSync("supabase/.env", "utf8").match(/^GE_SEND_EMAIL_HOOK_SECRET[=](.+)$/m)![1];
 
 function signed(body: string) {
   const id = `msg_${Date.now()}`;

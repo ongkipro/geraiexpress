@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MarketingClosingCta, MarketingShell } from "@/components/marketing/marketing-shell";
@@ -16,6 +17,23 @@ import {
 import { loadPlatform } from "@/lib/platform";
 import { supabaseServer } from "@/lib/supabase/server";
 import { loadWorkspace } from "@/lib/workspace";
+
+export const metadata: Metadata = {
+  title: "Kasir Loket Pengiriman Multi-Kurir Gratis · GeraiExpress",
+  description:
+    "Buka loket 12+ layanan ekspedisi di toko Anda bersama GeraiExpress. Komisi 20%–25% per paket lewat Mengantar, cetak resi thermal 10 x 15 cm, dan kurir jemput ke toko.",
+  robots: { index: true, follow: true },
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "Kasir Loket Pengiriman Multi-Kurir Gratis · GeraiExpress",
+    description:
+      "Buka loket 12+ layanan ekspedisi di toko Anda bersama GeraiExpress. Komisi 20%–25% per paket lewat Mengantar, cetak resi thermal 10 x 15 cm, dan kurir jemput ke toko.",
+    url: "https://geraiexpress.com/",
+    siteName: "GeraiExpress",
+    locale: "id_ID",
+    type: "website",
+  },
+};
 
 const BUSINESS_TYPES = [
   {

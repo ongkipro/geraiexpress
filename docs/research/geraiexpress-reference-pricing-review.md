@@ -1,27 +1,27 @@
-# GeraiCuan Pricing Review for GeraiExpress
+# LegacyReference Pricing Review for GeraiExpress
 
 - Reviewed: 2026-10-13; internal product/engineering research.
-- Request: Study GeraiCuan pricing and carry useful behavior into the existing GeraiExpress specification.
-- Preferred source: `/home/ongki/Projects/geraicuan-completion`, clean HEAD `1199406c5c6fb67d6607add624cea487c91ad029`.
-- Older baseline: `/home/ongki/Projects/geraicuan`, HEAD `3e3ebf6a860a87c55b41f1e48f52c77362aa3032`, with pre-existing changes. Its earlier money/COGS decisions are not the latest behavior.
+- Request: Study LegacyReference pricing and carry useful behavior into the existing GeraiExpress specification.
+- Preferred source: `/home/ongki/Projects/legacy-reference-completion`, clean HEAD `1199406c5c6fb67d6607add624cea487c91ad029`.
+- Older baseline: `/home/ongki/Projects/legacy-reference`, HEAD `3e3ebf6a860a87c55b41f1e48f52c77362aa3032`, with pre-existing changes. Its earlier money/COGS decisions are not the latest behavior.
 - Scope: Source, specifications, synthetic examples and selected local tests. No real customer records, provider invoices, credentials, database or authenticated API were accessed.
-- Authority: [GeraiExpress PRD](../spec/02-PRD.md), CTX-24 through CTX-26. GeraiCuan commercial decisions and historical rate observations are reference evidence, not automatically GeraiExpress policy.
+- Authority: [GeraiExpress PRD](../spec/02-PRD.md), CTX-24 through CTX-26. LegacyReference commercial decisions and historical rate observations are reference evidence, not automatically GeraiExpress policy.
 
 ## Product-owner clarification after this source study
 
 CTX-27/CTX-28 now select **normal undiscounted Mengantar customer/resi shipping**
 and **separate discounted seller cost**, including applicable COD/insurance
 components once. Platform-assigned discount terms must match verified provider
-activation/billing. GeraiCuan's cost-break-even COD Ongkir and synthetic legacy
+activation/billing. LegacyReference's cost-break-even COD Ongkir and synthetic legacy
 333-bps example below are historical observations, not GeraiExpress's selected
 customer pricing. PR-22/PR-23 and the existing technical/data/IAM/UX contracts
 own the current behavior. The reviewed Partner routes do not edit seller rates.
 
 ## 1. Main findings
 
-| Question | GeraiCuan behavior in the preferred source | Consequence for GeraiExpress |
+| Question | LegacyReference behavior in the preferred source | Consequence for GeraiExpress |
 |---|---|---|
-| Does the app charge a subscription? | PR-81 prohibits plans/prices/upgrades/payment for using GeraiCuan; the reference describes free access | This is GeraiCuan's policy. GeraiExpress monetization remains a separate decision |
+| Does the app charge a subscription? | PR-81 prohibits plans/prices/upgrades/payment for using LegacyReference; the reference describes free access | This is LegacyReference's policy. GeraiExpress monetization remains a separate decision |
 | Is there a freely configurable customer price list/markup? | Explicitly outside reference v3.1 scope; packing/cardboard/admin add-ons are an unimplemented owner decision | Do not claim a markup editor exists or silently invent its prices |
 | What is the customer shipping basis? | The chosen provider `price`, with separate collection rules for COD and COD Ongkir | Preserve customer charge versus provider deduction as separate quantities |
 | Where can a shipping spread arise? | Customer-facing list price versus account-specific deducted shipping, after actual fee/return effects | It is not a guaranteed discount, commission, customer payment or net profit |
@@ -64,7 +64,7 @@ particular 2× threshold is a source heuristic, not a vendor pricing contract.
 Notation: `G` = goods value included in recipient collection, `P` = provider
 customer/list shipping quote, `S` = account-specific deducted shipping estimate,
 `C` = courier collection, `F` = COD fee. The following formulas describe the
-**historical GeraiCuan 333-basis-point model**, excluding unverified insurance,
+**historical LegacyReference 333-basis-point model**, excluding unverified insurance,
 extra fees, adjustments and returns.
 
 ### Non-COD

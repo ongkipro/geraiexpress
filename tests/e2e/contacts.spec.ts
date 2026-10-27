@@ -1,6 +1,6 @@
 // PR-2 / UX-1: save, search, edit and reuse contacts within the current tenant only.
 import { actAsVisitor, expect, randomVisitorIp, test } from "./fixtures";
-import { expectNoHorizontalOverflow, signIn, startDemo } from "./helpers";
+import { expectNoHorizontalOverflow, localSql, sessionUserId, signIn, startDemo } from "./helpers";
 
 test("create a contact with an address, find it, edit it", async ({ page }) => {
   await startDemo(page);
@@ -108,4 +108,27 @@ test("a tampered form aimed at another tenant's contact changes nothing", async 
   await expect(other.getByRole("heading", { name: "Kontak Rahasia B" })).toBeVisible();
   await expect(other.getByText("Jl. Sisipan Asing 1")).toHaveCount(0);
   await other.close();
+});
+
+test("tenant admin can archive a contact while operator cannot see the archive contact button (T-028)", async ({ page }) => {
+  await startDemo(page);
+  await page.goto("/kontak");
+  await page.getByRole("link", { name: /Budi Santoso/ }).click();
+  await expect(page).toHaveURL(/\/kontak\/[0-9a-f-]{36}$/);
+
+  const archiveBtn = page.getByRole("button", { name: "Arsipkan kontak" });
+  await expect(archiveBtn).toBeVisible();
+  await archiveBtn.click();
+
+  await expect(page.getByText("Diarsipkan", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Kontak ini sudah diarsipkan/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Arsipkan kontak" })).toHaveCount(0);
+
+  localSql(`update public.memberships set role = 'operator' where user_id = '${await sessionUserId(page)}'`);
+  await page.goto("/kontak");
+  await expect(page.getByRole("link", { name: /Budi Santoso/ })).toHaveCount(0);
+  await page.getByRole("link", { name: /Sari Wulandari/ }).click();
+  await expect(page).toHaveURL(/\/kontak\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("button", { name: "Arsipkan kontak" })).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
 });

@@ -70,7 +70,9 @@ export default async function IntegrationsPage() {
               <span>
                 <span className="font-semibold">{r.tenant_name}</span>
                 <span className="block text-sm text-muted-foreground">
-                  {r.configured ? `Kunci sendiri (BYOK) berakhiran …${r.hint}, versi ${r.version}, disimpan ${formatWib(r.stored_at)}` : "Belum ada kunci API."}
+                  {r.configured
+                    ? `${r.mode === "partner_managed" || r.mode === "partner" ? "Akun Partner Mengantar berakhiran …" : "Kunci sendiri (BYOK) berakhiran …"}${r.hint}, versi ${r.version}, disimpan ${formatWib(r.stored_at)}`
+                    : "Belum ada kunci API."}
                 </span>
               </span>
               <Badge ok={r.configured ? null : false} label={r.configured ? "Tersimpan, belum diverifikasi" : "Belum terhubung"} />

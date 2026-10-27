@@ -11,6 +11,17 @@ export const metadata: Metadata = {
   title: "Simulasi Margin dan Komisi Loket Ekspedisi",
   description:
     "Hitung estimasi keuntungan loket ekspedisi di toko Anda dengan simulator komisi GeraiExpress. Komisi 20%-25% per paket, tanpa franchise atau royalti.",
+  robots: { index: true, follow: true },
+  alternates: { canonical: "/simulasi" },
+  openGraph: {
+    title: "Simulasi Margin dan Komisi Loket Ekspedisi · GeraiExpress",
+    description:
+      "Hitung estimasi keuntungan loket ekspedisi di toko Anda dengan simulator komisi GeraiExpress. Komisi 20%-25% per paket, tanpa franchise atau royalti.",
+    url: "https://geraiexpress.com/simulasi",
+    siteName: "GeraiExpress",
+    locale: "id_ID",
+    type: "website",
+  },
 };
 
 const COMPARISON = [

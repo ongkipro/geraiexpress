@@ -17,7 +17,7 @@ export default async function LabelPage({ params }: { params: Promise<{ id: stri
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const supabase = await supabaseServer();
   const { data: s } = await supabase.from("shipments")
-    .select("id, reference, awb, is_simulated, sender_name, sender_phone, recipient_name, recipient_phone, recipient_address, recipient_area, recipient_postal_code, item_description, weight_grams, customer_charge_idr, pickup_snapshot, issued_at, selected_quote_id")
+    .select("id, reference, awb, is_simulated, is_cod, cod_amount_idr, goods_value_idr, sender_name, sender_phone, recipient_name, recipient_phone, recipient_address, recipient_area, recipient_postal_code, item_description, weight_grams, customer_charge_idr, pickup_snapshot, issued_at, selected_quote_id")
     .eq("tenant_id", ws.tenant.id).eq("id", id).maybeSingle();
   if (!s) notFound();
   const { data: job } = await supabase.from("label_jobs").select("id").eq("tenant_id", ws.tenant.id)
@@ -67,6 +67,11 @@ export default async function LabelPage({ params }: { params: Promise<{ id: stri
             <p>{[pickup.outlet, pickup.area].filter(Boolean).join(", ")}</p>
           </div>
         </div>
+        {s.is_cod ? (
+          <p className="mt-3 rounded border-2 border-foreground px-2.5 py-1.5 font-semibold tabular" data-testid="label-cod">
+            COD — Tagih ke penerima: {formatIdr(s.cod_amount_idr)}
+          </p>
+        ) : null}
         <div className="mt-3 flex justify-between gap-2">
           <span>{s.item_description}</span>
           <span className="tabular">Ongkir {formatIdr(s.customer_charge_idr)}</span>

@@ -48,8 +48,8 @@ export type SellerSummary = { sellerId: string; externalUserId: string; active: 
 export type Registration = { alreadyRegistered: boolean; sellerId: string; apiKey: string | null };
 export type NewSeller = { name: string; email: string; phone: string; externalUserId: string };
 
-const SELLER_ID = /^[A-Za-z0-9_-]{1,64}$/;
-const API_KEY = /^[A-Za-z0-9_-]{8,128}$/;
+const SELLER_ID: RegExp = /^[A-Za-z0-9_-]{1,64}$/;
+const API_KEY: RegExp = /^[A-Za-z0-9_-]{8,128}$/;
 const TIMEOUT_MS = 15_000;
 
 export async function partnerSignature(path: string, body: string, timestamp: string, secret: string): Promise<string> {

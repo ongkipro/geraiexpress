@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://geraiexpress.com"),
   title: { default: "GeraiExpress", template: "%s · GeraiExpress" },
   description: "Ruang kerja gerai pengiriman multi-tenant.",
   robots: { index: false, follow: false },

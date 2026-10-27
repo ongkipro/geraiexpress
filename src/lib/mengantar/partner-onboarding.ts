@@ -199,6 +199,13 @@ export async function onboardPartnerSeller(
     };
   } catch (err) {
     if (!(err instanceof PartnerError)) {
+      await deps.rpc("record_partner_seller_onboarding_outcome", {
+        p_tenant: input.tenantId,
+        p_state: partnerSellerId ? "registered_key_pending" : "not_connected",
+        p_seller_id: partnerSellerId,
+        p_error_code: "UNAVAILABLE",
+        p_retry_after_seconds: null,
+      });
       return { ok: false, state: "rejected", errorCode: "mengantar_unavailable", sellerId: partnerSellerId };
     }
     return handlePartnerError(input.tenantId, partnerSellerId, err, deps.rpc);
@@ -343,6 +350,13 @@ async function handlePartnerError(
     error.code === "INVALID_EXTERNAL_USER_ID" ||
     error.code === "PHONE_NOT_ALLOWED"
   ) {
+    await rpc("record_partner_seller_onboarding_outcome", {
+      p_tenant: tenantId,
+      p_state: sellerId ? "registered_key_pending" : "not_connected",
+      p_seller_id: sellerId,
+      p_error_code: error.code,
+      p_retry_after_seconds: null,
+    });
     return {
       ok: false,
       state: "rejected",
@@ -352,6 +366,13 @@ async function handlePartnerError(
   }
 
   if (error.code === "unavailable" || error.code === "INTERNAL_ERROR") {
+    await rpc("record_partner_seller_onboarding_outcome", {
+      p_tenant: tenantId,
+      p_state: sellerId ? "registered_key_pending" : "not_connected",
+      p_seller_id: sellerId,
+      p_error_code: error.code,
+      p_retry_after_seconds: null,
+    });
     return {
       ok: false,
       state: "rejected",
@@ -360,6 +381,13 @@ async function handlePartnerError(
     };
   }
 
+  await rpc("record_partner_seller_onboarding_outcome", {
+    p_tenant: tenantId,
+    p_state: sellerId ? "registered_key_pending" : "not_connected",
+    p_seller_id: sellerId,
+    p_error_code: error.code.slice(0, 64) || "UNREADABLE_RESPONSE",
+    p_retry_after_seconds: null,
+  });
   return {
     ok: false,
     state: "rejected",

@@ -51,7 +51,13 @@ roots.forEach(walk);
 const bakedEnv = ".open-next/cloudflare/next-env.mjs";
 if (existsSync(bakedEnv)) {
   const text = readFileSync(bakedEnv, "utf8");
-  for (const name of ["CREDENTIAL_KEY", "MENGANTAR_PARTNER_SECRET", "SUPABASE_SECRET_KEY"]) {
+  for (const name of [
+    "CREDENTIAL_KEY",
+    "MENGANTAR_PARTNER_SECRET",
+    "SUPABASE_SECRET_KEY",
+    "GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET",
+    "SEND_EMAIL_HOOK_SECRET",
+  ]) {
     if (text.includes(name)) hits.push(`${bakedEnv}: ${name} baked into the Worker build (use a Worker secret)`);
   }
 }

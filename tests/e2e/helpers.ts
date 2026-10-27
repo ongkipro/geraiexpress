@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 
-export const FIXTURE_PASSWORD = "geraiexpress-local-dev";
+export const FIXTURE_PASSWORD: string = "geraiexpress-local-dev";
 
 export async function signIn(page: Page, email: string) {
   await page.goto("/masuk");

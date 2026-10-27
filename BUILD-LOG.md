@@ -693,3 +693,29 @@ Verified: `pnpm typecheck`, `pnpm test:unit` (12 files, 104 tests), `supabase db
 `pnpm smoke:worker`, `check-traceability.py` (16 files, 145 declarations, 6 tasks, 0 findings),
 and Playwright `pnpm test:e2e` across `mobile-390`, `tablet-768`, and `desktop-1280` (188 passed,
 4 opt-in live skipped). Independent security and code review (`218a8a7b`): `APPROVE`.
+Deployed preview `c00e9c85-5cb6-47c8-946d-54fd60ca410a` and applied remote migrations 13–15 on
+`jezxplwwmjogrmlixdcw`; `pnpm smoke:preview` 6/6 passed.
+
+## 2026-10-27 — T-031 Holistic live-readiness audit & polish (`RUN-20261027T154818Z-a871bd43`)
+
+Executed a full-repository live-readiness audit across SEO, Worker runtime, Supabase schema/RPCs,
+security scan gates, release manifests, and E2E test coverage:
+
+- **SEO indexation & crawlability**: `src/app/layout.tsx` sets `metadataBase: new URL("https://geraiexpress.com")`
+  while keeping `robots: { index: false, follow: false }` as the workspace/admin default; public
+  marketing pages (`/`, `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`) explicitly override
+  `robots: { index: true, follow: true }` with canonical URLs and OpenGraph metadata; added
+  `src/app/robots.ts` and `src/app/sitemap.ts`.
+- **Hourly demo cleanup & Partner onboarding recovery**: `custom-worker.ts` `scheduled()` invokes
+  `cleanup_expired_demos` on the hourly `0 * * * *` cron and logs `{"event":"demo_cleanup",...}`.
+  Migration `20261027230000_production_readiness_polish.sql` adds partial index
+  `provider_operations_batch_idx` on `public.provider_operations (provider_batch) where provider_batch is not null`
+  and allows `record_partner_seller_onboarding_outcome` to transition failed initial registrations
+  back to `'consent_recorded'`/`'not_connected'` instead of leaving rows in `'registration_pending'`.
+- **UI & label polish**: `/admin/integrasi` renders `Akun Partner Mengantar` vs `Kunci sendiri (BYOK)`,
+  and `/pengiriman/[id]/label` displays `COD — Tagih ke penerima: Rp...` (`data-testid="label-cod"`)
+  when `is_cod` is true.
+- **Playwright E2E & zero legacy footprint**: added E2E assertions for T-025 COD shipment flow,
+  T-026 `batch-payment-review` (`tenant_admin` vs `operator`), T-027 Partner onboarding consent
+  validation & operator hiding, and T-028 `Arsipkan kontak` role gating; scrubbed all remaining
+  legacy brand references in `docs/**` (0 matches across the entire repo).

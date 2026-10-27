@@ -1,12 +1,12 @@
 # GeraiExpress — Runtime Observability Record
 
 Updated: 2026-10-27
-Status: NOT_CONFIGURED
+Status: PREVIEW_ACTIVE
 
-No deployed runtime, sink or production probe exists. Locally, the Worker build exposes
-`GET /healthz` (`{"ok":true}`, `Cache-Control: no-store`), used by `pnpm smoke:worker`; it is a
+Production is not provisioned. On the deployed preview (`geraiexpress-preview`, see [RELEASE.md](RELEASE.md)) and locally, the Worker build exposes
+`GET /healthz` (`{"ok":true}`, `Cache-Control: no-store`), used by `pnpm smoke:worker` and `pnpm smoke:preview`; it is a
 liveness check only and says nothing about Supabase or provider health. Wrangler
-`observability.enabled` is set in `wrangler.jsonc` but has never received production traffic. The canonical proposed
+`observability.enabled: true` is active on `geraiexpress-preview` and configured in `wrangler.jsonc`. The canonical proposed
 signal and limit contract is [16-OBSERVABILITY-RATE-LIMITING.md](docs/spec/16-OBSERVABILITY-RATE-LIMITING.md).
 
 Log events (Worker console, no addresses, codes or secrets): `auth_mail_sent`,
@@ -34,6 +34,8 @@ was not compared; a steady rise means Mengantar's response changed.
 days, `failed_unresolved` "not created"/provider-error over 24 hours, `unpaid` over 7 days) and
 operations that cannot be sent (`queued` over 6 hours: the gerai lost its key or is inactive):
 any non-zero value needs an admin to check the Mengantar app (runbook in RELEASE.md).
+
+`demo_cleanup` (T-030, hourly `0 * * * *` cron in `custom-worker.ts`): calls `cleanup_expired_demos` via the machine identity and emits `{"event":"demo_cleanup","deletedTenants":...,"deletedUsers":...,"failed":...}` (counts only, no tenant/user identifiers). Without machine bindings it is covered by the `disabled: true` scheduled log; a non-zero `failed: true` indicates the machine RPC call failed.
 
 Add only actual stable non-secret endpoints after they exist, using the native
 release-check format:

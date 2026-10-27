@@ -35,7 +35,23 @@ test("operators see the connection state but cannot change it", async ({ page })
   await signIn(page, "operator-a@geraiexpress.test");
   await page.goto("/pengaturan");
   await expect(page.getByText("Akun Mengantar", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Pendaftaran akun Mengantar baru (Partner)" })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Akun Mengantar (kunci API sendiri)" })).toHaveCount(0);
+});
+
+test("Partner API onboarding card enforces owner consent and operators cannot see it (T-027)", async ({ page }) => {
+  await signIn(page, "owner-a@geraiexpress.test");
+  await page.goto("/pengaturan");
+  const section = page.getByRole("region", { name: "Pendaftaran akun Mengantar baru (Partner)" });
+  await expect(section).toBeVisible();
+  await expect(section.getByText("Lupa Password")).toBeVisible();
+
+  await section.getByLabel("Nama pemilik akun Mengantar").fill("Pemilik Gerai Uji A");
+  await section.getByLabel("Email pemilik").fill("pemilik-uji-a@geraiexpress.test");
+  await section.getByLabel("No. HP pemilik (08...)").fill("081234567890");
+  await section.getByRole("button", { name: "Daftarkan akun Mengantar baru" }).click();
+  await expect(section.getByRole("alert")).toHaveText(/Centang persetujuan kepemilikan akun dan Ketentuan\/Privasi Mengantar/);
+  await expectNoHorizontalOverflow(page);
 });
 
 test("the Super Admin integration page shows readiness without values and sets the Partner ID", async ({ page }) => {
