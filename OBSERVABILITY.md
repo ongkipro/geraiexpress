@@ -1,6 +1,6 @@
 # GeraiExpress — Runtime Observability Record
 
-Updated: 2026-10-14
+Updated: 2026-10-27
 Status: NOT_CONFIGURED
 
 No deployed runtime, sink or production probe exists. Locally, the Worker build exposes
@@ -22,10 +22,11 @@ of `action:status` counts (`dispatch`, `reconcile`, `payment` × `recorded`, `no
 means the database or machine identity is failing), a steadily non-zero `reconcile:inconclusive`
 (Mengantar unreachable or a rotated key blocking lookups), and `dispatch:not_claimed` that does
 not fall (a seller stuck busy). Without the machine bindings it logs `disabled: true`; a
-failing due-list query logs `failed: true`. Interactive steps log `dispatch_action` (step,
-status, outcome/reason). A `price_mismatch` shipment event (and `priceMismatch`
-in `dispatch_action`, a count in `dispatch_sweep`) means Mengantar's price for the order differs
-from the customer charge; for non-COD orders both are the normal tariff, so any mismatch is real.
+failing due-list query logs `failed: true`. Interactive steps log `dispatch_action` (step:
+`dispatch`, `reconcile`, `payment`, or `pay_batch`; status; outcome/reason). A `price_mismatch`
+shipment event (and `priceMismatch` in `dispatch_action`, a count in `dispatch_sweep`) means
+Mengantar's price for the order differs from `customer_charge_idr` (normal tariff for non-COD,
+normal tariff + `cod_fee_idr` for two-pass COD orders — T-025).
 It is reported once per price (an unpaid order that is paid later does not report it again).
 `priceUnknown` (and its count in `dispatch_sweep`) means the order's price was unreadable, so it
 was not compared; a steady rise means Mengantar's response changed.

@@ -1,14 +1,14 @@
 {
   "activeRun": null,
   "lastRun": {
-    "finishedAt": "2026-10-15T07:48:44Z",
+    "finishedAt": "2026-10-27T13:47:23Z",
     "result": "PASS",
-    "runId": "RUN-20261015T065820Z-867f4eb1"
+    "runId": "RUN-20261027T122627Z-42dca1d4"
   },
-  "observedHead": "80a92f070a87339a6938bbb2617220b54d1c3a94",
-  "observedState": "REVIEWING",
+  "observedHead": "d85fa92d022af81101ebce54f338a6dac9099a27",
+  "observedState": "AWAITING_DEPLOY_APPROVAL",
   "project": "geraiexpress",
   "schemaVersion": 1,
   "statusAuthority": "STATUS.md",
-  "updatedAt": "2026-10-15T07:48:44Z"
+  "updatedAt": "2026-10-27T13:47:24Z"
 }

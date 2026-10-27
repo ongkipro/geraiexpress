@@ -21,8 +21,7 @@ A synthetic-data demo preview runs at https://geraiexpress-preview.ongki.workers
 - [Architecture design](docs/spec/04-SYSTEM-ARCHITECTURE.md): target system boundaries.
 - [Current status](STATUS.md), [decisions](DECISIONS.md), [work queue](TASKS.md)
   and [build history](BUILD-LOG.md): repository handoff and actual evidence.
-- [Mengantar Partner study](docs/research/geraiexpress-mengantar-partner-api.md)
-  and [reference pricing study](docs/research/geraiexpress-geraicuan-pricing-review.md).
+- [Mengantar Partner study](docs/research/geraiexpress-mengantar-partner-api.md).
 
 ## Run locally
 

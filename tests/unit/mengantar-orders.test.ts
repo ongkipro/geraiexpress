@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { createMengantarPublicClient, MengantarError, type CreateOrderRequest } from "../../src/lib/mengantar/public-api";
+import { createMengantarPublicClient, estimateTwoPassCod, InvalidOrderRequest, MengantarError, type CreateOrderRequest } from "../../src/lib/mengantar/public-api";
 
 // Sanitized sandbox responses (T-020/T-021, 2026-10-14): phones, emails and user records removed.
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`fixtures/mengantar/${name}`, import.meta.url), "utf8"));
@@ -218,5 +218,105 @@ describe("order reconciliation (T-021)", () => {
   it("refuses an unreadable order list instead of guessing", async () => {
     const { api } = clientFor({ body: { success: true, data: [{ ORDER_ID: "261014AAAAAA", status: "active" }] } });
     expect((await codeOf(api.findOrdersByReference({ reference: REF, courier: "JT", notBefore: new Date() }))).code).toBe("malformed");
+  });
+});
+
+describe("COD two-pass quoting and discontinued couriers (T-025)", () => {
+  it("computes two-pass COD fees per distinct tariff without double-applying the COD fee", async () => {
+    const seenCodAmounts: number[] = [];
+    const results = await estimateTwoPassCod(
+      async (input) => {
+        seenCodAmounts.push(input.codAmount!);
+        // Pass 1: codAmount = 50000 (goodsValueIdr). JNE and SiCepat share tariff 40000; JT has tariff 93000.
+        if (input.codAmount === 50000) {
+          return [
+            { courier: "JNE", tariff: 40000, codFee: 1750, netShipping: 32000, etaText: "1-2" },
+            { courier: "SiCepat", tariff: 40000, codFee: 1750, netShipping: 31000, etaText: "1-2" },
+            { courier: "JT", tariff: 93000, codFee: 1750, netShipping: 65100, etaText: "2-4" },
+          ];
+        }
+        // Pass 2 for tariff 40000: codAmount = 50000 + 40000 = 90000 -> codFee = 3150
+        if (input.codAmount === 90000) {
+          return [
+            { courier: "JNE", tariff: 40000, codFee: 3150, netShipping: 32000, etaText: "1-2" },
+            { courier: "SiCepat", tariff: 40000, codFee: 3150, netShipping: 31000, etaText: "1-2" },
+            { courier: "JT", tariff: 93000, codFee: 3150, netShipping: 65100, etaText: "2-4" },
+          ];
+        }
+        // Pass 2 for tariff 93000: codAmount = 50000 + 93000 = 143000 -> codFee = 4994
+        return [
+          { courier: "JNE", tariff: 40000, codFee: 4994, netShipping: 32000, etaText: "1-2" },
+          { courier: "SiCepat", tariff: 40000, codFee: 4994, netShipping: 31000, etaText: "1-2" },
+          { courier: "JT", tariff: 93000, codFee: 4994, netShipping: 65100, etaText: "2-4" },
+        ];
+      },
+      {
+        originAreaId: "5fc63201f8f44b34aa4c4e24",
+        destinationAreaId: "5fc63169f8f44b34aa4c2ee1",
+        weightGrams: 1000,
+        goodsValueIdr: 50000,
+      },
+    );
+    // 1 pass-1 call + 2 distinct tariff pass-2 calls (90000 and 143000)
+    expect(seenCodAmounts).toEqual([50000, 90000, 143000]);
+    expect(results).toEqual([
+      { courier: "JNE", tariff: 40000, codFee: 3150, netShipping: 32000, etaText: "1-2" },
+      { courier: "SiCepat", tariff: 40000, codFee: 3150, netShipping: 31000, etaText: "1-2" },
+      { courier: "JT", tariff: 93000, codFee: 4994, netShipping: 65100, etaText: "2-4" },
+    ]);
+    // For JT: customer_charge = 93000 + 4994 = 97994; recipient COD = 50000 + 97994 = 147994 (fee applied once).
+    const jt = results.find((r) => r.courier === "JT")!;
+    const customerCharge = jt.tariff + jt.codFee;
+    const recipientCodAmount = 50000 + customerCharge;
+    expect(customerCharge).toBe(97994);
+    expect(recipientCodAmount).toBe(147994);
+  });
+
+  it("refuses COD quoting when goodsValueIdr is below Rp1.000 and tags Ninja as courier_discontinued", async () => {
+    await expect(
+      estimateTwoPassCod(async () => [], {
+        originAreaId: "5fc63201f8f44b34aa4c4e24",
+        destinationAreaId: "5fc63169f8f44b34aa4c2ee1",
+        weightGrams: 1000,
+        goodsValueIdr: 500,
+      }),
+    ).rejects.toMatchObject({ reason: "cod_goods_value_required" });
+
+    const { api } = clientFor({ body: {} });
+    const ninjaErr = await api.createOrder({ ...request, courier: "Ninja" }).then(() => null, (e) => e);
+    expect(ninjaErr).toBeInstanceOf(InvalidOrderRequest);
+    expect((ninjaErr as InvalidOrderRequest).reason).toBe("courier_discontinued");
+  });
+});
+
+describe("batch listing and pay-unpaid (T-026)", () => {
+  it("lists all active orders belonging to a batch and pays an unpaid batch via POST /order/pay-unpaid", async () => {
+    const batchRows = [
+      { ORDER_ID: "261014H0JAFR", batch: "26101416827JYE", destinationMark: REF, estimatedPrice: 111600, status: "active", isPaid: false, cnote_no: null, createdAt: "2026-10-14T09:12:10Z" },
+      { ORDER_ID: "261014OTHER1", batch: "26101499999999", destinationMark: "GX261014-OTHER1", estimatedPrice: 40000, status: "active", isPaid: true, cnote_no: "JO111", createdAt: "2026-10-14T09:10:00Z" },
+    ];
+    const { api, calls } = clientFor(
+      { body: { success: true, data: batchRows } },
+      { body: { success: true, data: [{ orderId: "261014H0JAFR", cnote_no: "JO6948371799", isPaid: true }] } },
+    );
+    const listed = await api.listOrdersByBatch("26101416827JYE", "JT");
+    expect(listed).toEqual([
+      { orderId: "261014H0JAFR", batch: "26101416827JYE", price: 111600, reference: REF, trackingNumber: null, status: "active", paid: false, createdAt: "2026-10-14T09:12:10Z" },
+    ]);
+    const paid = await api.payUnpaidBatch("26101416827JYE", "JT");
+    expect(paid).toEqual({ paidCount: 1, awbs: ["JO6948371799"] });
+    expect(calls[1].url).toBe(`https://sandbox.mengantar.com/api/public/${KEY}/order/pay-unpaid`);
+    expect(calls[1].init.method).toBe("POST");
+    expect(JSON.parse(String(calls[1].init.body))).toEqual({ batch_id: "26101416827JYE", courier: "JT" });
+  });
+
+  it("refuses invalid batchIds or couriers locally and preserves providerMessage on 400 pay-unpaid refusal", async () => {
+    const { api, calls } = clientFor({ status: 400, body: { success: false, message: "Saldo tidak mencukupi" } });
+    await expect(api.payUnpaidBatch("../bad", "JT")).rejects.toThrow("Invalid order request");
+    await expect(api.payUnpaidBatch("26101416827JYE", "Ninja")).rejects.toThrow("Invalid order request");
+    expect(calls).toHaveLength(0);
+
+    const err = await codeOf(api.payUnpaidBatch("26101416827JYE", "JT"));
+    expect([err.code, err.providerMessage]).toEqual(["rejected", "Saldo tidak mencukupi"]);
   });
 });

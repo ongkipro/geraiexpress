@@ -8,7 +8,7 @@ import { friendlyError } from "@/lib/errors";
 import { DISPATCH_INFO, FAILURE_REASON, courierName, etaLabel, formatIdr, formatWeight, formatWib } from "@/lib/format";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/workspace";
-import { checkPaymentAction, closeFailedAction, dispatchQueuedAction, reconcileAction, reopenAction, requestLabelAction } from "@/modules/shipments/actions";
+import { checkPaymentAction, closeFailedAction, dispatchQueuedAction, payUnpaidBatchAction, reconcileAction, reopenAction, requestLabelAction } from "@/modules/shipments/actions";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DRAFT_FIELDS, type DraftValues } from "@/modules/shipments/draft";
@@ -50,12 +50,30 @@ const RESULT_TEXT: Record<string, string> = {
   quote_stale: "Pesanan terlalu lama di antrean sehingga ongkirnya kedaluwarsa. Tidak ada yang dikirim; buka draf lagi dan cek ongkir ulang.",
 };
 
+type BatchReview = {
+  batch: string;
+  courier: string;
+  batch_digest: string;
+  member_count: number;
+  total_customer_charge_idr: number;
+  members: {
+    operation_id: string;
+    shipment_id: string;
+    reference: string;
+    provider_order_id: string;
+    recipient_name: string | null;
+    customer_charge_idr: number | null;
+    is_cod: boolean;
+    cod_amount_idr: number | null;
+  }[];
+};
+
 export default async function ShipmentPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ galat?: string; terbit?: string; rekonsiliasi?: string; hasil?: string; info?: string }>;
+  searchParams: Promise<{ galat?: string; detail?: string; terbit?: string; rekonsiliasi?: string; hasil?: string; info?: string }>;
 }) {
   const ws = await requireWorkspace();
   const { id } = await params;
@@ -73,9 +91,18 @@ export default async function ShipmentPage({
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-3xl tracking-tight tabular">{s.reference}</h1>
         <StatusBadge state={s.submission_state} />
+        {s.is_cod ? (
+          <span className="inline-flex items-center rounded-sm bg-secondary px-2.5 py-0.5 text-xs font-semibold text-foreground ring-1 ring-border">
+            COD
+          </span>
+        ) : null}
       </div>
       {flags.galat ? (
-        <p role="alert" className="rounded-md bg-card p-4 ring-1 ring-foreground"><span aria-hidden="true">⚠ </span>{friendlyError({ message: flags.galat })}</p>
+        <p role="alert" className="rounded-md bg-card p-4 ring-1 ring-foreground">
+          <span aria-hidden="true">⚠ </span>
+          {friendlyError({ message: flags.galat })}
+          {flags.detail ? ` (${flags.detail})` : ""}
+        </p>
       ) : null}
     </div>
   );
@@ -86,9 +113,9 @@ export default async function ShipmentPage({
         .select("id, name, phone, is_sender, is_recipient, addresses:contact_addresses(id, label, address_line, area, area_id, postal_code, is_primary, archived_at)")
         .eq("tenant_id", ws.tenant.id).is("archived_at", null).order("name").limit(300),
       s.submission_state === "estimated"
-        ? supabase.from("shipment_quotes").select("id, courier, service, normal_tariff_idr, eta_days, is_simulated")
+        ? supabase.from("shipment_quotes").select("id, courier, service, normal_tariff_idr, cod_supported, cod_fee_idr, customer_charge_idr, eta_days, is_simulated")
             .eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id).eq("shipment_revision", s.revision)
-            .gt("expires_at", new Date().toISOString()).order("normal_tariff_idr")
+            .gt("expires_at", new Date().toISOString()).order("customer_charge_idr")
         : Promise.resolve({ data: [] as QuoteOption[] }),
     ]);
     const initial = Object.fromEntries(DRAFT_FIELDS.map((f) => [f, s[f] == null ? "" : String(s[f])])) as DraftValues;
@@ -118,16 +145,20 @@ export default async function ShipmentPage({
     );
   }
 
-  const [{ data: quote }, { data: events }, { data: label }, { data: op }] = await Promise.all([
+  const real = !s.is_simulated;
+  const [{ data: quote }, { data: events }, { data: label }, { data: op }, { data: batchReviewData }] = await Promise.all([
     s.selected_quote_id
       ? supabase.from("shipment_quotes").select("courier, service, eta_days, is_simulated").eq("tenant_id", ws.tenant.id).eq("id", s.selected_quote_id).maybeSingle()
       : Promise.resolve({ data: null }),
     supabase.from("shipment_events").select("id, kind, detail, created_at").eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id).order("id"),
     supabase.from("label_jobs").select("id, state").eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id).eq("state", "completed").limit(1).maybeSingle(),
-    supabase.from("provider_operations").select("state, result_code, provider_order_id, is_simulated")
+    supabase.from("provider_operations").select("state, result_code, provider_order_id, provider_batch, provider_error_detail, is_simulated")
       .eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id).eq("kind", "create_order").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    real && s.submission_state === "awaiting_payment" && ws.role === "tenant_admin"
+      ? supabase.rpc("review_unpaid_batch", { p_shipment: s.id })
+      : Promise.resolve({ data: null }),
   ]);
-  const real = !s.is_simulated;
+  const batchReview = (batchReviewData ?? null) as BatchReview | null;
   const retryable = s.submission_state === "failed" && !!op && !op.is_simulated
     && REOPENABLE.includes(op.result_code ?? "");
   const shipmentForm = (action: (f: FormData) => Promise<void>, label: string, variant?: "outline") => (
@@ -142,6 +173,11 @@ export default async function ShipmentPage({
     ...(real && op?.provider_order_id ? [["ID pesanan Mengantar", <span className="tabular" key="o">{op.provider_order_id}</span>] as [string, React.ReactNode]] : []),
     ["Layanan", quote ? `${courierName(quote.courier)} ${quote.service} · ${etaLabel(quote.eta_days)}` : "—"],
     ["Ongkir pelanggan", <span className="tabular" key="c">{formatIdr(s.customer_charge_idr)}</span>],
+    ...(s.is_cod ? ([
+      ["Metode pembayaran", "COD (Bayar di Tempat)"],
+      ["Nilai barang", <span className="tabular" key="gv">{formatIdr(s.goods_value_idr)}</span>],
+      ["Tagihan COD ke penerima", <span className="tabular font-semibold" key="cod">{formatIdr(s.cod_amount_idr)}</span>],
+    ] as [string, React.ReactNode][]) : []),
     ["Pengirim", `${s.sender_name ?? "—"} · ${s.sender_phone ?? "—"}`],
     ["Penerima", `${s.recipient_name ?? "—"} · ${s.recipient_phone ?? "—"}`],
     ["Alamat tujuan", [s.recipient_address, s.recipient_area, s.recipient_postal_code].filter(Boolean).join(", ") || "—"],
@@ -166,10 +202,45 @@ export default async function ShipmentPage({
             {shipmentForm(dispatchQueuedAction, "Kirim sekarang")}
           </>
         ) : real && s.submission_state === "awaiting_payment" ? (
-          <>
-            <p>Pesanan Mengantar sudah dibuat, tetapi saldo Mengantar belum cukup sehingga resi belum terbit. Isi saldo dan bayar pesanan ini di aplikasi Mengantar, lalu periksa pembayarannya. Jangan buat pengiriman baru untuk paket ini.</p>
-            {shipmentForm(checkPaymentAction, "Periksa pembayaran")}
-          </>
+          <div className="flex flex-col gap-4">
+            <p>Pesanan Mengantar sudah dibuat, tetapi saldo Mengantar belum cukup sehingga resi belum terbit. Isi saldo terlebih dahulu; Anda dapat membayar batch dari sini (khusus admin) atau membayarnya di aplikasi Mengantar lalu memeriksa pembayarannya. Jangan buat pengiriman baru untuk paket ini.</p>
+            <div>{shipmentForm(checkPaymentAction, "Periksa pembayaran", "outline")}</div>
+            {ws.role === "tenant_admin" && batchReview ? (
+              <div className="flex flex-col gap-3 rounded-md bg-secondary/40 p-4 ring-1 ring-border" data-testid="batch-payment-review">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-base font-semibold">
+                    Tinjau Batch Mengantar <span className="tabular">{batchReview.batch}</span> ({courierName(batchReview.courier)})
+                  </h3>
+                  <span className="text-xs text-muted-foreground">
+                    {batchReview.member_count} pesanan · Total ongkir pelanggan <span className="tabular font-semibold">{formatIdr(batchReview.total_customer_charge_idr)}</span>
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Perintah bayar Mengantar berlaku untuk seluruh pesanan dalam batch ini sekaligus. Pastikan semua pesanan di bawah sudah benar sebelum memotong saldo Mengantar:
+                </p>
+                <ul className="divide-y divide-border rounded-md bg-card ring-1 ring-border">
+                  {batchReview.members.map((m) => (
+                    <li key={m.operation_id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="tabular font-semibold">{m.reference}</span>
+                        <span className="text-muted-foreground">({m.provider_order_id})</span>
+                        <span>· {m.recipient_name ?? "—"}</span>
+                        {m.is_cod ? <span className="rounded-sm bg-secondary px-1.5 py-0.5 text-xs font-semibold">COD</span> : null}
+                      </span>
+                      <span className="tabular font-medium">{formatIdr(m.customer_charge_idr)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <form action={payUnpaidBatchAction} className="flex flex-wrap items-center gap-3">
+                  <input type="hidden" name="shipment_id" value={s.id} />
+                  <input type="hidden" name="batch_digest" value={batchReview.batch_digest} />
+                  <Button type="submit">Bayar batch dari saldo Mengantar</Button>
+                </form>
+              </div>
+            ) : ws.role !== "tenant_admin" ? (
+              <p className="text-sm text-muted-foreground">Minta admin gerai untuk membayar batch Mengantar atau memeriksa pembayarannya.</p>
+            ) : null}
+          </div>
         ) : s.submission_state === "unknown" || s.submission_state === "queued" || s.submission_state === "in_flight" ? (
           <>
             <p>Hasil pengiriman ke kurir belum pasti. Jangan buat pengiriman baru untuk paket ini — periksa operasi aslinya terlebih dahulu.</p>
@@ -195,6 +266,11 @@ export default async function ShipmentPage({
         ) : retryable ? (
           <>
             <p>{FAILURE_REASON[op!.result_code!]} Tidak ada pesanan yang dibuat, jadi Anda bisa memperbaiki data lalu mengonfirmasi lagi.</p>
+            {op?.provider_error_detail ? (
+              <p className="rounded-md bg-secondary/60 p-3 text-sm text-foreground" data-testid="provider-error-detail">
+                <span className="font-semibold">Keterangan Mengantar:</span> {op.provider_error_detail}
+              </p>
+            ) : null}
             {shipmentForm(reopenAction, "Ubah & coba lagi")}
           </>
         ) : real && op ? (
@@ -203,6 +279,11 @@ export default async function ShipmentPage({
               {FAILURE_REASON[op.result_code ?? ""] ?? "Pengiriman gagal."} Mengantar mungkin masih mencatat percobaan ini, jadi jangan buat pengiriman baru sebelum admin gerai memeriksanya.
               {["NOT_CREATED", "PROVIDER_ERROR_ITEM"].includes(op.result_code ?? "") ? " Sistem memeriksanya ulang otomatis selama 24 jam." : ""}
             </p>
+            {op.provider_error_detail ? (
+              <p className="rounded-md bg-secondary/60 p-3 text-sm text-foreground" data-testid="provider-error-detail">
+                <span className="font-semibold">Keterangan Mengantar:</span> {op.provider_error_detail}
+              </p>
+            ) : null}
             {ws.role === "tenant_admin" && ["NOT_CREATED", "PROVIDER_ERROR_ITEM"].includes(op.result_code ?? "") ? (
               <div className="flex flex-col gap-4">
                 {shipmentForm(reconcileAction, "Periksa lagi di Mengantar", "outline")}

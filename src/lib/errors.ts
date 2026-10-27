@@ -51,6 +51,23 @@ const MESSAGES: Record<string, string> = {
   mengantar_refused: "Mengantar menolak permintaan ini. Periksa wilayah, berat dan alamat pickup.",
   pickup_not_set: "Alamat pickup Mengantar outlet ini belum dipilih. Admin gerai bisa memilihnya di Pengaturan.",
   pickup_not_found: "Alamat pickup itu tidak ditemukan di akun Mengantar gerai ini. Muat ulang lalu pilih lagi.",
+  // T-025 COD & T-026 batch payment recovery
+  cod_not_supported: "Layanan kurir ini tidak mendukung pengiriman COD ke wilayah tujuan.",
+  cod_goods_value_required: "Isi nilai barang minimal Rp1.000 untuk pengiriman COD.",
+  batch_not_payable: "Batch pembayaran ini belum siap atau tidak memiliki pesanan yang menunggu pembayaran.",
+  batch_scope_mismatch: "Batch Mengantar ini memuat pesanan di luar gerai ini atau data yang belum dikenali. Periksa langsung di aplikasi Mengantar.",
+  batch_digest_mismatch: "Rincian batch pembayaran berubah sejak Anda meninjaunya. Muat ulang lalu tinjau kembali.",
+  courier_discontinued: "Layanan kurir ini sudah dihentikan dan tidak dapat dibayar melalui API. Hubungi dukungan Mengantar.",
+  // T-027 Partner seller onboarding
+  consent_required: "Centang persetujuan kepemilikan akun dan Ketentuan/Privasi Mengantar terlebih dahulu.",
+  partner_not_configured: "Pendaftaran Partner Mengantar di server belum disiapkan. Gunakan opsi kunci API sendiri (BYOK) atau hubungi admin.",
+  partner_email_registered: "Email ini sudah terdaftar di Mengantar. Masuk ke Mengantar untuk menyalin kunci API, lalu hubungkan lewat formulir Kunci API sendiri di bawah.",
+  partner_key_pending: "Akun Mengantar berhasil dibuat, tetapi kunci API sedang disiapkan. Klik Ambil Kunci API untuk melanjutkan.",
+  partner_rate_limited: "Batas permintaan pendaftaran Mengantar tercapai. Tunggu beberapa saat lalu coba lagi.",
+  partner_restricted: "Akun penjual atau akses Partner dibatasi oleh Mengantar. Hubungi dukungan Mengantar.",
+  already_partner_connected: "Gerai ini sudah memiliki akun penjual Mengantar yang terdaftar.",
+  // T-028 Contact archive
+  contact_already_archived: "Kontak ini sudah diarsipkan.",
 };
 
 export function friendlyError(error: { message?: string; code?: string } | null | undefined): string {

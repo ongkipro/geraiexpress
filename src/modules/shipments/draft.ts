@@ -4,12 +4,12 @@
 export const DRAFT_FIELDS = [
   "sender_name", "sender_phone", "recipient_name", "recipient_phone", "recipient_address",
   "recipient_area", "recipient_area_id", "recipient_postal_code", "item_description", "weight_grams", "length_cm",
-  "width_cm", "height_cm", "goods_value_idr",
+  "width_cm", "height_cm", "goods_value_idr", "is_cod",
 ] as const;
 
 export type DraftField = (typeof DRAFT_FIELDS)[number];
 export type DraftValues = Record<DraftField, string>;
-export type DraftUpdate = Partial<Record<DraftField, string | number | null>>;
+export type DraftUpdate = Partial<Record<DraftField, string | number | boolean | null>>;
 
 const PHONE = /^\+?[0-9]{8,15}$/;
 const POSTAL = /^[0-9]{5}$/;
@@ -72,6 +72,12 @@ export function parseDraft(form: FormData): { values: DraftValues; update: Draft
     if (n === "invalid") errors[field] = message;
     else update[field] = n;
   }
+  const isCod = values.is_cod === "true" || values.is_cod === "on" || values.is_cod === "1";
+  values.is_cod = isCod ? "true" : "false";
+  update.is_cod = isCod;
+  if (isCod && typeof update.goods_value_idr === "number" && update.goods_value_idr < 1000) {
+    errors.goods_value_idr = "Untuk pengiriman COD, nilai barang minimal Rp1.000.";
+  }
   return { values, update, errors };
 }
 
@@ -81,9 +87,12 @@ export const REQUIRED_FOR_QUOTE: DraftField[] = [
   "recipient_area", "item_description", "weight_grams",
 ];
 
-// A live (Mengantar) quote also needs the recipient's provider area.
+// A live (Mengantar) quote also needs the recipient's provider area; COD needs goods_value_idr >= 1000.
 export function missingForQuote(update: DraftUpdate, live = false): DraftField[] {
   const missing = REQUIRED_FOR_QUOTE.filter((f) => update[f] == null || update[f] === "");
   if (live && !update.recipient_area_id && !missing.includes("recipient_area")) missing.push("recipient_area");
+  if (update.is_cod === true && (typeof update.goods_value_idr !== "number" || update.goods_value_idr < 1000) && !missing.includes("goods_value_idr")) {
+    missing.push("goods_value_idr");
+  }
   return missing;
 }

@@ -24,7 +24,17 @@ export type ContactOption = {
   is_recipient: boolean;
   addresses: { id: string; label: string | null; address_line: string; area: string; area_id: string | null; postal_code: string | null }[];
 };
-export type QuoteOption = { id: string; courier: string; service: string; normal_tariff_idr: number; eta_days: string; is_simulated: boolean };
+export type QuoteOption = {
+  id: string;
+  courier: string;
+  service: string;
+  normal_tariff_idr: number;
+  cod_supported?: boolean;
+  cod_fee_idr?: number;
+  customer_charge_idr?: number;
+  eta_days: string;
+  is_simulated: boolean;
+};
 
 type Props = {
   shipmentId: string;
@@ -223,6 +233,21 @@ export function IntakeForm(props: Props) {
             {field("height_cm", "Tinggi (cm)", { inputMode: "numeric" })}
             {field("goods_value_idr", "Nilai barang (Rp)", { inputMode: "numeric" })}
           </div>
+          <input type="hidden" name="is_cod" value={values.is_cod === "true" ? "true" : "false"} />
+          <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-md bg-secondary/40 p-3">
+            <Checkbox
+              id="f-is_cod"
+              checked={values.is_cod === "true"}
+              onCheckedChange={(checked) => set("is_cod", checked === true ? "true" : "false")}
+              className="mt-1"
+            />
+            <span className="flex flex-col gap-1 text-sm">
+              <span className="font-medium text-foreground">Pengiriman COD (Bayar di Tempat)</span>
+              <span className="text-muted-foreground">
+                Kurir menagih penerima saat paket tiba (nilai barang + ongkir + biaya COD). Nilai barang wajib diisi minimal Rp1.000.
+              </span>
+            </span>
+          </label>
         </fieldset>
 
         <div className="flex flex-wrap gap-3">
@@ -244,20 +269,29 @@ export function IntakeForm(props: Props) {
           <fieldset disabled={!quotesCurrent} className="flex flex-col gap-3">
             <legend className="sr-only">Pilih layanan</legend>
             <div className="grid gap-3 md:grid-cols-3">
-              {props.quotes.map((q) => (
-                <label key={q.id}
-                  className={cn("flex min-h-11 cursor-pointer flex-col gap-1 rounded-lg bg-card p-4 ring-1 ring-border has-focus-visible:outline-2 has-focus-visible:outline-ring",
-                    q.id === quoteId && "ring-2 ring-ring")}>
-                  <input type="radio" name="quote" value={q.id} checked={q.id === quoteId} onChange={() => setQuoteId(q.id)} className="sr-only" />
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">{q.is_simulated ? q.service : courierName(q.courier)}</span>
-                    {q.id === quoteId ? <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" aria-hidden="true" />Dipilih</span> : null}
-                  </span>
-                  <span className="text-sm text-muted-foreground">{q.is_simulated ? q.courier : q.service} · {etaLabel(q.eta_days)}</span>
-                  <span className="tabular text-xl">{formatIdr(q.normal_tariff_idr)}</span>
-                  {q.is_simulated ? <span className="text-sm text-muted-foreground">Harga contoh (simulasi)</span> : null}
-                </label>
-              ))}
+              {props.quotes.map((q) => {
+                const codFee = q.cod_fee_idr ?? 0;
+                const customerCharge = q.customer_charge_idr ?? (q.normal_tariff_idr + codFee);
+                return (
+                  <label key={q.id}
+                    className={cn("flex min-h-11 cursor-pointer flex-col gap-1 rounded-lg bg-card p-4 ring-1 ring-border has-focus-visible:outline-2 has-focus-visible:outline-ring",
+                      q.id === quoteId && "ring-2 ring-ring")}>
+                    <input type="radio" name="quote" value={q.id} checked={q.id === quoteId} onChange={() => setQuoteId(q.id)} className="sr-only" />
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="font-semibold">{q.is_simulated ? q.service : courierName(q.courier)}</span>
+                      {q.id === quoteId ? <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" aria-hidden="true" />Dipilih</span> : null}
+                    </span>
+                    <span className="text-sm text-muted-foreground">{q.is_simulated ? q.courier : q.service} · {etaLabel(q.eta_days)}</span>
+                    <span className="tabular text-xl">{formatIdr(customerCharge)}</span>
+                    {codFee > 0 ? (
+                      <span className="tabular text-xs text-muted-foreground">
+                        Ongkir {formatIdr(q.normal_tariff_idr)} + biaya COD {formatIdr(codFee)}
+                      </span>
+                    ) : null}
+                    {q.is_simulated ? <span className="text-sm text-muted-foreground">Harga contoh (simulasi)</span> : null}
+                  </label>
+                );
+              })}
             </div>
           </fieldset>
         ) : null}
@@ -272,6 +306,10 @@ export function IntakeForm(props: Props) {
 function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues }) {
   const [state, action, pending] = useActionState<ConfirmState, FormData>(confirmShipmentAction, {});
   const v = props.values;
+  const isCod = v.is_cod === "true";
+  const codFee = props.quote.cod_fee_idr ?? 0;
+  const customerCharge = props.quote.customer_charge_idr ?? (props.quote.normal_tariff_idr + codFee);
+  const goodsValue = Number((v.goods_value_idr || "0").replace(/\./g, "")) || 0;
   const rows: [string, string][] = [
     ["Pengirim", `${v.sender_name} · ${v.sender_phone}`],
     ["Penerima", `${v.recipient_name} · ${v.recipient_phone}`],
@@ -279,6 +317,11 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
     ["Pickup", props.outlet.name],
     ["Paket", `${v.item_description} · ${v.weight_grams} g`],
     ["Layanan", `${courierName(props.quote.courier)} ${props.quote.service} (${etaLabel(props.quote.eta_days)})`],
+    ...(isCod ? ([
+      ["Metode", "COD (Bayar di Tempat)"],
+      ["Nilai barang", formatIdr(goodsValue)],
+      ["Ongkir + biaya COD", `${formatIdr(props.quote.normal_tariff_idr)} + ${formatIdr(codFee)}`],
+    ] as [string, string][]) : []),
   ];
   return (
     <Dialog>
@@ -302,7 +345,13 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
             </div>
           ))}
           <dt className="font-semibold">Ongkir pelanggan</dt>
-          <dd className="tabular font-semibold">{formatIdr(props.quote.normal_tariff_idr)}</dd>
+          <dd className="tabular font-semibold">{formatIdr(customerCharge)}</dd>
+          {isCod ? (
+            <>
+              <dt className="font-semibold">Tagihan COD ke penerima</dt>
+              <dd className="tabular font-semibold">{formatIdr(goodsValue + customerCharge)}</dd>
+            </>
+          ) : null}
         </dl>
         {state.error ? <p role="alert" className="text-sm"><span aria-hidden="true">⚠ </span>{state.error}</p> : null}
         <form action={action}>

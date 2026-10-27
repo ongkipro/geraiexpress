@@ -28,6 +28,7 @@ const COURIERS: Record<string, string> = {
   spx: "spx",
   pos: "pos",
 };
+export const OFFERED_COURIERS = new Set(Object.values(COURIERS));
 
 // Couriers seen refusing drop-off orders (sandbox, T-020: anteraja). GeraiExpress dispatches
 // drop-off only, so these are not offered.
@@ -56,7 +57,7 @@ export class MengantarError extends Error {
 
 // The request was refused locally, before anything was sent.
 export class InvalidOrderRequest extends Error {
-  constructor() {
+  constructor(readonly reason: string = "invalid_order_request") {
     super("Invalid order request");
     this.name = "InvalidOrderRequest";
   }
@@ -218,11 +219,65 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
     },
 
     // Reconciliation by ORDER_ID (exact, with history at the provider).
-    async findOrder(orderId: string): Promise<ProviderOrder | null> {
+    async findOrder(orderId: string, courier?: string): Promise<ProviderOrder | null> {
       if (!ORDER_ID.test(orderId)) throw new Error("Invalid order id");
-      const orders = (await listOrders({ order_id: orderId })).filter((o) => o.orderId === orderId);
+      if (courier !== undefined && !OFFERED_COURIERS.has(courier)) throw new Error("Invalid courier");
+      const params: Record<string, string> = { order_id: orderId, ...(courier ? { courier } : {}) };
+      const orders = (await listOrders(params)).filter((o) => o.orderId === orderId);
       if (orders.length > 1) throw new MengantarError("malformed");
       return orders[0] ?? null;
+    },
+
+    // Lists all orders in a Mengantar batch for full-batch scope verification before payment (TD-3, T-026).
+    async listOrdersByBatch(batch: string, courier: string): Promise<ProviderOrder[]> {
+      if (typeof courier === "string" && courier.trim().toLowerCase() === "ninja") {
+        throw new InvalidOrderRequest("courier_discontinued");
+      }
+      if (!BATCH_ID.test(batch) || !OFFERED_COURIERS.has(courier)) {
+        throw new InvalidOrderRequest();
+      }
+      const rows = await listOrders({ batch, courier, page: "1", size: "100" });
+      return rows.filter((o) => o.batch === batch && o.status !== "error");
+    },
+
+    // Pays an unpaid Mengantar batch from the seller's wallet balance (TD-3, T-026).
+    // Array order in `awbs` does not prove shipment-to-AWB mapping; callers reconcile each order via findOrder.
+    async payUnpaidBatch(batchId: string, courier: string): Promise<PayUnpaidResult> {
+      if (typeof courier === "string" && courier.trim().toLowerCase() === "ninja") {
+        throw new InvalidOrderRequest("courier_discontinued");
+      }
+      if (!BATCH_ID.test(batchId) || !OFFERED_COURIERS.has(courier)) {
+        throw new InvalidOrderRequest();
+      }
+      const { status, payload } = await send("/order/pay-unpaid", {}, { batch_id: batchId, courier });
+      if (status === 400 && payload.success === false && !Array.isArray(payload.data)) {
+        throw new MengantarError("rejected", text(payload.message).slice(0, 200) || null);
+      }
+      if (status !== 200 || payload.success !== true) {
+        throw new MengantarError("unknown_outcome");
+      }
+      const d = isRecord(payload.data) ? payload.data : payload;
+      let rawAwbs: string[] | null = null;
+      if (Array.isArray(d.awbs) && d.awbs.every((x) => typeof x === "string")) {
+        rawAwbs = d.awbs;
+      } else if (Array.isArray(d.awb) && d.awb.every((x) => typeof x === "string")) {
+        rawAwbs = d.awb;
+      } else if (Array.isArray(d.cnote_no) && d.cnote_no.every((x) => typeof x === "string")) {
+        rawAwbs = d.cnote_no;
+      } else if (Array.isArray(payload.data)) {
+        if (payload.data.every((x) => typeof x === "string")) {
+          rawAwbs = payload.data as string[];
+        } else if (payload.data.every((x) => isRecord(x))) {
+          rawAwbs = (payload.data as Record<string, unknown>[])
+            .map((x) => (typeof x.cnote_no === "string" ? x.cnote_no : typeof x.awb === "string" ? x.awb : ""))
+            .filter(Boolean);
+        }
+      }
+      const rawCount = money(d.count ?? d.paidCount ?? d.paid_count ?? (rawAwbs ? rawAwbs.length : null));
+      if (rawCount === null || !rawAwbs) {
+        throw new MengantarError("unknown_outcome");
+      }
+      return { paidCount: rawCount, awbs: rawAwbs.map((x) => x.trim()).filter(Boolean) };
     },
 
     // Reconciliation after an unknown outcome: our reference travels as destinationMark. The
@@ -330,13 +385,80 @@ export function parseEstimates(data: unknown, cod: boolean): CourierEstimate[] {
   return estimates.sort((a, b) => a.tariff - b.tariff || (a.courier < b.courier ? -1 : a.courier > b.courier ? 1 : 0));
 }
 
-// --- Orders (T-021) ---------------------------------------------------------------------------
+// --- Orders (T-021 / T-025 / T-026) -----------------------------------------------------------
 
 const ORDER_ID = /^[A-Z0-9]{6,20}$/;
+const BATCH_ID = /^[A-Z0-9]{6,24}$/;
 const SKEW_MS = 10 * 60_000;
 // GeraiExpress shipment reference (e.g. GX261014-ABC123) sent as destinationMark and used to
 // reconcile unknown outcomes.
 const REFERENCE = /^[A-Z]{2}[A-Z0-9-]{4,30}$/;
+
+export type PayUnpaidResult = {
+  paidCount: number;
+  awbs: string[];
+};
+
+export type TwoPassCodEstimateInput = {
+  originAreaId: string;
+  destinationAreaId: string;
+  weightGrams: number;
+  goodsValueIdr: number;
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
+  discountPercent?: number;
+};
+
+// Two-pass COD quoting (T-025 / TD-1):
+// Pass 1 calls GET /estimate with codAmount = goodsValueIdr to discover COD-capable couriers and
+// their normal shipping tariff. Because Mengantar calculates codFee as a percentage of the COD
+// parameter (which on POST /order/create must be goods + shipping + COD fee), Pass 2 calls
+// GET /estimate with codAmount = goodsValueIdr + tariff (grouped by distinct tariff across
+// couriers, at most 4 calls) and extracts each courier's codFee and netShipping from that second
+// pass. Customer charge = tariff + codFee; recipient COD collection = goodsValueIdr + tariff + codFee.
+export async function estimateTwoPassCod(
+  estimateFn: (input: EstimateRequest) => Promise<CourierEstimate[]>,
+  input: TwoPassCodEstimateInput,
+): Promise<CourierEstimate[]> {
+  if (!Number.isSafeInteger(input.goodsValueIdr) || input.goodsValueIdr < 1000) {
+    throw new InvalidOrderRequest("cod_goods_value_required");
+  }
+  const baseInput = {
+    originAreaId: input.originAreaId,
+    destinationAreaId: input.destinationAreaId,
+    weightGrams: input.weightGrams,
+    ...(input.lengthCm !== undefined ? { lengthCm: input.lengthCm } : {}),
+    ...(input.widthCm !== undefined ? { widthCm: input.widthCm } : {}),
+    ...(input.heightCm !== undefined ? { heightCm: input.heightCm } : {}),
+    ...(input.discountPercent !== undefined ? { discountPercent: input.discountPercent } : {}),
+  };
+  const pass1 = await estimateFn({ ...baseInput, codAmount: input.goodsValueIdr });
+  if (pass1.length === 0) return [];
+
+  const distinctTariffs = Array.from(new Set(pass1.map((row) => row.tariff)));
+  const pass2ByTariff = new Map<number, Map<string, CourierEstimate>>();
+  await Promise.all(
+    distinctTariffs.map(async (tariff) => {
+      const rows = await estimateFn({ ...baseInput, codAmount: input.goodsValueIdr + tariff });
+      pass2ByTariff.set(tariff, new Map(rows.map((r) => [r.courier, r])));
+    }),
+  );
+
+  const resolved: CourierEstimate[] = [];
+  for (const row of pass1) {
+    const pass2Row = pass2ByTariff.get(row.tariff)?.get(row.courier);
+    if (!pass2Row || pass2Row.tariff !== row.tariff || pass2Row.codFee < 0) continue;
+    resolved.push({
+      courier: row.courier,
+      tariff: row.tariff,
+      codFee: pass2Row.codFee,
+      netShipping: pass2Row.netShipping,
+      etaText: pass2Row.etaText ?? row.etaText,
+    });
+  }
+  return resolved.sort((a, b) => (a.tariff + a.codFee) - (b.tariff + b.codFee) || (a.courier < b.courier ? -1 : a.courier > b.courier ? 1 : 0));
+}
 
 export type CreateOrderRequest = {
   courier: string;
@@ -379,7 +501,10 @@ export type ProviderOrder = {
 };
 
 function createOrderBody(r: CreateOrderRequest) {
-  const courierOk = Object.values(COURIERS).includes(r.courier);
+  if (typeof r.courier === "string" && r.courier.trim().toLowerCase() === "ninja") {
+    throw new InvalidOrderRequest("courier_discontinued");
+  }
+  const courierOk = OFFERED_COURIERS.has(r.courier);
   const { areaId, address, name, phone } = r.recipient ?? ({} as CreateOrderRequest["recipient"]);
   const money = (v: unknown) => typeof v === "number" && Number.isSafeInteger(v) && v >= 1;
   const valid = courierOk

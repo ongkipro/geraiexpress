@@ -1,8 +1,9 @@
 # GeraiExpress — Current Architecture Record
 
-Updated: 2026-10-14
-State: local foundation and synthetic demo preview implemented and verified locally (DEL-1
-stages 1–2). No cloud resource, deployment, live provider call or real customer data exists.
+Updated: 2026-10-27
+State: local foundation, synthetic demo preview, public marketing surfaces, Mengantar Partner
+sandbox seller onboarding, live quotes/issuance, two-pass COD pricing, and batch `pay-unpaid`
+recovery implemented and verified locally (DEL-1 stages 1–3, T-001 through T-030).
 
 ## Canonical design
 
@@ -24,9 +25,9 @@ flowchart LR
         UI["Server-rendered pages<br/>+ small client islands<br/>(intake form, dialogs, nav sheet)"]
     end
     subgraph Worker["Cloudflare Worker — OpenNext 1.20.10 / Next.js 16.3.8<br/>(proved locally in workerd via wrangler dev)"]
-        MW["middleware.ts<br/>session refresh · Cache-Control: private, no-store"]
-        Pages["App Router pages<br/>/masuk /akses /pilih-gerai<br/>/pengiriman /kontak /pengaturan"]
-        Actions["Server actions<br/>auth · contacts · shipments"]
+        MW["middleware.ts<br/>session refresh · Cache-Control: private, no-store<br/>security headers (X-Frame-Options, CSP frame-ancestors)"]
+        Pages["App Router pages<br/>/ /fitur /simulasi /cara-kerja /hubungi-kami<br/>/masuk /akses /pilih-gerai /pengiriman /kontak /pengaturan"]
+        Actions["Server actions<br/>auth · contacts · credentials · shipments"]
         WS["lib/workspace.ts<br/>tenant = active membership<br/>(ge_tenant cookie is only a selector)"]
         Health["/healthz (no-store)"]
     end
@@ -34,10 +35,10 @@ flowchart LR
         Auth["Auth<br/>email/password fixtures · anonymous demo<br/>before_user_created hook blocks public signup<br/>anonymous identities locked to demo"]
         API["Data API / RPC<br/>publishable key + user JWT only"]
         DB["public schema: RLS on every table<br/>composite same-tenant FKs<br/>column-level grants"]
-        Priv["private schema: helpers, triggers,<br/>quote_costs (no API grants)"]
+        Priv["private schema: helpers, triggers,<br/>quote_costs, seller_credentials,<br/>tenant_mengantar_onboarding (no API grants)"]
     end
     Sim["Simulated provider<br/>(SQL, demo tenants only)"]
-    Mengantar["Mengantar Partner/Public API"]:::target
+    Mengantar["Mengantar Partner/Public API"]
     Dispatcher["Account dispatcher (src/lib/mengantar/dispatcher.ts)<br/>machine identity, dispatch_* RPCs"]
 
     UI --> MW --> Pages
@@ -52,7 +53,7 @@ flowchart LR
     DB -->|request_quotes / confirm_shipment<br/>is_demo only| Sim
     Dispatcher -->|"dispatch_claim / dispatch_record<br/>service_role only"| DB
     Dispatcher -->|seller key opened in Worker| Mengantar
-    WS -.->|"not wired yet (T-024)"| Dispatcher
+    Actions --> Dispatcher
 
     classDef target stroke-dasharray: 5 5,color:#7a7a7a
 ```
@@ -60,11 +61,9 @@ flowchart LR
 Every user-driven read and write runs with the signed-in user's JWT, so the Worker and a hostile
 browser calling the Data API directly hit the same RLS and RPC checks (TEN-1). The one exception
 is the account dispatcher (DEC-010, T-022): it records Mengantar results through `dispatch_*`
-RPCs that only `service_role` may execute, so no user can forge a resi. It is built and proven
-against the sandbox but not yet called by any page (T-024 wires issuance). Since T-023 the same
+RPCs that only `service_role` may execute, so no user can forge a resi. Since T-023 the same
 machine identity (Worker secret `SUPABASE_SECRET_KEY`, never in `.env*` or the client bundle)
-serves two more service_role-only RPCs after the page has verified membership with the user's
-session: `machine_seller_key` (the sealed key, opened only in the Worker) and
+serves `machine_seller_key` (the sealed key, opened only in the Worker) and
 `record_live_quotes` (live Mengantar estimates; net cost to `private.quote_costs`). Connected
 real gerai quote live and pick recipient areas from Mengantar; demo gerai keep the SQL
 simulation. Without `MENGANTAR_ENV`/`SUPABASE_SECRET_KEY` (e.g. the preview) live features fail
@@ -79,9 +78,21 @@ anyone checks an unpaid order's payment. The Worker entry is `custom-worker.ts` 
 handler + `scheduled`): a cron every 5 minutes runs `sweep()` over `dispatch_due()` — queued
 operations nobody sent, stale in-flight/unknown ones, unpaid orders — throttled by
 `last_checked_at` and skipping claims that would certainly be refused. Real labels come from
-the Mengantar app until Mengantar whitelists label generation; COD and API payment are T-025. Per seller, at
+the Mengantar app until Mengantar whitelists label generation. Per seller, at
 most one real operation is in flight (a partial unique index); a stale in-flight or unknown
 operation is reconciled by its reference, never resent.
+
+T-025 and T-026 add COD shipments (`is_cod`, `cod_amount_idr`, `cod_fee_idr`, `cod_supported`)
+with two-pass live COD fee pricing (`estimate(COD = goodsValue + pass1Tariff)`), provider
+refusal detail persistence (`provider_error_detail`), and tenant-admin batch `pay-unpaid`
+recovery (`review_unpaid_batch`, `dispatch_claim_batch_payment`, `dispatch_record_batch_payment`,
+and `payUnpaidBatch(batch, courier)` verified against `batch_digest` before spending balance).
+T-027 adds Mengantar Partner API sandbox seller onboarding (`private.tenant_mengantar_onboarding`
+with immutable `external_user_id = 'geraiexpress:tenant:' || tenant_id`, owner disclosure +
+Terms/Privacy consent, 503 partial-provisioning recovery, and 409 existing-account BYOK routing).
+T-028, T-029, and T-030 add contact archiving (`archive_contact` with row-lock `tenant_admin`
+re-check), public marketing pages (`/`, `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`),
+security response headers, `cleanup_expired_demos`, and `env.staging` in `wrangler.jsonc`.
 
 ### Code map (`src/`)
 
@@ -163,13 +174,15 @@ erDiagram
     tenant_applications |o--o| tenants : "approval creates one"
     tenants ||--o{ tenant_invitations : "email-bound, 7 days"
     tenants ||--o{ seller_credentials : "private, ciphertext, versioned"
+    tenants ||--o| tenant_mengantar_onboarding : "private Partner onboarding state"
 ```
 
 `platform_grants` (capabilities per identity) and `audit_events` are platform-only: no Data API
 writes, reads need the capability and an `aal2` session, and audit rows cannot be updated,
 deleted or truncated.
 
-`quote_costs` lives in the `private` schema with RLS enabled and no API-role grants. Every
+`quote_costs`, `seller_credentials`, and `tenant_mengantar_onboarding` live in the `private`
+schema with RLS enabled and no API-role grants. Every
 child table carries `tenant_id` and references its parent through a composite
 `(tenant_id, id)` foreign key, so cross-tenant reparenting fails in the database.
 
@@ -201,23 +214,25 @@ sequenceDiagram
 |---|---|---|
 | Runtime | Next.js 16.3.8 App Router on `@opennextjs/cloudflare` 1.20.10, Wrangler 4.149.0, React 19.3.0, TypeScript 6.0.3; exact pins; pnpm `minimumReleaseAge` policy respected | `pnpm build`, `pnpm cf:build`; e2e against `wrangler dev` (workerd) |
 | Adapter decision | Next.js 16.4.0 failed in workerd (`Unexpected loadManifest(/.next/server/preview-props.json)`, HTTP 500) with OpenNext 1.20.10; pinned 16.3.8, which passes. vinext (Cloudflare-recommended, beta) not used; OpenNext 1.x accepted as DEC-005 | BUILD-LOG 2026-10-14; `scripts/worker-smoke.sh` |
-| Session handling | `src/middleware.ts` refreshes Supabase cookies and sets `Cache-Control: private, no-store` on every non-static response; Node middleware not used (OpenNext does not support it) | Reviewer curl of Worker responses; e2e |
+| Session handling & headers | `src/middleware.ts` refreshes Supabase cookies, sets `Cache-Control: private, no-store` on every non-static response, and attaches `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and HTTPS `Strict-Transport-Security` | `tests/unit/middleware.test.ts`; reviewer curl of Worker responses; e2e |
 | Identity | Supabase Auth email/password (seeded local fixtures only) and anonymous demo sessions; public signup refused by `private.before_user_created`; email confirmations on; trigger `private.lock_anonymous_identity` on `auth.users` refuses, for anonymous identities, any email/phone/password change request and any clearing of `is_anonymous`; OAuth linking is additionally off (`enable_manual_linking = false`), so a demo session cannot become a real account (PR-31) | `tests/db/isolation.test.ts` registration gate, mutation-checked |
 | Tenancy | `memberships` + `private.member_role()`; anonymous identities count only in demo tenants; `ge_tenant` cookie validated against own memberships; multiple memberships require `/pilih-gerai` | DB isolation suite; e2e forged-cookie and two-membership tests |
-| Contacts | Tenant-owned contacts and addresses, optimistic revision on edit, address archive keeps one primary | `tests/e2e/contacts.spec.ts` |
-| Shipments | Draft → simulated quote (per revision, 30 min expiry) → explicit confirmation → one `create_order` operation → simulated AWB `SIM…`; content frozen after submission; unknown outcome reconciles the original operation | `tests/db/shipment-flow.test.ts`; `tests/e2e/shipping.spec.ts` |
-| Pricing | Customer charge = simulated normal tariff; synthetic net cost stored only in `private.quote_costs` | DB grant assertions; reviewer RSC/payload inspection |
+| Contacts | Tenant-owned contacts and addresses, optimistic revision on edit, address archive keeps one primary; whole-contact archiving runs via `archive_contact` RPC with row-lock `tenant_admin` re-check (`archived_at` revoked from direct column update) | `tests/db/contact-archive-and-demo-cleanup.test.ts`; `tests/e2e/contacts.spec.ts` |
+| Shipments & COD | Draft → quote (simulated for demo, live two-pass COD or non-COD Mengantar estimate for connected real gerai) → explicit confirmation → one `create_order` operation → AWB or `awaiting_payment`; provider refusal messages stored in `provider_error_detail`; unpaid batches reviewed (`review_unpaid_batch`) and paid by `tenant_admin` (`payUnpaidShipmentBatch` bound to `batch_digest`) | `tests/unit/mengantar-orders.test.ts`, `tests/unit/mengantar-dispatcher.test.ts`, `tests/db/cod-and-payment.test.ts`, `tests/e2e/shipping.spec.ts` |
+| Pricing | Customer charge = normal tariff + `cod_fee_idr` (when `is_cod`); net shipping cost stored only in `private.quote_costs` | DB grant assertions; `tests/db/cod-and-payment.test.ts` |
 | Labels | Watermarked sample label page for simulated shipments only; completed job reused; print hides app shell | e2e label tests |
-| Roles | DEC-008: `tenant_admin` and `operator`; `reconcile_shipment` (unknown outcome) requires `tenant_admin`, operators see an escalation notice; a demo visitor is `tenant_admin` of their own sample gerai | `tests/db/shipment-flow.test.ts` operator denial; e2e operator escalation |
+| Roles | DEC-008: `tenant_admin` and `operator`; `reconcile_shipment`, `review_unpaid_batch`, and `archive_contact` require `tenant_admin` with row-lock role re-checks; operators see an escalation notice; a demo visitor is `tenant_admin` of their own sample gerai | `tests/db/shipment-flow.test.ts`, `tests/db/cod-and-payment.test.ts`, `tests/db/contact-archive-and-demo-cleanup.test.ts` |
 | Super Admin | `/admin` with `platform_grants` capabilities, TOTP `aal2` (Supabase MFA) checked in `private.platform_capable` on every call, tenant directory + suspend/reactivate with reason, grant/revoke with stale-revision and final-governor guard, append-only `audit_events` with a filtered projection (actor, target, change, reason) | `tests/db/platform.test.ts` (mutation-checked: aal2 check, final-governor guard, lock-before-check concurrency); `tests/e2e/platform.spec.ts` |
 | Registration | `/daftar` email code (Supabase OTP, Bahasa Indonesia template, generic reply), password set only after verification, one open `tenant_applications` row per identity (revisioned, partial drafts), Super Admin approve / request changes / reject with reason; approval creates one active tenant, outlet and `tenant_admin` membership and no seller. Public account creation is closed unless a governor opens it (`private.settings`, audited); local seed opens it. A password set before an email's first confirmation is discarded at confirmation (pre-registration takeover) | `tests/db/registration.test.ts`, `tests/db/isolation.test.ts` (mutation-checked: password discard, review authority); `tests/e2e/registration.spec.ts` |
 | Staff and roles | `tenant_invitations` (one pending per tenant+email, 7 days, revocable, RPC-only reads); accept only by the verified invited email while the issuer is still an active admin, once (concurrent accepts converge); an invited email may create its account while public registration is closed; `set_member_role` / `deactivate_member` lock the tenant's memberships, re-check the caller, keep one active `tenant_admin`; `reconcile_shipment` re-checks the role after a share lock; demo tenants cannot invite | `tests/db/invitations.test.ts` (mutation-checked: issuer check, last-admin guard, role re-check after lock); `tests/e2e/members.spec.ts` |
-| Mengantar credentials | Tenant admins of real gerai store their own seller API key (BYOK, DEC-006, owner declaration): the Worker seals it with AES-256-GCM under the `CREDENTIAL_KEY` Worker secret, AAD = tenant + version; `private.seller_credentials` holds ciphertext only (one active, monotonic versions, no API role access, no readback RPC); members see configured/hint/version; readiness stays "Belum diverifikasi". Super Admin `integration_operations` sets the Partner ID (not secret) and sees whether `MENGANTAR_PARTNER_SECRET` and `CREDENTIAL_KEY` bindings exist, never values | `tests/unit/credential-crypto.test.ts`; `tests/db/credentials.test.ts` (mutation-checked: store authority); `tests/e2e/credentials.spec.ts` |
+| Mengantar credentials & Partner onboarding | Tenant admins of real gerai either connect via Mengantar Partner API sandbox onboarding (`begin_partner_seller_onboarding` / `complete_partner_seller_onboarding` / `record_partner_seller_onboarding_outcome`, immutable `external_user_id`, 503 partial-provisioning recovery, 409 existing-account BYOK routing) or store their own seller API key (BYOK, DEC-006): the Worker seals keys with AES-256-GCM under `CREDENTIAL_KEY`, AAD = tenant + version; `private.seller_credentials` holds ciphertext only; Super Admin `integration_operations` sets the Partner ID and sees binding readiness | `tests/unit/mengantar-partner-onboarding.test.ts`, `tests/db/partner-onboarding.test.ts`, `tests/db/credentials.test.ts`, `tests/e2e/credentials.spec.ts` |
+| Public marketing | Public pages `/`, `/fitur`, `/simulasi`, `/cara-kerja`, and `/hubungi-kami` render under the GeraiExpress brand (zero legacy brand references or redirects) while preserving `PR-32` signed-in `/` routing | `tests/unit/marketing-rebrand.test.ts`, `tests/e2e/marketing.spec.ts` |
+| Demo cleanup & staging | `cleanup_expired_demos` (`service_role` only) deletes expired demo tenants (`is_demo = true`) and orphaned expired anonymous users without touching real tenants; `wrangler.jsonc` defines `env.staging` (`geraiexpress-staging`, `MENGANTAR_ENV: "sandbox"`, `PARTNER_ID: "ongkirich"`) | `tests/db/contact-archive-and-demo-cleanup.test.ts`, `tests/unit/custom-worker.test.ts`, `tests/unit/mengantar-tenant.test.ts` |
 | CAPTCHA | Supabase Auth captcha (Turnstile) on password sign-in, anonymous demo sign-in, OTP, signup, recovery and resend (secret via `env()` from gitignored `supabase/.env`; never `supabase config push` this config — the local value is Cloudflare's always-pass test secret); the Worker renders Turnstile explicitly (`appearance: interaction-only`, Indonesian), below each submit button so a verifying frame can never cover it; submit stays focusable (`aria-disabled`) until a token exists; site key read at runtime from the `TURNSTILE_SITE_KEY` binding; local uses Cloudflare's documented test keys | `tests/db/captcha.test.ts` (each entry point refused without a token); auth/registration e2e |
 | Auth email | Supabase Send Email Hook → `POST /api/auth/send-email` on the Worker: Standard Webhooks signature (HMAC-SHA256, ±5 min), refuses anonymous identities and unused action types, renders Bahasa Indonesia code mail, delivers via the `MAIL_TRANSPORT` binding (local Mailpit only; fails closed otherwise); decisions return 200 + error object (what Auth reads, no retries); replay inside the 5-minute window is an accepted ceiling until an id store exists; logs outcome without addresses or codes (DEC-009) | `tests/unit/auth-mail.test.ts` (mutation-checked: anonymous refusal); `tests/e2e/auth-mail.spec.ts` on both runtimes; anonymous email change produces no mail (`tests/db/isolation.test.ts`) |
 | Preview | Worker `geraiexpress-preview` (workers.dev) + Supabase `geraiexpress-preview` (ap-southeast-1); remote Auth settings in `infra/supabase-preview/supabase/config.toml`; Auth email and CAPTCHA intentionally off (see RELEASE.md) | `pnpm smoke:preview`; remote probes in BUILD-LOG |
 | Abuse limits | `src/lib/rate-limit.ts` + `ratelimits` in `wrangler.jsonc`: per-visitor (IPv4 address, IPv6 /64) sign-in and demo-entry limits before Supabase Auth (RATE-1 native Auth ingress) | `tests/unit/visitor-key.test.ts`; e2e RATE-1 tests on Worker and next dev, mutation-checked |
-| Readiness | `/pengaturan` shows per-capability state; for real tenants every provider capability is "Belum tersedia" or "Belum diverifikasi" (only the outlet pickup address can be "Siap") | e2e settings tests |
+| Readiness | `/pengaturan` shows per-capability state and Partner/BYOK connection status | e2e settings tests |
 | Quote reuse | `request_quotes` returns the unexpired set of the current revision instead of inserting another (migration `20261014090000`) | `tests/db/shipment-flow.test.ts` |
 | Presentation | shadcn/ui (radix base, rhea style) remapped to UI-2 tokens; system font; Tailwind names `text-base/sm/xs/xl/3xl` carry the UI-2 sizes so `cn()` merges correctly; ≥44px targets | e2e touch-target, overflow and keyboard checks at 390/768/1280 |
 
@@ -227,7 +242,7 @@ sequenceDiagram
 |---|---|
 | Invitation email and account recovery (PR-32, PR-33) | Invitations work without app-sent mail (admin shares the sign-in link; the invitee verifies by code); invitation mail and password recovery need ARCH-3 mail proof |
 | Opening public registration on a real project | Proved custom SMTP delivery (PR-33), the OTP templates applied to the remote project, Terms/Privacy (PRIV-3), CAPTCHA (T-016) |
-| Mengantar Partner seller creation in the app, key verification, rotation, live quotes/issuance in the UI, labels, webhooks (PR-17, PR-19, PR-20, PR-3–PR-6 live) | Clients and the dispatcher exist (T-019–T-022, sandbox-proven); UI wiring is T-023/T-024; production needs ARCH-2 egress (Partner), Terms/Privacy versions (PR-20), label whitelisting |
+| Mengantar production Partner API egress, key rotation, real courier labels, webhooks | Sandbox Partner onboarding, live quotes, COD, and batch payment are wired locally (T-019–T-027); production needs ARCH-2 egress allowlisting, legal Terms/Privacy versions (PR-20), and Mengantar label whitelisting |
 | Durable Object / queues for the dispatcher (TD-3) | Deferred by DEC-010 until volume requires them; a sweep for stale operations comes with T-024 |
 | Super Admin pricing, monitoring, integrations and recovery (PR-23, PR-25–PR-27) | Built on T-012's grants as each capability gets a page; integrations in T-015 |
 | Production Super Admin bootstrap | Owner runs the first grant on the remote project (remote write approval) and enrols TOTP; a second recovery governor follows (DEC-008). Never via `seed.sql`, which holds local-only working admin credentials |

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/workspace";
 import { archiveAddressAction } from "@/modules/contacts/actions";
-import { AddAddressForm, EditContactForm } from "@/modules/contacts/forms";
+import { AddAddressForm, ArchiveContactForm, EditContactForm } from "@/modules/contacts/forms";
 
 export const metadata: Metadata = { title: "Kontak" };
 
@@ -19,7 +19,7 @@ export default async function ContactPage({ params, searchParams }: {
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const supabase = await supabaseServer();
   const { data: c } = await supabase.from("contacts")
-    .select("id, revision, name, phone, is_sender, is_recipient, contact_addresses(id, label, address_line, area, postal_code, is_primary, archived_at)")
+    .select("id, revision, name, phone, is_sender, is_recipient, archived_at, contact_addresses(id, label, address_line, area, postal_code, is_primary, archived_at)")
     .eq("tenant_id", ws.tenant.id).eq("id", id).maybeSingle();
   if (!c) notFound();
   const addresses = (c.contact_addresses ?? []).filter((a) => !a.archived_at)
@@ -30,7 +30,17 @@ export default async function ContactPage({ params, searchParams }: {
       <Link href="/kontak" className="inline-flex min-h-11 items-center gap-2 self-start text-primary">
         <ArrowLeft className="size-4" aria-hidden="true" /> Semua kontak
       </Link>
-      <h1 className="text-3xl tracking-tight break-words">{c.name}</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-3xl tracking-tight break-words">{c.name}</h1>
+        {c.archived_at ? (
+          <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold ring-1 ring-border">Diarsipkan</span>
+        ) : null}
+      </div>
+      {c.archived_at ? (
+        <p role="status" className="rounded-md bg-muted p-4 ring-1 ring-border">
+          Kontak ini sudah diarsipkan dan tidak muncul di daftar kontak aktif. Pengiriman yang sudah dikonfirmasi tidak berubah.
+        </p>
+      ) : null}
       {created ? <p role="status" className="rounded-md bg-card p-4 ring-1 ring-border">Kontak tersimpan.</p> : null}
       {alamat === "gagal" ? (
         <p role="alert" className="rounded-md bg-card p-4 ring-1 ring-foreground"><span aria-hidden="true">⚠ </span>Alamat belum tersimpan. Tambahkan lagi di bagian Alamat.</p>
@@ -43,6 +53,11 @@ export default async function ContactPage({ params, searchParams }: {
       <section aria-labelledby="edit-heading" className="flex flex-col gap-4 rounded-lg bg-card p-6 ring-1 ring-border">
         <h2 id="edit-heading" className="text-xl">Data kontak</h2>
         <EditContactForm contact={c} />
+        {ws.role === "tenant_admin" && !c.archived_at ? (
+          <div className="border-t border-border pt-4">
+            <ArchiveContactForm contact={{ id: c.id, revision: c.revision }} />
+          </div>
+        ) : null}
       </section>
 
       <section aria-labelledby="addr-heading" className="flex flex-col gap-4 rounded-lg bg-card p-6 ring-1 ring-border">

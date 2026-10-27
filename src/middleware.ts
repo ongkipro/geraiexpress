@@ -21,6 +21,13 @@ export async function middleware(request: NextRequest) {
   if (request.method === "GET" || request.method === "HEAD") await supabase.auth.getClaims();
   else await supabase.auth.getUser();
   response.headers.set("Cache-Control", "private, no-store");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("Content-Security-Policy", "frame-ancestors 'none'");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  if (request.nextUrl.protocol === "https:") {
+    response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
   return response;
 }
 

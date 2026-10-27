@@ -46,6 +46,27 @@
         "MAIL_FROM": "no-reply@geraiexpress.local"
       },
       "observability": { "enabled": true }
+    },
+    "staging": {
+      "name": "geraiexpress-staging",
+      "placement": { "region": "aws:ap-southeast-1" },
+      "triggers": { "crons": ["*/5 * * * *"] },
+      "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "geraiexpress-staging" }],
+      "ratelimits": [
+        { "name": "SIGN_IN_LIMITER", "namespace_id": "5001", "simple": { "limit": 10, "period": 60 } },
+        { "name": "DEMO_LIMITER", "namespace_id": "5002", "simple": { "limit": 5, "period": 60 } },
+        { "name": "MFA_LIMITER", "namespace_id": "5003", "simple": { "limit": 10, "period": 60 } },
+        { "name": "OTP_LIMITER", "namespace_id": "5004", "simple": { "limit": 3, "period": 60 } }
+      ],
+      "vars": {
+        "SUPABASE_URL": "https://jezxplwwmjogrmlixdcw.supabase.co",
+        "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_CjBGzsKrrJPuKThPU1n2DQ_pCKaZNp1",
+        "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+        "MENGANTAR_ENV": "sandbox",
+        "PARTNER_ID": "ongkirich",
+        "MAIL_FROM": "no-reply@geraiexpress.com"
+      },
+      "observability": { "enabled": true }
     }
   }
 }

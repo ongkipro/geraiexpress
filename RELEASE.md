@@ -13,8 +13,8 @@ Status: PREVIEW_DEPLOYED
 
 | Component | Value |
 |---|---|
-| Worker | `geraiexpress-preview` → https://geraiexpress-preview.ongki.workers.dev. Active version `dddc2184-fcea-42b4-bbaa-400c3ad26ce0` (redeployed with the hardened `pnpm deploy:preview`); previous complete version `fcd6b075` |
-| Supabase | project `geraiexpress-preview`, ref `jezxplwwmjogrmlixdcw`, region ap-southeast-1, Postgres 17; 9 migrations applied with `db push` (no seed) |
+| Worker | `geraiexpress-preview` → https://geraiexpress-preview.ongki.workers.dev. Active version `f9bc88ad-4f62-43ca-8b59-acfcb76deeb9` (2026-10-18, T-024 + PERF-1, placement `aws:ap-southeast-1`); previous version `dddc2184` (T-018) |
+| Supabase | project `geraiexpress-preview`, ref `jezxplwwmjogrmlixdcw`, region ap-southeast-1, Postgres 17; 12 migrations applied with `db push` (no seed) |
 | Auth settings | `infra/supabase-preview/supabase/config.toml`, applied with `supabase config push --workdir infra/supabase-preview` (never the local config) |
 | Worker secrets | `CREDENTIAL_KEY`, `SEND_EMAIL_HOOK_SECRET` (values only in the owner's local secrets store and Cloudflare/Supabase) |
 
@@ -41,9 +41,8 @@ Redeploy: `pnpm deploy:preview` (builds with all local `.env*` files held aside,
 `--env preview`). Schema: `pnpm exec supabase db push` with the preview DB password from the
 secrets store. Production remains not provisioned.
 
-The preview runs the T-018 build. Redeploying it with T-019..T-024 needs the four new migrations
-(`db push`) and leaves live Mengantar off (no `SUPABASE_SECRET_KEY` or `MENGANTAR_ENV` there;
-`env.preview` sets no crons). Not done; it needs owner approval like any deploy.
+The preview runs T-019..T-024 and PERF-1 (2026-10-18). Live Mengantar stays off there (no
+`SUPABASE_SECRET_KEY` or `MENGANTAR_ENV`; `env.preview` sets no crons).
 
 ## Production gates for live Mengantar (integration audit, 2026-10-14)
 

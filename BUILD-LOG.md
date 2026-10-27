@@ -627,5 +627,69 @@ isolation e2e failures).
 Verified: unit 74, typecheck, full e2e on next dev (179 passed, 4 opt-in skipped; the specs run
 before the final middleware edit re-ran: 86 passed), build, cf:build, check:bundle, worker smoke;
 nav pending state screenshotted (dot visible while pending, no layout shift). Security review:
-CHANGES_REQUIRED (revoked sessions on RPC-only actions), fixed, approved. Not yet measured on the
-preview: it needs `supabase db push` of three migrations and a preview deploy (owner approval).
+CHANGES_REQUIRED (revoked sessions on RPC-only actions), fixed, approved.
+
+Deployed 2026-10-18 with owner approval: `supabase db push` (dry run first) applied the three
+T-022..T-024 migrations (12 of 12), `pnpm deploy:preview` published version `f9bc88ad`;
+responses carry `cf-placement: remote-SIN`. Re-measured with the same script, warm: document
+TTFB 0.46–0.63 s per dashboard page (was 0.53–0.90 s), in-app navigation 0.49–0.61 s (was
+0.65–0.70 s). The comparison understates the gain: during this run the client's traffic reached
+Cloudflare in WAW/ARN (`/cdn-cgi/trace` loc=ID, colo=WAW; TCP connect ~0.19 s) instead of HKG at
+baseline, so every request carried a far longer client leg.
+
+## 2026-10-27 — T-025..T-030 COD, batch payment, Partner sandbox onboarding, audit hardening & GeraiExpress marketing
+
+Executed in parallel across four implementation lanes under run `RUN-20261027T122627Z-42dca1d4`:
+
+- **T-025 (COD shipments & two-pass COD fee pricing, PR-22)**: migration
+  `20261027190000_cod_and_batch_payment.sql` adds `cod_fee_idr`, `cod_supported`, and
+  `customer_charge_idr` (`normal_tariff_idr + cod_fee_idr`) on `shipment_quotes`, grants
+  `update (is_cod)` on `shipments` while keeping `cod_amount_idr` and `customer_charge_idr`
+  RPC-only, and updates `seed_shipment_quotes`, `record_live_quotes`, `confirm_shipment`, and
+  `private.record_provider_price`. `estimateTwoPassCod` in `src/lib/mengantar/public-api.ts`
+  evaluates pass 1 (`codAmount = goodsValueIdr`) to discover normal shipping tariffs and COD
+  support, then runs pass 2 per distinct tariff (`codAmount = goodsValueIdr + tariff`) so the
+  provider's COD fee is computed once on `goods + shipping` while private seller `net_cost_idr`
+  remains isolated in `private.quote_costs`. `createOrderBody` sends `COD_AMOUNT: 0` for non-COD
+  and `customerChargeIdr + goodsValueIdr` for COD, persists provider item error text on rejected
+  orders, and compares `estimatedPrice` against `shipments.customer_charge_idr`.
+- **T-026 (Batch `pay-unpaid` recovery, TD-3 / DEC-008 / DEC-010)**: `review_unpaid_batch`
+  computes full local batch membership, total payable IDR, and a SHA-256 `batch_digest` for
+  `tenant_admin` review; refuses discontinued `ninja` (`courier_discontinued`), mixed couriers,
+  or cross-tenant batch collisions (`batch_scope_mismatch`). `dispatch_begin_batch_payment`
+  (`service_role`) locks the tenant and all batch member shipments and verifies `p_batch_digest`.
+  `payUnpaidShipmentBatch` in `src/lib/mengantar/dispatcher.ts` verifies 1-to-1 batch membership
+  against Mengantar's `listOrdersByBatch` before calling `/order/pay-unpaid` once, and reconciles
+  each member via `findOrder` on timeout/5xx without re-sending payment or creating a second order.
+- **T-027 (Mengantar Partner API sandbox seller onboarding, PR-17 / PR-18 / PR-20 / DEC-006)**:
+  migration `20261027210000_partner_seller_onboarding.sql` adds `private.tenant_mengantar_onboarding`
+  with immutable `external_user_id = 'geraiexpress:tenant:' || tenant_id::text` and RPCs
+  `begin_partner_seller_onboarding`, `complete_partner_seller_onboarding`,
+  `record_partner_seller_onboarding_outcome`, and `partner_onboarding_status`.
+  `src/lib/mengantar/partner-onboarding.ts` and `/pengaturan` orchestrate sandbox seller
+  registration (`/api/partner/v1/sellers`) with explicit owner confirmation (`PR-20`), Worker-side
+  AES-256-GCM sealing of the returned `apiKey`, idempotent 200 repeat completion, 503
+  `KEY_PROVISIONING_FAILED` retry recovery via `/sellers/api-key`, 409 `EMAIL_ALREADY_REGISTERED`
+  routing to manual BYOK, and first-login `Lupa Password` guidance.
+- **T-028 & T-030 (Audit hardening, contact archive guard, demo cleanup, security headers & staging config)**:
+  migration `20261027220000_contact_archive_and_demo_cleanup.sql` revokes direct `archived_at`
+  updates on `public.contacts`, adds `public.archive_contact` with row-lock `tenant_admin`
+  re-check, adds `public.cleanup_expired_demos` (`service_role` only, strictly scoped to
+  `is_demo = true` / `is_anonymous = true`), and upgrades optimistic concurrency exceptions from
+  SQLSTATE `40001` to `55000` (fixing PostgREST v14.18 `hasql-transaction` infinite retry loops on
+  `40001`). `src/middleware.ts` adds `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and HTTPS
+  `Strict-Transport-Security`. `wrangler.jsonc` adds `env.staging` (`geraiexpress-staging`,
+  `MENGANTAR_ENV: "sandbox"`), and `custom-worker.ts` runs hourly demo cleanup alongside the
+  5-minute dispatch sweep.
+- **T-029 (Public marketing pages on `geraiexpress`, PR-13 & PR-32)**: anonymous visitors on `/`,
+  `/fitur`, `/simulasi`, `/cara-kerja`, and `/hubungi-kami` receive the standalone GeraiExpress
+  marketing experience (commission simulator, multi-courier overview, `/masuk` demo + `/daftar`
+  CTAs) while signed-in users on `/` continue routing to their workspace per `PR-32`. Zero legacy
+  brand references or redirects exist across code, config, tests, and operational docs.
+
+Verified: `pnpm typecheck`, `pnpm test:unit` (12 files, 104 tests), `supabase db lint`,
+`pnpm test:db` (10 files, 115 tests), `pnpm build`, `pnpm cf:build`, `pnpm check:bundle` (64 files),
+`pnpm smoke:worker`, `check-traceability.py` (16 files, 145 declarations, 6 tasks, 0 findings),
+and Playwright `pnpm test:e2e` across `mobile-390`, `tablet-768`, and `desktop-1280` (188 passed,
+4 opt-in live skipped). Independent security and code review (`218a8a7b`): `APPROVE`.

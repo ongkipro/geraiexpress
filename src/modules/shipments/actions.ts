@@ -4,11 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { env, supabaseServer } from "@/lib/supabase/server";
 import { friendlyError } from "@/lib/errors";
-import { DROP_OFF_UNSUPPORTED } from "@/lib/mengantar/public-api";
+import { DROP_OFF_UNSUPPORTED, estimateTwoPassCod, InvalidOrderRequest } from "@/lib/mengantar/public-api";
 import { mengantarFailure, tenantMengantar } from "@/lib/mengantar/tenant";
 import { machineClient } from "@/lib/supabase/machine";
 import { workerSecret } from "@/lib/worker-secret";
-import { checkPayment, dispatchOperation, reconcileOperation, type DispatchSummary } from "@/lib/mengantar/dispatcher";
+import { checkPayment, dispatchOperation, payUnpaidShipmentBatch, reconcileOperation, type DispatchSummary } from "@/lib/mengantar/dispatcher";
 import { dispatcherDeps } from "@/lib/mengantar/machine-deps";
 import { requireWorkspace } from "@/lib/workspace";
 import { missingForQuote, parseDraft, type DraftField, type DraftValues } from "./draft";
@@ -123,7 +123,10 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
           .eq("tenant_id", ws.tenant.id).eq("id", id).maybeSingle<{ outlets: { mengantar_area_id: string | null } | null }>();
         const quoted = await liveQuotes(ws.tenant.id, origin?.outlets?.mengantar_area_id ?? null, id, revision, update);
         if (quoted.error) return { error: quoted.error + contactNote, values };
-        if (quoted.count === 0) return { error: "Tidak ada layanan Mengantar untuk rute dan berat ini." + contactNote, values };
+        if (quoted.count === 0) {
+          const emptyMsg = update.is_cod === true ? friendlyError({ message: "cod_not_supported" }) : "Tidak ada layanan Mengantar untuk rute dan berat ini.";
+          return { error: emptyMsg + contactNote, values };
+        }
       } else {
         const { error: qe } = await supabase.rpc("request_quotes", { p_shipment: id, p_expected_revision: revision });
         if (qe) return { error: friendlyError(qe) + contactNote, values };
@@ -134,27 +137,63 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
   return { ok: "Draf tersimpan.", warning: contactNote.trim() || undefined };
 }
 
-// T-023: live estimate through the tenant's own seller key (membership already verified by
+// T-023 / T-025: live estimate through the tenant's own seller key (membership already verified by
 // requireWorkspace), written by the machine identity so the tariff cannot be forged. The counter
-// sees the normal tariff; the net cost after the account discount stays private.
-// lazy: billable weight is the actual weight; volumetric weight and COD quotes come with T-024.
+// sees the normal tariff (plus COD fee when COD is requested); the net cost after the account
+// discount stays private.
 async function liveQuotes(tenantId: string, originAreaId: string | null, shipmentId: string, revision: number,
   update: Record<string, unknown>): Promise<{ count: number; error?: undefined } | { error: string; count?: undefined }> {
   if (!originAreaId) return { error: friendlyError({ message: "pickup_not_set" }) };
+  const isCod = update.is_cod === true;
+  const goodsValueIdr = Number(update.goods_value_idr ?? 0);
+  if (isCod && (!Number.isSafeInteger(goodsValueIdr) || goodsValueIdr < 1000)) {
+    return { error: friendlyError({ message: "cod_goods_value_required" }) };
+  }
   const mengantar = await tenantMengantar(tenantId);
   if (!mengantar.ok) return { error: friendlyError({ message: `mengantar_${mengantar.reason}` }) };
   const machine = machineClient();
   if (!machine) return { error: friendlyError({ message: "mengantar_not_configured" }) };
+  const dims = {
+    ...(typeof update.length_cm === "number" ? { lengthCm: update.length_cm } : {}),
+    ...(typeof update.width_cm === "number" ? { widthCm: update.width_cm } : {}),
+    ...(typeof update.height_cm === "number" ? { heightCm: update.height_cm } : {}),
+  };
   let estimates;
   try {
-    estimates = await mengantar.client.estimate({
-      originAreaId, destinationAreaId: String(update.recipient_area_id), weightGrams: Number(update.weight_grams),
-    });
+    if (isCod) {
+      estimates = await estimateTwoPassCod((input) => mengantar.client.estimate(input), {
+        originAreaId,
+        destinationAreaId: String(update.recipient_area_id),
+        weightGrams: Number(update.weight_grams),
+        goodsValueIdr,
+        ...dims,
+      });
+    } else {
+      estimates = await mengantar.client.estimate({
+        originAreaId,
+        destinationAreaId: String(update.recipient_area_id),
+        weightGrams: Number(update.weight_grams),
+        ...dims,
+      });
+    }
   } catch (error) {
+    if (error instanceof InvalidOrderRequest) {
+      return { error: friendlyError({ message: error.reason }) };
+    }
     return { error: friendlyError({ message: mengantarFailure(error) }) };
   }
   const rows = estimates.filter((e) => !DROP_OFF_UNSUPPORTED.has(e.courier))
-    .map((e) => ({ courier: e.courier, tariff: e.tariff, net: e.netShipping, eta: (e.etaText ?? "").slice(0, 40) }));
+    .map((e) => ({
+      courier: e.courier,
+      tariff: e.tariff,
+      net: e.netShipping,
+      cod_fee: isCod ? e.codFee : 0,
+      cod_supported: true,
+      eta: (e.etaText ?? "").slice(0, 40),
+    }));
+  if (isCod && rows.length === 0) {
+    return { error: friendlyError({ message: "cod_not_supported" }) };
+  }
   const { data, error } = await machine.rpc("record_live_quotes", {
     p_tenant: tenantId, p_shipment: shipmentId, p_expected_revision: revision, p_rows: rows,
   });
@@ -258,6 +297,27 @@ export async function checkPaymentAction(form: FormData) {
   const summary = await checkPayment(op.id, deps);
   if (summary.status === "not_reconcilable") redirect(`/pengiriman/${id}?galat=${encodeURIComponent(summary.reason)}`);
   redirect(`/pengiriman/${id}?${outcomeFlag("payment", summary)}`);
+}
+
+// T-026: tenant admin pays an unpaid Mengantar batch after reviewing its full membership and digest.
+export async function payUnpaidBatchAction(form: FormData) {
+  const ws = await requireWorkspace();
+  const id = String(form.get("shipment_id"));
+  const batchDigest = String(form.get("batch_digest") ?? "").trim();
+  if (ws.role !== "tenant_admin") redirect(`/pengiriman/${id}?galat=admin_required`);
+  const supabase = await supabaseServer();
+  const { error: reviewError } = await supabase.rpc("review_unpaid_batch", { p_shipment: id });
+  if (reviewError) redirect(`/pengiriman/${id}?galat=${encodeURIComponent(reviewError.message)}`);
+  const deps = machineDeps();
+  if (!deps) redirect(`/pengiriman/${id}?info=mengantar_not_configured`);
+  const summary = await payUnpaidShipmentBatch(id, batchDigest, deps);
+  revalidatePath("/pengiriman");
+  revalidatePath(`/pengiriman/${id}`);
+  if (summary.status === "not_reconcilable") {
+    const detailParam = summary.detail ? `&detail=${encodeURIComponent(summary.detail)}` : "";
+    redirect(`/pengiriman/${id}?galat=${encodeURIComponent(summary.reason)}${detailParam}`);
+  }
+  redirect(`/pengiriman/${id}?${outcomeFlag("pay_batch", summary)}`);
 }
 
 // After a definite refusal (nothing created at Mengantar) the counter fixes the draft and retries.

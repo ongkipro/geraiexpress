@@ -3,13 +3,18 @@ import { CheckCircle2, CircleSlash, FlaskConical, HelpCircle } from "lucide-reac
 import { formatWib } from "@/lib/format";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/workspace";
-import { RemoveSellerKeyForm, SellerKeyForm } from "@/modules/credentials/forms";
+import {
+  PartnerSellerOnboardingForm,
+  RemoveSellerKeyForm,
+  SellerKeyForm,
+  type PartnerOnboardingStatus,
+} from "@/modules/credentials/forms";
 import { PickupForm } from "@/modules/mengantar/pickup-form";
 import { mengantarFailure, tenantMengantar } from "@/lib/mengantar/tenant";
 import type { PickupAddress } from "@/lib/mengantar/public-api";
 import { friendlyError } from "@/lib/errors";
 
-type CredentialStatus = { configured: boolean; hint: string | null; version: number | null; created_at: string | null; latest_version: number };
+type CredentialStatus = { configured: boolean; mode?: string | null; hint: string | null; version: number | null; created_at: string | null; latest_version: number };
 
 export const metadata: Metadata = { title: "Pengaturan" };
 
@@ -24,8 +29,23 @@ const STATE: Record<Readiness, { label: string; Icon: typeof CheckCircle2 }> = {
 // PR-8: each capability has its own readiness; a connected account is never "all ready".
 export default async function SettingsPage() {
   const ws = await requireWorkspace();
-  const { data: raw } = await (await supabaseServer()).rpc("seller_credential_status", { p_tenant: ws.tenant.id });
-  const credential = ((raw ?? []) as CredentialStatus[])[0] ?? { configured: false, hint: null, version: null, created_at: null, latest_version: 0 };
+  const sb = await supabaseServer();
+  const [{ data: raw }, { data: rawOnboarding }] = await Promise.all([
+    sb.rpc("seller_credential_status", { p_tenant: ws.tenant.id }),
+    sb.rpc("partner_onboarding_status", { p_tenant: ws.tenant.id }),
+  ]);
+  const credential = ((raw ?? []) as CredentialStatus[])[0] ?? { configured: false, mode: null, hint: null, version: null, created_at: null, latest_version: 0 };
+  const onboarding = ((rawOnboarding ?? []) as PartnerOnboardingStatus[])[0] ?? {
+    connection_mode: credential.configured ? (credential.mode === "partner" ? "partner_managed" : "byok") : "none",
+    onboarding_state: credential.configured ? "connected" : "not_connected",
+    partner_seller_id: null,
+    owner_name: null,
+    owner_email: null,
+    owner_phone: null,
+    consent_recorded_at: null,
+    last_error_code: null,
+    retry_after_at: null,
+  };
 
   // T-023: with a stored key, the server reads the seller's saved pickup addresses through it; a
   // successful read is the first proof the key works against Mengantar. Only for admins, who
@@ -48,7 +68,6 @@ export default async function SettingsPage() {
   // them to be checked by hand in the Mengantar app.
   let openOrders = 0;
   if (!ws.isDemo && credential.configured && ws.role === "tenant_admin") {
-    const sb = await supabaseServer();
     const [{ count: ops }, { count: unpaid }] = await Promise.all([
       sb.from("provider_operations").select("id", { count: "exact", head: true }).eq("tenant_id", ws.tenant.id)
         .eq("is_simulated", false).in("state", ["queued", "in_flight", "unknown"]),
@@ -108,6 +127,16 @@ export default async function SettingsPage() {
           })}
         </ul>
       </section>
+
+      {ws.role === "tenant_admin" && !ws.isDemo ? (
+        <section aria-labelledby="partner-onboarding-heading" className="flex flex-col gap-3 rounded-lg bg-card p-6 ring-1 ring-border">
+          <h2 id="partner-onboarding-heading" className="text-xl">Pendaftaran akun Mengantar baru (Partner)</h2>
+          <p className="text-sm text-muted-foreground">
+            Belum punya akun Mengantar untuk gerai ini? Daftarkan akun penjual baru secara resmi melalui integrasi Partner Mengantar.
+          </p>
+          <PartnerSellerOnboardingForm onboarding={onboarding} />
+        </section>
+      ) : null}
 
       {ws.role === "tenant_admin" && !ws.isDemo ? (
         <section aria-labelledby="mengantar-heading" className="flex flex-col gap-3 rounded-lg bg-card p-6 ring-1 ring-border">

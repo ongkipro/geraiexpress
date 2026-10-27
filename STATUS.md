@@ -1,13 +1,13 @@
 # GeraiExpress — Status
 
-Updated: 2026-10-14
+Updated: 2026-10-27
 Status: Active
-State: REVIEWING
-Review-Risk: R3
+State: AWAITING_DEPLOY_APPROVAL
+Review-Risk: R4
 Independent-Review: PASS
-Primary-Worker: claude-code-main (claude-opus-5-5)
-Independent-Reviewer: separate review agents per task (see .delivery runs T-001…T-008)
-Independent-Review-Head: UNSET
+Primary-Worker: agy-main (gemini-4-argon)
+Independent-Reviewer: separate review agents per task (see .delivery runs T-001…T-030)
+Independent-Review-Head: d85fa92d022af81101ebce54f338a6dac9099a27
 
 ## Current state
 
@@ -21,24 +21,30 @@ Auth email goes through the Worker's Send Email Hook that refuses anonymous iden
 Every task finished `PASS` in its own delivery-ledger run with executed checks, mutation checks
 and an approved independent security review; evidence is in `.delivery`.
 
-The Mengantar integration T-019 to T-024 is complete locally and proven against the Mengantar
-sandbox: read client (area search, estimates), Partner client and a Partner-registered sandbox
-seller, order adapter with reconciliation, the account dispatcher (DEC-010: machine identity,
-one in-flight order per seller, no resend), live quotes and area pickers, and real issuance with
-reconciliation, payment checks and a cron sweep (custom Worker entry). Connected real gerai
-quote and issue through their own Mengantar key; demo gerai stay simulated. An independent
-audit of the whole integration (2026-10-14) found it sound for sandbox and a supervised pilot
-and listed production gates (below and RELEASE.md). COD and API payment are T-025.
+The Mengantar integration and standalone GeraiExpress launch slice T-019 to T-030 are complete
+locally and proven against the Mengantar sandbox: read client (area search, estimates), Partner
+client and a Partner-registered sandbox seller, order adapter with reconciliation, the account
+dispatcher (DEC-010: machine identity, one in-flight order per seller, no resend), live quotes and
+area pickers, real issuance with reconciliation, payment checks and a cron sweep (custom Worker
+entry), COD shipments with two-pass COD fee pricing (T-025), batch `pay-unpaid` recovery bound by
+batch digest (T-026), Partner API sandbox seller onboarding in `/pengaturan` (T-027), `tenant_admin`
+contact archive guard and cron/credential unit coverage (T-028), Komdigi-clean GeraiExpress public
+marketing pages (`/`, `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`) with zero legacy brand
+footprint (T-029), and security headers (`X-Frame-Options`, `CSP frame-ancestors`, `nosniff`,
+`Referrer-Policy`, `HSTS`), expired demo cleanup RPC (`cleanup_expired_demos`), and `wrangler.jsonc`
+`env.staging` configuration (T-030).
 
-Last full verification (2026-10-14, T-024): `pnpm test:db` 103 (twice), `pnpm test:unit` 72,
-typecheck, db lint, build, cf:build, `check:bundle`, worker smoke, Playwright on next dev (179
-passed, 4 opt-in skipped), and the cron sweep in local workerd; the opt-in live sandbox e2e last
-ran before the final price follow-ups (order issued unpaid, payment check).
+Last full verification (2026-10-27, T-025..T-030): `pnpm test:db` 115, `pnpm test:unit` 104,
+typecheck, db lint, build, cf:build, `check:bundle`, worker smoke, spec traceability (16 files,
+145 declarations, 6 tasks, 0 findings), and Playwright e2e on next dev across 390/768/1280 (188
+passed, 4 opt-in skipped).
 
-A synthetic-data preview is deployed (T-018, 2026-10-14): Worker `geraiexpress-preview` at
+A synthetic-data preview is deployed (T-018, 2026-10-14; redeployed 2026-10-18 with T-019..T-024
+and PERF-1, 12 migrations; migrations 13–15 for T-025..T-030 are verified locally and awaiting
+owner approval before remote `supabase db push` and `wrangler deploy`): Worker `geraiexpress-preview` at
 https://geraiexpress-preview.ongki.workers.dev on Supabase project `geraiexpress-preview`
 (RELEASE.md). Auth email, Auth CAPTCHA, Super Admin and live Mengantar (no machine identity
-or `MENGANTAR_ENV`) are intentionally off there; the preview predates T-019..T-024. Production
+or `MENGANTAR_ENV`) are intentionally off there. Production
 is not provisioned. Mengantar has been called only with the owner's sandbox credentials and,
 read-only, the owner's production key; no customer data exists. Simulation output is labelled
 as such everywhere it appears.
@@ -50,7 +56,7 @@ open `/masuk` and choose **Coba demo**. Super Admin fixtures and TOTP secrets: R
 
 ## Active work
 
-None. See TASKS.md "Next candidates".
+None in progress. Tasks `T-025` through `T-030` are completed and verified in [TASKS.md](TASKS.md).
 
 ## Owner decisions needed next
 

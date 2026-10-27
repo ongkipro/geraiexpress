@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { addAddressAction, createContactAction, updateContactAction, type ContactState } from "./actions";
+import { addAddressAction, archiveContactAction, createContactAction, updateContactAction, type ContactState } from "./actions";
 
 function Field({ name, label, state, defaultValue, type = "text", inputMode, textarea }: {
   name: string; label: string; state: ContactState; defaultValue?: string; type?: string;
@@ -99,6 +99,23 @@ export function AddAddressForm({ contactId }: { contactId: string }) {
         <Field name="postal_code" label="Kode pos" inputMode="numeric" state={state} />
       </div>
       <Button type="submit" variant="outline" className="self-start" disabled={pending}>Tambah alamat</Button>
+    </form>
+  );
+}
+
+export function ArchiveContactForm({ contact }: { contact: { id: string; revision: number } }) {
+  const [state, action, pending] = useActionState<ContactState, FormData>(archiveContactAction, {});
+  return (
+    <form action={action} className="flex flex-col gap-3">
+      <input type="hidden" name="contact_id" value={contact.id} />
+      <input type="hidden" name="revision" value={contact.revision} />
+      <Status state={state} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">Mengarsipkan kontak menyembunyikannya dari daftar aktif tanpa mengubah pengiriman lama.</p>
+        <Button type="submit" variant="outline" disabled={pending} aria-busy={pending}>
+          {pending ? "Mengarsipkan…" : "Arsipkan kontak"}
+        </Button>
+      </div>
     </form>
   );
 }

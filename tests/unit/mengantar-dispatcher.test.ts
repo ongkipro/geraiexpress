@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { credentialAad, sealCredential } from "../../src/lib/credential-crypto";
-import { checkPayment, dispatchOperation, providerPhone, reconcileOperation, sweep, type Rpc } from "../../src/lib/mengantar/dispatcher";
+import { checkPayment, dispatchOperation, payUnpaidShipmentBatch, providerPhone, reconcileOperation, sweep, type Rpc } from "../../src/lib/mengantar/dispatcher";
 
 const SEAL_KEY = Buffer.alloc(32, 9).toString("base64");
 const SELLER_KEY = "API-UNITTESTKEY0001";
@@ -65,7 +65,7 @@ describe("dispatchOperation (TD-3)", () => {
     const cases: [unknown, { status?: number; body: unknown }, Record<string, unknown>][] = [
       [{}, { body: unpaid }, { p_outcome: "unpaid", p_order_id: "261014H0JAFR", p_batch: "26101416827JYE", p_price: 111600 }],
       [{}, { body: fixture("order-create-jne-item-error.json") }, { p_outcome: "failed", p_batch: "26101416ZI8BP1", p_record_id: "6acf44a4771fe2b474c055fd", p_code: "PROVIDER_ERROR_ITEM" }],
-      [{}, { status: 400, body: { success: false, message: "Ekspedisi tidak mendukung Drop Off" } }, { p_outcome: "rejected", p_code: "PROVIDER_REJECTED" }],
+      [{}, { status: 400, body: { success: false, message: "Ekspedisi tidak mendukung Drop Off" } }, { p_outcome: "rejected", p_code: "PROVIDER_REJECTED", p_detail: "Ekspedisi tidak mendukung Drop Off" }],
       [{}, { status: 403, body: { success: false, message: "Not allowed" } }, { p_outcome: "rejected", p_code: "NOT_ALLOWED" }],
       [{}, { status: 504, body: "gateway" }, { p_outcome: "unknown", p_code: "UNKNOWN_OUTCOME" }],
       [{}, { status: 409, body: { success: false } }, { p_outcome: "unknown", p_code: "UNKNOWN_OUTCOME" }],
@@ -243,6 +243,131 @@ describe("checkPayment and sweep (T-024)", () => {
     expect(calls).toEqual(["dispatch_due:", "dispatch_claim:a", "dispatch_begin_reconcile:b", "dispatch_begin_payment_check:c", "dispatch_stuck_counts:"]);
     const broken: Rpc = async () => ({ data: null, error: { message: "down" } });
     expect(await sweep(deps(broken, fakeFetch({ body: {} }).impl))).toEqual({ checked: 0, failed: true, results: [] });
+  });
+});
+
+describe("COD dispatch and payUnpaidShipmentBatch (T-025 / T-026)", () => {
+  it("dispatches a COD shipment using COD amount instead of goodsValue and refuses incomplete COD payloads", async () => {
+    const codIssued = fixture("order-create-jt-cod-issued.json");
+    codIssued.data[0].destinationMark = REF;
+    const bodies: unknown[] = [];
+    const f = fakeFetch({ body: codIssued });
+    const wrappedFetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (init?.body) bodies.push(JSON.parse(String(init.body)));
+      return f.impl(url, init);
+    }) as typeof fetch;
+
+    const r = fakeRpc({ data: await payload({ is_cod: true, cod_amount_idr: 150000 }) });
+    expect(await dispatchOperation("op-1", deps(r.rpc, wrappedFetch))).toEqual({ status: "recorded", outcome: "issued" });
+    expect(bodies).toHaveLength(1);
+    const sentOrder = (bodies[0] as { orders: Record<string, unknown>[] }).orders[0];
+    expect(sentOrder.COD).toBe(150000);
+    expect(sentOrder).not.toHaveProperty("goodsValue");
+
+    const badCod = fakeRpc({ data: await payload({ is_cod: true, cod_amount_idr: null }) });
+    const g = fakeFetch({ body: codIssued });
+    await dispatchOperation("op-1", deps(badCod.rpc, g.impl));
+    expect(g.urls).toEqual([]);
+    expect(badCod.recorded()).toEqual([{ p_operation: "op-1", p_attempt: 3, p_outcome: "rejected", p_code: "INPUT_INCOMPLETE" }]);
+  });
+
+  async function batchClaim(overrides: Record<string, unknown> = {}) {
+    const sealed = await sealCredential(SELLER_KEY, credentialAad(TENANT, 2), SEAL_KEY);
+    return {
+      claim_operation_id: "op-1",
+      tenant_id: TENANT,
+      provider_env: "sandbox",
+      batch: "26101416827JYE",
+      courier: "JT",
+      batch_digest: "op-1:261014H0JAFR:111600",
+      members: [
+        { operation_id: "op-1", shipment_id: "ship-1", reference: REF, provider_order_id: "261014H0JAFR", customer_charge_idr: 111600 },
+      ],
+      credential: { ciphertext: sealed.ciphertext, iv: sealed.iv, key_version: sealed.keyVersion, version: 2 },
+      ...overrides,
+    };
+  }
+
+  it("verifies full batch membership, calls POST /order/pay-unpaid once, and records each paid member", async () => {
+    const calls: { fn: string; args: Record<string, unknown> }[] = [];
+    const claim = await batchClaim();
+    const rpc: Rpc = async (fn, args) => {
+      calls.push({ fn, args });
+      if (fn === "dispatch_begin_batch_payment") return { data: claim, error: null };
+      if (fn === "dispatch_record_payment") return { data: { state: "succeeded", replayed: false, price_mismatch: false }, error: null };
+      return { data: { released: true }, error: null };
+    };
+    const f = fakeFetch(
+      // 1. listOrdersByBatch (page 1)
+      { body: { success: true, data: [{ ORDER_ID: "261014H0JAFR", batch: "26101416827JYE", destinationMark: REF, estimatedPrice: 111600, status: "active", isPaid: false, cnote_no: null, createdAt: "2026-10-14T09:12:10Z" }] } },
+      // 2. payUnpaidBatch
+      { body: { success: true, data: [{ orderId: "261014H0JAFR", cnote_no: "JO6948371799", isPaid: true }] } },
+      // 3. findOrder("261014H0JAFR", "JT")
+      { body: { success: true, data: [{ ORDER_ID: "261014H0JAFR", batch: "26101416827JYE", destinationMark: REF, estimatedPrice: 111600, status: "active", isPaid: true, cnote_no: "JO6948371799", createdAt: "2026-10-14T09:12:10Z" }] } },
+    );
+
+    const summary = await payUnpaidShipmentBatch("ship-1", "op-1:261014H0JAFR:111600", deps(rpc, f.impl));
+    expect(summary).toEqual({ status: "recorded", outcome: "issued" });
+    expect(f.urls.filter((u) => u.endsWith("/order/pay-unpaid"))).toHaveLength(1);
+    expect(calls.map((c) => c.fn)).toEqual([
+      "dispatch_begin_batch_payment",
+      "dispatch_record_payment",
+      "dispatch_release_batch_payment",
+    ]);
+    expect(calls[1].args).toEqual({
+      p_operation: "op-1",
+      p_order_id: "261014H0JAFR",
+      p_paid: true,
+      p_tracking: "JO6948371799",
+      p_price: 111600,
+    });
+  });
+
+  it("refuses to call pay-unpaid when the live Mengantar batch contains an unknown or foreign order", async () => {
+    const calls: { fn: string; args: Record<string, unknown> }[] = [];
+    const claim = await batchClaim();
+    const rpc: Rpc = async (fn, args) => {
+      calls.push({ fn, args });
+      if (fn === "dispatch_begin_batch_payment") return { data: claim, error: null };
+      return { data: { released: true }, error: null };
+    };
+    const f = fakeFetch({
+      body: {
+        success: true,
+        data: [
+          { ORDER_ID: "261014H0JAFR", batch: "26101416827JYE", destinationMark: REF, estimatedPrice: 111600, status: "active", isPaid: false, cnote_no: null, createdAt: "2026-10-14T09:12:10Z" },
+          { ORDER_ID: "261014FOREIGN", batch: "26101416827JYE", destinationMark: "GX261014-FOREIGN", estimatedPrice: 50000, status: "active", isPaid: false, cnote_no: null, createdAt: "2026-10-14T09:12:11Z" },
+        ],
+      },
+    });
+    const summary = await payUnpaidShipmentBatch("ship-1", "op-1:261014H0JAFR:111600", deps(rpc, f.impl));
+    expect(summary).toEqual({ status: "not_reconcilable", reason: "batch_scope_mismatch" });
+    expect(f.urls.filter((u) => u.endsWith("/order/pay-unpaid"))).toHaveLength(0);
+    expect(calls.at(-1)?.fn).toBe("dispatch_release_batch_payment");
+  });
+
+  it("reconciles via findOrder without resending when pay-unpaid times out or returns 504", async () => {
+    const calls: { fn: string; args: Record<string, unknown> }[] = [];
+    const claim = await batchClaim();
+    const rpc: Rpc = async (fn, args) => {
+      calls.push({ fn, args });
+      if (fn === "dispatch_begin_batch_payment") return { data: claim, error: null };
+      if (fn === "dispatch_record_payment") return { data: { state: "succeeded", replayed: false, price_mismatch: false }, error: null };
+      return { data: { released: true }, error: null };
+    };
+    const f = fakeFetch(
+      // 1. listOrdersByBatch
+      { body: { success: true, data: [{ ORDER_ID: "261014H0JAFR", batch: "26101416827JYE", destinationMark: REF, estimatedPrice: 111600, status: "active", isPaid: false, cnote_no: null, createdAt: "2026-10-14T09:12:10Z" }] } },
+      // 2. payUnpaidBatch -> 504 gateway timeout
+      { status: 504, body: "gateway timeout" },
+      // 3. findOrder -> payment actually succeeded at Mengantar!
+      { body: { success: true, data: [{ ORDER_ID: "261014H0JAFR", batch: "26101416827JYE", destinationMark: REF, estimatedPrice: 111600, status: "active", isPaid: true, cnote_no: "JO6948371799", createdAt: "2026-10-14T09:12:10Z" }] } },
+    );
+
+    const summary = await payUnpaidShipmentBatch("ship-1", "op-1:261014H0JAFR:111600", deps(rpc, f.impl));
+    expect(summary).toEqual({ status: "recorded", outcome: "issued" });
+    expect(f.urls.filter((u) => u.endsWith("/order/pay-unpaid"))).toHaveLength(1);
+    expect(calls.some((c) => c.fn === "dispatch_record_payment")).toBe(true);
   });
 });
 

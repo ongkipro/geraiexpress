@@ -122,3 +122,19 @@ export async function archiveAddressAction(form: FormData) {
   revalidatePath(`/kontak/${contactId}`);
   redirect(`/kontak/${contactId}?alamat=diarsipkan`);
 }
+
+export async function archiveContactAction(_: ContactState, form: FormData): Promise<ContactState> {
+  const ws = await requireWorkspace();
+  const contactId = String(form.get("contact_id") ?? "");
+  const expectedVersion = Number(form.get("revision"));
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("archive_contact", {
+    p_tenant: ws.tenant.id,
+    p_contact: contactId,
+    p_expected_version: expectedVersion,
+  });
+  if (error) return { error: friendlyError(error) };
+  revalidatePath("/kontak");
+  revalidatePath(`/kontak/${contactId}`);
+  return { ok: "Kontak diarsipkan. Pengiriman lama tidak berubah." };
+}

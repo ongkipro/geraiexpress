@@ -13,7 +13,7 @@ import { requireWorkspace } from "@/lib/workspace";
 export const metadata: Metadata = { title: "Pengiriman" };
 
 const PAGE_SIZE = 20;
-const ATTENTION = ["unknown", "failed", "queued", "in_flight"];
+const ATTENTION = ["unknown", "failed", "awaiting_payment", "queued", "in_flight"];
 
 type Row = {
   id: string;
@@ -24,6 +24,8 @@ type Row = {
   recipient_area: string | null;
   awb: string | null;
   customer_charge_idr: number | null;
+  is_cod: boolean;
+  cod_amount_idr: number | null;
   updated_at: string;
 };
 
@@ -41,7 +43,7 @@ export default async function ShipmentsPage({
 
   let query = supabase
     .from("shipments")
-    .select("id, reference, submission_state, sender_name, recipient_name, recipient_area, awb, customer_charge_idr, updated_at", { count: "exact" })
+    .select("id, reference, submission_state, sender_name, recipient_name, recipient_area, awb, customer_charge_idr, is_cod, cod_amount_idr, updated_at", { count: "exact" })
     .eq("tenant_id", ws.tenant.id)
     .order("updated_at", { ascending: false })
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
@@ -132,7 +134,10 @@ export default async function ShipmentsPage({
                 <li key={s.id}>
                   <Link href={`/pengiriman/${s.id}`} prefetch={false} className="flex flex-col gap-2 p-4">
                     <span className="flex items-center justify-between gap-3">
-                      <span className="font-semibold tabular" data-testid="shipment-ref">{s.reference}</span>
+                      <span className="flex items-center gap-2 font-semibold tabular" data-testid="shipment-ref">
+                        {s.reference}
+                        {s.is_cod ? <span className="rounded-sm bg-secondary px-1.5 py-0.5 text-xs font-semibold text-foreground ring-1 ring-border">COD</span> : null}
+                      </span>
                       <StatusBadge state={s.submission_state} />
                     </span>
                     <span className="text-sm text-muted-foreground">
@@ -163,7 +168,10 @@ export default async function ShipmentsPage({
                   {rows.map((s) => (
                     <tr key={s.id}>
                       <td className="px-3 py-3 whitespace-nowrap">
-                        <Link href={`/pengiriman/${s.id}`} prefetch={false} className="inline-flex min-h-11 items-center font-semibold text-primary tabular" data-testid="shipment-ref">{s.reference}</Link>
+                        <span className="inline-flex items-center gap-2">
+                          <Link href={`/pengiriman/${s.id}`} prefetch={false} className="inline-flex min-h-11 items-center font-semibold text-primary tabular" data-testid="shipment-ref">{s.reference}</Link>
+                          {s.is_cod ? <span className="rounded-sm bg-secondary px-1.5 py-0.5 text-xs font-semibold text-foreground ring-1 ring-border">COD</span> : null}
+                        </span>
                       </td>
                       <td className="max-w-[220px] px-3 py-3">
                         <span className="block truncate" title={`${s.sender_name ?? "—"} → ${s.recipient_name ?? "—"}`}>{s.sender_name ?? "—"} → {s.recipient_name ?? "—"}</span>

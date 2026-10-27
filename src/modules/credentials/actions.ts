@@ -3,11 +3,81 @@
 import { revalidatePath } from "next/cache";
 import { credentialAad, credentialHint, sealCredential, validApiKey } from "@/lib/credential-crypto";
 import { friendlyError } from "@/lib/errors";
+import {
+  DEFAULT_PARTNER_ID,
+  onboardPartnerSeller,
+  PARTNER_PRIVACY_VERSION,
+  PARTNER_TERMS_VERSION,
+  recoverPartnerSellerKey,
+  type PartnerOnboardingDeps,
+} from "@/lib/mengantar/partner-onboarding";
 import { supabaseServer } from "@/lib/supabase/server";
 import { workerSecret } from "@/lib/worker-secret";
 import { requireWorkspace } from "@/lib/workspace";
 
 export type CredentialState = { error?: string; ok?: string };
+
+function partnerDeps(supabase: Awaited<ReturnType<typeof supabaseServer>>): PartnerOnboardingDeps {
+  return {
+    rpc: (fn, args) => supabase.rpc(fn, args),
+    environment: workerSecret("MENGANTAR_ENV"),
+    partnerId: workerSecret("PARTNER_ID") ?? DEFAULT_PARTNER_ID,
+    partnerSecret:
+      workerSecret("MENGANTAR_PARTNER_SECRET") ?? workerSecret("GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET"),
+    credentialKey: workerSecret("CREDENTIAL_KEY"),
+  };
+}
+
+// PR-17 / PR-20 / DEC-006: onboard a new Mengantar seller account through the Partner API sandbox
+// after recording owner identity and Terms/Privacy agreement.
+export async function registerPartnerSellerAction(
+  _: CredentialState,
+  form: FormData,
+): Promise<CredentialState> {
+  const ws = await requireWorkspace();
+  if (ws.role !== "tenant_admin" || ws.isDemo) {
+    return { error: "Hanya admin gerai yang dapat mendaftarkan akun penjual Mengantar." };
+  }
+  const supabase = await supabaseServer();
+  const res = await onboardPartnerSeller(
+    {
+      tenantId: ws.tenant.id,
+      ownerName: String(form.get("owner_name") ?? ""),
+      ownerEmail: String(form.get("owner_email") ?? ""),
+      ownerPhone: String(form.get("owner_phone") ?? ""),
+      termsVersion: String(form.get("terms_version") || PARTNER_TERMS_VERSION),
+      privacyVersion: String(form.get("privacy_version") || PARTNER_PRIVACY_VERSION),
+      agreed: form.get("consent_agreed") === "on",
+    },
+    partnerDeps(supabase),
+  );
+  revalidatePath("/pengaturan");
+  if (!res.ok) return { error: friendlyError({ message: res.errorCode }) };
+  return { ok: res.message };
+}
+
+// Recover the seller API key when a previous registration returned 503 KEY_PROVISIONING_FAILED
+// (registered_key_pending) without creating a duplicate identity.
+export async function recoverPartnerSellerKeyAction(
+  _: CredentialState,
+  form: FormData,
+): Promise<CredentialState> {
+  const ws = await requireWorkspace();
+  if (ws.role !== "tenant_admin" || ws.isDemo) {
+    return { error: "Hanya admin gerai yang dapat memulihkan kunci API Mengantar." };
+  }
+  const supabase = await supabaseServer();
+  const res = await recoverPartnerSellerKey(ws.tenant.id, partnerDeps(supabase), {
+    ownerName: String(form.get("owner_name") ?? ""),
+    ownerEmail: String(form.get("owner_email") ?? ""),
+    ownerPhone: String(form.get("owner_phone") ?? ""),
+    termsVersion: String(form.get("terms_version") || PARTNER_TERMS_VERSION),
+    privacyVersion: String(form.get("privacy_version") || PARTNER_PRIVACY_VERSION),
+  });
+  revalidatePath("/pengaturan");
+  if (!res.ok) return { error: friendlyError({ message: res.errorCode }) };
+  return { ok: res.message };
+}
 
 // PR-18 / DEC-006 / IAM-3: a tenant admin connects their own existing Mengantar seller key. The
 // plaintext exists only inside this request: it is sealed with the Worker secret and bound to

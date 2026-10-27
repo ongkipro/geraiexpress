@@ -9,7 +9,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 export type WorkerBindingName = "CREDENTIAL_KEY" | "MENGANTAR_PARTNER_SECRET" | "TURNSTILE_SITE_KEY"
   | "SEND_EMAIL_HOOK_SECRET" | "MAIL_TRANSPORT" | "MAILPIT_URL" | "MAIL_FROM"
   // DEC-010 machine identity (Supabase secret key) and the Mengantar environment for live calls.
-  | "SUPABASE_SECRET_KEY" | "MENGANTAR_ENV";
+  | "SUPABASE_SECRET_KEY" | "MENGANTAR_ENV" | "PARTNER_ID" | "GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET";
 
 // Non-secret configuration (site key, mail transport, sender) is read the same way.
 export function workerSecret(name: WorkerBindingName): string | undefined {
