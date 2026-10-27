@@ -7,7 +7,7 @@ Review-Risk: R4
 Independent-Review: PASS
 Primary-Worker: agy-main (gemini-4-argon)
 Independent-Reviewer: separate review agents per task (see .delivery runs T-001…T-031)
-Independent-Review-Head: f059a9a14d46813bf94ef3424073914fcc2d8b47
+Independent-Review-Head: 59d12996f56f0139028e172592ccb44ed552030e
 
 ## Current state
 
