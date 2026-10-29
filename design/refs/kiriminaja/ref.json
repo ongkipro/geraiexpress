@@ -1,0 +1,672 @@
+{
+  "capturedAt": "2026-10-28T21:35:59.613Z",
+  "viewports": {
+    "390": {
+      "url": "https://kiriminaja.com/",
+      "width": 390,
+      "height": 9212,
+      "title": "Aplikasi Kirim Paket COD Terbaik #1 Indonesia | KiriminAja",
+      "headingMax": 30,
+      "type": {
+        "families": [
+          {
+            "v": "Inter",
+            "c": 4651
+          },
+          {
+            "v": "Montserrat",
+            "c": 550
+          }
+        ],
+        "sizes": [
+          {
+            "v": "16px",
+            "c": 2608
+          },
+          {
+            "v": "14px",
+            "c": 1745
+          },
+          {
+            "v": "18px",
+            "c": 396
+          },
+          {
+            "v": "12px",
+            "c": 224
+          },
+          {
+            "v": "10px",
+            "c": 122
+          },
+          {
+            "v": "20px",
+            "c": 67
+          },
+          {
+            "v": "30px",
+            "c": 33
+          },
+          {
+            "v": "24px",
+            "c": 3
+          },
+          {
+            "v": "7px",
+            "c": 3
+          }
+        ],
+        "weights": [
+          {
+            "v": "400",
+            "c": 2664
+          },
+          {
+            "v": "600",
+            "c": 1145
+          },
+          {
+            "v": "500",
+            "c": 771
+          },
+          {
+            "v": "700",
+            "c": 621
+          }
+        ],
+        "roles": {
+          "p": {
+            "size": "14px",
+            "weight": "500",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "family": "Inter",
+            "transform": "none"
+          },
+          "button": {
+            "size": "14px",
+            "weight": "500",
+            "lineHeight": "14px",
+            "letterSpacing": "normal",
+            "family": "Inter",
+            "transform": "none"
+          },
+          "h2": {
+            "size": "14px",
+            "weight": "700",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "family": "Montserrat",
+            "transform": "none"
+          },
+          "h3": {
+            "size": "16px",
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "family": "Inter",
+            "transform": "none"
+          },
+          "a": {
+            "size": "18px",
+            "weight": "700",
+            "lineHeight": "28px",
+            "letterSpacing": "normal",
+            "family": "Inter",
+            "transform": "none"
+          }
+        }
+      },
+      "color": {
+        "text": [
+          {
+            "v": "rgb(29, 27, 30)",
+            "c": 2653
+          },
+          {
+            "v": "oklab(0.22563 0.00455377 -0.00458863 / 0.7)",
+            "c": 807
+          },
+          {
+            "v": "rgb(99, 107, 119)",
+            "c": 716
+          },
+          {
+            "v": "oklab(0.22563 0.00455377 -0.00458863 / 0.8)",
+            "c": 508
+          },
+          {
+            "v": "rgb(255, 255, 255)",
+            "c": 170
+          },
+          {
+            "v": "rgb(88, 30, 184)",
+            "c": 124
+          }
+        ],
+        "background": [
+          {
+            "v": "rgb(255, 255, 255)",
+            "c": 2631920.404880762
+          },
+          {
+            "v": "rgb(248, 242, 246)",
+            "c": 802635.4375
+          },
+          {
+            "v": "oklab(0.999994 0.0000455678 0.0000200868 / 0.3)",
+            "c": 295728
+          },
+          {
+            "v": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+            "c": 128100
+          },
+          {
+            "v": "rgb(237, 230, 235)",
+            "c": 114815.34375
+          },
+          {
+            "v": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+            "c": 100148
+          }
+        ]
+      },
+      "radius": [
+        {
+          "v": "12px",
+          "c": 136
+        },
+        {
+          "v": "3.35544e+07px",
+          "c": 40
+        },
+        {
+          "v": "16px",
+          "c": 25
+        },
+        {
+          "v": "8px",
+          "c": 14
+        },
+        {
+          "v": "0px",
+          "c": 2
+        },
+        {
+          "v": "6px",
+          "c": 1
+        }
+      ],
+      "sections": [
+        {
+          "tag": "div",
+          "y": 0,
+          "h": 9212,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 196,
+          "heading": {
+            "tag": "h1",
+            "size": "10px",
+            "text": "Satu Sistem Terintegrasi untuk Semua Pengiriman Bi"
+          }
+        },
+        {
+          "tag": "iframe",
+          "y": 750,
+          "h": 94,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 0,
+          "heading": null
+        }
+      ]
+    },
+    "768": {
+      "url": "https://kiriminaja.com/",
+      "width": 768,
+      "height": 8749,
+      "title": "Aplikasi Kirim Paket COD Terbaik #1 Indonesia | KiriminAja",
+      "headingMax": 30,
+      "type": {
+        "families": [
+          {
+            "v": "Inter",
+            "c": 4651
+          },
+          {
+            "v": "Montserrat",
+            "c": 550
+          }
+        ],
+        "sizes": [
+          {
+            "v": "16px",
+            "c": 2608
+          },
+          {
+            "v": "14px",
+            "c": 1745
+          },
+          {
+            "v": "18px",
+            "c": 396
+          },
+          {
+            "v": "12px",
+            "c": 224
+          },
+          {
+            "v": "10px",
+            "c": 122
+          },
+          {
+            "v": "20px",
+            "c": 67
+          },
+          {
+            "v": "30px",
+            "c": 33
+          },
+          {
+            "v": "24px",
+            "c": 3
+          },
+          {
+            "v": "7px",
+            "c": 3
+          }
+        ],
+        "weights": [
+          {
+            "v": "400",
+            "c": 2664
+          },
+          {
+            "v": "600",
+            "c": 1145
+          },
+          {
+            "v": "500",
+            "c": 771
+          },
+          {
+            "v": "700",
+            "c": 621
+          }
+        ],
+        "roles": {
+          "p": {
+            "size": "14px",
+            "weight": "500",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "family": "Inter",
+            "transform": "none"
+          },
+          "button": {
+            "size": "14px",
+            "weight": "500",
+            "lineHeight": "14px",
+            "letterSpacing": "normal",
+            "family": "Inter",
+            "transform": "none"
+          },
+          "h2": {
+            "size": "14px",
+            "weight": "700",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "family": "Montserrat",
+            "transform": "none"
+          },
+          "h3": {
+            "size": "16px",
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "family": "Inter",
+            "transform": "none"
+          },
+          "a": {
+            "size": "18px",
+            "weight": "700",
+            "lineHeight": "28px",
+            "letterSpacing": "normal",
+            "family": "Inter",
+            "transform": "none"
+          }
+        }
+      },
+      "color": {
+        "text": [
+          {
+            "v": "rgb(29, 27, 30)",
+            "c": 2653
+          },
+          {
+            "v": "oklab(0.22563 0.00455377 -0.00458863 / 0.7)",
+            "c": 807
+          },
+          {
+            "v": "rgb(99, 107, 119)",
+            "c": 716
+          },
+          {
+            "v": "oklab(0.22563 0.00455377 -0.00458863 / 0.8)",
+            "c": 508
+          },
+          {
+            "v": "rgb(255, 255, 255)",
+            "c": 170
+          },
+          {
+            "v": "rgb(88, 30, 184)",
+            "c": 124
+          }
+        ],
+        "background": [
+          {
+            "v": "rgb(255, 255, 255)",
+            "c": 3800024.747556925
+          },
+          {
+            "v": "rgb(248, 242, 246)",
+            "c": 1235002.75
+          },
+          {
+            "v": "oklab(0.999994 0.0000455678 0.0000200868 / 0.3)",
+            "c": 547584
+          },
+          {
+            "v": "rgb(237, 230, 235)",
+            "c": 474451.125
+          },
+          {
+            "v": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+            "c": 214032
+          },
+          {
+            "v": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+            "c": 209768
+          }
+        ]
+      },
+      "radius": [
+        {
+          "v": "12px",
+          "c": 136
+        },
+        {
+          "v": "3.35544e+07px",
+          "c": 40
+        },
+        {
+          "v": "16px",
+          "c": 25
+        },
+        {
+          "v": "8px",
+          "c": 14
+        },
+        {
+          "v": "0px",
+          "c": 2
+        },
+        {
+          "v": "6px",
+          "c": 1
+        }
+      ],
+      "sections": [
+        {
+          "tag": "div",
+          "y": 0,
+          "h": 8749,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 196,
+          "heading": {
+            "tag": "h1",
+            "size": "10px",
+            "text": "Satu Sistem Terintegrasi untuk Semua Pengiriman Bi"
+          }
+        },
+        {
+          "tag": "iframe",
+          "y": 806,
+          "h": 94,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 0,
+          "heading": null
+        }
+      ]
+    },
+    "1440": {
+      "url": "https://kiriminaja.com/",
+      "width": 1440,
+      "height": 7119,
+      "title": "Aplikasi Kirim Paket COD Terbaik #1 Indonesia | KiriminAja",
+      "headingMax": 48,
+      "type": {
+        "families": [
+          {
+            "v": "Inter",
+            "c": 4640
+          },
+          {
+            "v": "Montserrat",
+            "c": 550
+          }
+        ],
+        "sizes": [
+          {
+            "v": "18px",
+            "c": 1989
+          },
+          {
+            "v": "16px",
+            "c": 1668
+          },
+          {
+            "v": "14px",
+            "c": 764
+          },
+          {
+            "v": "30px",
+            "c": 383
+          },
+          {
+            "v": "12px",
+            "c": 264
+          },
+          {
+            "v": "28px",
+            "c": 34
+          },
+          {
+            "v": "48px",
+            "c": 33
+          },
+          {
+            "v": "36px",
+            "c": 28
+          },
+          {
+            "v": "10px",
+            "c": 16
+          },
+          {
+            "v": "20px",
+            "c": 5
+          }
+        ],
+        "weights": [
+          {
+            "v": "400",
+            "c": 3273
+          },
+          {
+            "v": "600",
+            "c": 1134
+          },
+          {
+            "v": "700",
+            "c": 583
+          },
+          {
+            "v": "500",
+            "c": 200
+          }
+        ],
+        "roles": {
+          "button": {
+            "size": "14px",
+            "weight": "500",
+            "lineHeight": "14px",
+            "letterSpacing": "normal",
+            "family": "Inter",
+            "transform": "none"
+          },
+          "a": {
+            "size": "14px",
+            "weight": "500",
+            "lineHeight": "14px",
+            "letterSpacing": "normal",
+            "family": "Inter",
+            "transform": "none"
+          },
+          "p": {
+            "size": "18px",
+            "weight": "400",
+            "lineHeight": "28px",
+            "letterSpacing": "normal",
+            "family": "Inter",
+            "transform": "none"
+          },
+          "h2": {
+            "size": "18px",
+            "weight": "700",
+            "lineHeight": "28px",
+            "letterSpacing": "normal",
+            "family": "Montserrat",
+            "transform": "none"
+          },
+          "h3": {
+            "size": "18px",
+            "weight": "600",
+            "lineHeight": "28px",
+            "letterSpacing": "normal",
+            "family": "Inter",
+            "transform": "none"
+          }
+        }
+      },
+      "color": {
+        "text": [
+          {
+            "v": "rgb(29, 27, 30)",
+            "c": 2653
+          },
+          {
+            "v": "oklab(0.22563 0.00455377 -0.00458863 / 0.7)",
+            "c": 807
+          },
+          {
+            "v": "rgb(99, 107, 119)",
+            "c": 716
+          },
+          {
+            "v": "oklab(0.22563 0.00455377 -0.00458863 / 0.8)",
+            "c": 508
+          },
+          {
+            "v": "rgb(255, 255, 255)",
+            "c": 170
+          },
+          {
+            "v": "oklab(0.999994 0.0000455677 0.0000200868 / 0.8)",
+            "c": 120
+          }
+        ],
+        "background": [
+          {
+            "v": "rgb(255, 255, 255)",
+            "c": 3338454.78125
+          },
+          {
+            "v": "rgb(248, 242, 246)",
+            "c": 1923297
+          },
+          {
+            "v": "rgb(237, 230, 235)",
+            "c": 304462.875
+          },
+          {
+            "v": "oklab(0.999994 0.0000455678 0.0000200868 / 0.3)",
+            "c": 279546
+          },
+          {
+            "v": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+            "c": 118776
+          },
+          {
+            "v": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+            "c": 82458
+          }
+        ]
+      },
+      "radius": [
+        {
+          "v": "12px",
+          "c": 136
+        },
+        {
+          "v": "3.35544e+07px",
+          "c": 38
+        },
+        {
+          "v": "16px",
+          "c": 25
+        },
+        {
+          "v": "8px",
+          "c": 15
+        },
+        {
+          "v": "0px",
+          "c": 2
+        },
+        {
+          "v": "6px",
+          "c": 1
+        }
+      ],
+      "sections": [
+        {
+          "tag": "div",
+          "y": 0,
+          "h": 7119,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 196,
+          "heading": {
+            "tag": "h1",
+            "size": "12px",
+            "text": "Satu Sistem Terintegrasi untuk Semua Pengiriman Bi"
+          }
+        },
+        {
+          "tag": "iframe",
+          "y": 806,
+          "h": 94,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 0,
+          "heading": null
+        }
+      ]
+    }
+  }
+}

@@ -1,34 +1,45 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
+import { StatusAlert } from "@/components/auth/auth-shell";
 import { Turnstile, useCaptchaGate } from "@/components/turnstile";
 import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { signInAction, startDemoAction, type DemoState, type SignInState } from "@/lib/auth-actions";
+import { cn } from "@/lib/utils";
 
-export function SignInForm({ siteKey }: { siteKey: string | undefined }) {
+// `codeEntry`: the host also serves /daftar, so a forgotten password has a way in (an emailed code).
+export function SignInForm({ siteKey, codeEntry }: { siteKey: string | undefined; codeEntry: boolean }) {
   const [state, action, pending] = useActionState<SignInState, FormData>(signInAction, {});
   const { onToken, guard, hint } = useCaptchaGate();
+  const describedBy = state.error ? "signin-error" : undefined;
   return (
     <form action={action} className="flex flex-col gap-5" noValidate>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required
-          defaultValue={state.email} aria-invalid={state.error ? true : undefined}
-          aria-describedby={state.error ? "signin-error" : undefined} />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="password">Kata sandi</Label>
-        <Input id="password" name="password" type="password" autoComplete="current-password" required
-          aria-invalid={state.error ? true : undefined} aria-describedby={state.error ? "signin-error" : undefined} />
-      </div>
+      <FieldGroup className="gap-5">
+        <Field className="gap-2">
+          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required
+            defaultValue={state.email} aria-invalid={state.error ? true : undefined} aria-describedby={describedBy} />
+        </Field>
+        <Field className="gap-2">
+          <FieldLabel htmlFor="password">Kata sandi</FieldLabel>
+          <Input id="password" name="password" type="password" autoComplete="current-password" required
+            aria-invalid={state.error ? true : undefined} aria-describedby={describedBy} />
+        </Field>
+      </FieldGroup>
       {state.error ? (
-        <p id="signin-error" role="alert" className="text-sm text-foreground">
-          <span aria-hidden="true">⚠ </span>{state.error}
-        </p>
+        <StatusAlert variant="destructive" id="signin-error">
+          {state.error}
+          {codeEntry ? (
+            <span className="mt-1 block">
+              Lupa kata sandi? <Link href="/daftar" className="font-semibold whitespace-nowrap">Masuk dengan kode</Link>
+            </span>
+          ) : null}
+        </StatusAlert>
       ) : null}
-      <Button type="submit" disabled={pending} aria-busy={pending} {...guard}>
+      <Button type="submit" disabled={pending} aria-busy={pending} {...guard} className={cn("w-full", guard.className)}>
         {pending ? "Memeriksa…" : "Masuk"}
       </Button>
       {hint}
@@ -44,14 +55,12 @@ export function DemoEntry({ siteKey }: { siteKey: string | undefined }) {
   const { onToken, guard, hint } = useCaptchaGate();
   return (
     <form action={action} className="flex flex-col gap-3">
-      <Button type="submit" variant="outline" disabled={pending} aria-busy={pending} {...guard}>
+      <Button type="submit" variant="outline" disabled={pending} aria-busy={pending} {...guard} className={cn("w-full bg-card", guard.className)}>
         {pending ? "Menyiapkan gerai contoh…" : "Coba demo"}
       </Button>
       {hint}
       <Turnstile siteKey={siteKey} resetSignal={state} onToken={onToken} />
-      {state.error ? (
-        <p role="alert" className="text-sm text-foreground"><span aria-hidden="true">⚠ </span>{state.error}</p>
-      ) : null}
+      {state.error ? <StatusAlert variant="destructive">{state.error}</StatusAlert> : null}
     </form>
   );
 }

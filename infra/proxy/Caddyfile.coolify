@@ -1,0 +1,38 @@
+# Coolify terminates public TLS. Only its verified peer may supply forwarded IPs.
+{
+	admin off
+	auto_https off
+	servers {
+		trusted_proxies static {$COOLIFY_PROXY_CIDR}
+		trusted_proxies_strict
+		client_ip_headers X-Forwarded-For
+	}
+}
+
+:8080 {
+	@hosts host {$SITE_HOST:geraiexpress.com} {$APP_HOST:app.geraiexpress.com} {$OWNER_HOST:owner.geraiexpress.com} {$HOOKS_HOST:hooks.geraiexpress.com}
+	@internal path_regexp (?i)^/+api/+internal(/|$)
+	request_body {
+		max_size 1MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	handle @internal {
+		respond "Not Found" 404
+	}
+	handle @hosts {
+		reverse_proxy app:3000 {
+			header_up X-Real-IP {client_ip}
+			header_up X-Forwarded-Proto https
+			header_up -Forwarded
+			header_up -CF-Connecting-IP
+			header_up -True-Client-IP
+			header_up -X-Client-IP
+		}
+	}
+	handle {
+		respond "Not Found" 404
+	}
+}

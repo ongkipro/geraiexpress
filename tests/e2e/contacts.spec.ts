@@ -1,11 +1,13 @@
 // PR-2 / UX-1: save, search, edit and reuse contacts within the current tenant only.
 import { actAsVisitor, expect, randomVisitorIp, test } from "./fixtures";
-import { expectNoHorizontalOverflow, localSql, sessionUserId, signIn, startDemo } from "./helpers";
+import { atDashboard, expectNoHorizontalOverflow, localSql, sessionUserId, signIn, startDemo } from "./helpers";
 
 test("create a contact with an address, find it, edit it", async ({ page }) => {
   await startDemo(page);
   await page.goto("/kontak");
   await expect(page.getByRole("link", { name: /Sari Wulandari/ })).toBeVisible();
+  // New contacts are entered in a sheet opened from the header.
+  await page.getByRole("button", { name: "Tambah kontak" }).click();
   await page.getByLabel("Nama", { exact: true }).fill("Dewi Lestari Uji");
   await page.getByLabel("No. HP").fill("0812 7777 8888");
   await page.getByText("Tambahkan alamat (opsional)").click();
@@ -28,6 +30,7 @@ test("create a contact with an address, find it, edit it", async ({ page }) => {
 test("invalid contact keeps input and marks the field", async ({ page }) => {
   await startDemo(page);
   await page.goto("/kontak");
+  await page.getByRole("button", { name: "Tambah kontak" }).click();
   await page.getByLabel("Nama", { exact: true }).fill("Nomor Salah");
   await page.getByLabel("No. HP").fill("12");
   await page.getByRole("button", { name: "Simpan kontak" }).click();
@@ -36,8 +39,8 @@ test("invalid contact keeps input and marks the field", async ({ page }) => {
 });
 
 test("another tenant's contact is not found", async ({ page }) => {
-  await signIn(page, "owner-a@geraiexpress.test");
-  await expect(page).toHaveURL(/\/pengiriman$/);
+  await signIn(page, "owner-c@geraiexpress.test");
+  await expect(page).toHaveURL(atDashboard); // UX-16: sign-in lands on the Dashboard.
   const res = await page.goto("/kontak/00000000-0000-4000-d000-00000000000b");
   expect(res?.status()).toBe(404);
   await page.goto("/kontak");
@@ -89,7 +92,7 @@ test("add a second address, archive the primary, and a new primary remains", asy
 
 test("a tampered form aimed at another tenant's contact changes nothing", async ({ page, browser }) => {
   await signIn(page, "owner-a@geraiexpress.test");
-  await expect(page).toHaveURL(/\/pengiriman$/);
+  await expect(page).toHaveURL(atDashboard); // UX-16: sign-in lands on the Dashboard.
   await page.goto("/kontak/00000000-0000-4000-d000-00000000000a");
   await page.locator('input[name="contact_id"]').first().evaluate((el, id) => ((el as HTMLInputElement).value = id), "00000000-0000-4000-d000-00000000000b");
   await page.getByLabel("Nama", { exact: true }).fill("Diretas");
@@ -103,6 +106,7 @@ test("a tampered form aimed at another tenant's contact changes nothing", async 
   await expect(page.getByRole("alert").filter({ hasText: /⚠/ }).first()).toBeVisible();
 
   const other = await browser.newPage();
+  await actAsVisitor(other, test.info().project.use.baseURL!, randomVisitorIp());
   await signIn(other, "owner-b@geraiexpress.test");
   await other.goto("/kontak/00000000-0000-4000-d000-00000000000b");
   await expect(other.getByRole("heading", { name: "Kontak Rahasia B" })).toBeVisible();
@@ -119,6 +123,8 @@ test("tenant admin can archive a contact while operator cannot see the archive c
   const archiveBtn = page.getByRole("button", { name: "Arsipkan kontak" });
   await expect(archiveBtn).toBeVisible();
   await archiveBtn.click();
+  // Archiving asks for confirmation in a dialog first (destructive-action tier).
+  await page.getByRole("dialog").getByRole("button", { name: "Arsipkan kontak" }).click();
 
   await expect(page.getByText("Diarsipkan", { exact: true })).toBeVisible();
   await expect(page.getByText(/Kontak ini sudah diarsipkan/)).toBeVisible();

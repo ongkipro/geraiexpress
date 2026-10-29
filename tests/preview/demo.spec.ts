@@ -16,8 +16,9 @@ test("a visitor opens an isolated demo, issues a simulated shipment and prints a
   await expect(page).toHaveURL(/\/pengiriman$/);
   await expect(page.getByText(/Demo · Simulasi/)).toBeVisible();
 
-  await page.getByRole("link", { name: "Buat pengiriman" }).filter({ visible: true }).first().click();
-  await page.getByRole("button", { name: "Mulai draf baru" }).click();
+  // The list header starts the draft directly (C4: no intermediate page). Scoped to the page: the app
+  // header (T-079) carries the same action from 768 px.
+  await page.getByRole("main").getByRole("button", { name: "Buat pengiriman" }).first().click();
   await expect(page).toHaveURL(/\/pengiriman\/[0-9a-f-]{36}$/);
   await page.getByLabel("Pilih pengirim tersimpan").selectOption({ label: "Budi Santoso (contoh) · 081200000001" });
   await page.getByLabel("Pilih penerima tersimpan").selectOption({ label: "Sari Wulandari (contoh) · 081200000003" });

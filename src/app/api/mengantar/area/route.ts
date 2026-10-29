@@ -4,7 +4,7 @@ import { mengantarFailure, tenantMengantar } from "@/lib/mengantar/tenant";
 // T-023: recipient area search for a connected (non-demo) gerai, through the tenant's own seller
 // key. The tenant comes from the caller's verified membership, never from the request.
 // lazy: no per-user rate limit beyond the 3-character minimum and the client's debounce; add a
-// Workers rate limit binding if Mengantar reports quota pressure.
+// per-visitor limiter (src/lib/limiter.ts) if Mengantar reports quota pressure.
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 
 export async function GET(request: Request) {

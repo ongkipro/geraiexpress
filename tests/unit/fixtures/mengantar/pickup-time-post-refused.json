@@ -1,0 +1,5 @@
+{
+  "_fixture": "T-043: the documented refusal text only (\"invalid pickup time\", Add Time constraint). The HTTP status and body shape are Unknown; this assumes the plain 400 envelope the other endpoints use.",
+  "success": false,
+  "message": "invalid pickup time"
+}

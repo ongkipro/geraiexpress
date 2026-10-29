@@ -76,18 +76,18 @@ describe("create order (T-021)", () => {
 
   it("reports an issued shipment only with a paid item, ORDER_ID, resi and our reference", async () => {
     expect(await clientFor({ body: withMark("order-create-jt-issued.json") }).api.createOrder(request)).toEqual({
-      outcome: "issued", orderId: "261014LJ9GP7", trackingNumber: "JO6844983511", batch: "26101416Q0L7LJ", tariffWithFees: 93000,
+      outcome: "issued", orderId: "261014LJ9GP7", trackingNumber: "JO6844983511", batch: "26101416Q0L7LJ", batchId: "6acf44c1771fe2b474c05676", tariffWithFees: 93000,
     });
   });
 
   it("reports an unpaid order (no resi yet) separately", async () => {
     expect(await clientFor({ body: fixture("order-create-jt-unpaid.json") }).api.createOrder(request))
-      .toEqual({ outcome: "unpaid", orderId: "261014H0JAFR", batch: "26101416827JYE", tariffWithFees: 111600 });
+      .toEqual({ outcome: "unpaid", orderId: "261014H0JAFR", batch: "26101416827JYE", batchId: "6acf476a6b00a9b494ff04b8", tariffWithFees: 111600 });
   });
 
   it("treats success:true with an error item as a failed attempt, not an order", async () => {
     expect(await clientFor({ body: fixture("order-create-jne-item-error.json") }).api.createOrder(request))
-      .toEqual({ outcome: "failed", batch: "26101416ZI8BP1", providerRecordId: "6acf44a4771fe2b474c055fd" });
+      .toEqual({ outcome: "failed", batch: "26101416ZI8BP1", batchId: "6acf44a4771fe2b474c055dc", providerRecordId: "6acf44a4771fe2b474c055fd" });
     const odd = fixture("order-create-jne-item-error.json");
     odd.data[0].ORDER_ID = "261014ZZZZZZ"; // an error item with an identity is not "nothing happened"
     expect((await codeOf(clientFor({ body: odd }).api.createOrder(request))).code).toBe("unknown_outcome");
@@ -97,7 +97,7 @@ describe("create order (T-021)", () => {
     const { goodsValue: _omit, ...rest } = request;
     const body = fixture("order-create-jt-cod-issued.json");
     const result = await clientFor({ body }).api.createOrder({ ...rest, reference: body.data[0].destinationMark, codAmount: 150000 });
-    expect(result).toEqual({ outcome: "issued", orderId: "2610142JG95B", trackingNumber: "JO6948371799", batch: body.data[0].batch, tariffWithFees: 97994 });
+    expect(result).toEqual({ outcome: "issued", orderId: "2610142JG95B", trackingNumber: "JO6948371799", batch: body.data[0].batch, batchId: body.data[0].batch_id, tariffWithFees: 97994 });
     expect([body.data[0].COD_AMOUNT, body.data[0].GOODS_AMOUNT]).toEqual([150000, 150000]);
   });
 
@@ -154,13 +154,31 @@ describe("create order (T-021)", () => {
     await expect(api.createOrder(neither as CreateOrderRequest)).rejects.toThrow("Invalid order request");
     expect(calls).toEqual([]);
   });
+
+  it("shares live recipient limits with quote/confirmation validation (100/101, 300/301 and local phone)", async () => {
+    const valid = { ...request, recipient: { ...request.recipient, name: "N".repeat(100), address: "A".repeat(300) } };
+    const ok = clientFor({ body: withMark("order-create-jt-issued.json") });
+    await ok.api.createOrder(valid);
+    expect(ok.calls).toHaveLength(1);
+    for (const recipient of [
+      { ...valid.recipient, name: "N".repeat(101) },
+      { ...valid.recipient, address: "A".repeat(301) },
+      { ...valid.recipient, phone: "1234567890" },
+      { ...valid.recipient, phone: "081234567" },
+      { ...valid.recipient, phone: "+441234567890" },
+    ]) {
+      const refused = clientFor({ body: {} });
+      await expect(refused.api.createOrder({ ...valid, recipient })).rejects.toBeInstanceOf(InvalidOrderRequest);
+      expect(refused.calls).toEqual([]);
+    }
+  });
 });
 
 describe("order reconciliation (T-021)", () => {
   it("finds one order by ORDER_ID and reads its reference and state", async () => {
     const { api, calls } = clientFor({ body: fixture("order-find-by-id.json") });
     expect(await api.findOrder("261014H0JAFR")).toEqual({
-      orderId: "261014H0JAFR", batch: "26101416827JYE", price: 111600, reference: REF, trackingNumber: null, status: "active", paid: false, createdAt: "2026-10-14T09:12:10.231Z",
+      orderId: "261014H0JAFR", batch: "26101416827JYE", batchId: "6acf476a6b00a9b494ff04b8", price: 111600, reference: REF, trackingNumber: null, status: "active", paid: false, createdAt: "2026-10-14T09:12:10.231Z",
     });
     expect(new URL(calls[0].url).searchParams.get("order_id")).toBe("261014H0JAFR");
     expect(await clientFor({ body: fixture("order-find-unknown-id.json") }).api.findOrder("ZZZZZZZZZZZZ")).toBeNull();
@@ -206,7 +224,7 @@ describe("order reconciliation (T-021)", () => {
     const error = { ...row("x", "2026-10-14T09:10:00Z", REF), ORDER_ID: undefined, status: "error", cnote_no: null };
     const { api } = clientFor({ body: { success: true, data: [error] } }, { body: { success: true, data: [] } });
     expect(await api.findOrdersByReference({ reference: REF, courier: "JT", notBefore: new Date("2026-10-14T09:00:00Z") }))
-      .toEqual([{ orderId: null, batch: null, price: null, reference: REF, trackingNumber: null, status: "error", paid: true, createdAt: "2026-10-14T09:10:00Z" }]);
+      .toEqual([{ orderId: null, batch: null, batchId: null, price: null, reference: REF, trackingNumber: null, status: "error", paid: true, createdAt: "2026-10-14T09:10:00Z" }]);
   });
 
   it("does not claim 'not found' when the scan could not reach the attempt time", async () => {
@@ -230,24 +248,24 @@ describe("COD two-pass quoting and discontinued couriers (T-025)", () => {
         // Pass 1: codAmount = 50000 (goodsValueIdr). JNE and SiCepat share tariff 40000; JT has tariff 93000.
         if (input.codAmount === 50000) {
           return [
-            { courier: "JNE", tariff: 40000, codFee: 1750, netShipping: 32000, etaText: "1-2" },
-            { courier: "SiCepat", tariff: 40000, codFee: 1750, netShipping: 31000, etaText: "1-2" },
-            { courier: "JT", tariff: 93000, codFee: 1750, netShipping: 65100, etaText: "2-4" },
+            { courier: "JNE", tariff: 40000, codFee: 1750, netShipping: 32000, discountBps: null, etaText: "1-2" },
+            { courier: "SiCepat", tariff: 40000, codFee: 1750, netShipping: 31000, discountBps: null, etaText: "1-2" },
+            { courier: "JT", tariff: 93000, codFee: 1750, netShipping: 65100, discountBps: null, etaText: "2-4" },
           ];
         }
         // Pass 2 for tariff 40000: codAmount = 50000 + 40000 = 90000 -> codFee = 3150
         if (input.codAmount === 90000) {
           return [
-            { courier: "JNE", tariff: 40000, codFee: 3150, netShipping: 32000, etaText: "1-2" },
-            { courier: "SiCepat", tariff: 40000, codFee: 3150, netShipping: 31000, etaText: "1-2" },
-            { courier: "JT", tariff: 93000, codFee: 3150, netShipping: 65100, etaText: "2-4" },
+            { courier: "JNE", tariff: 40000, codFee: 3150, netShipping: 32000, discountBps: 2000, etaText: "1-2" },
+            { courier: "SiCepat", tariff: 40000, codFee: 3150, netShipping: 31000, discountBps: 2250, etaText: "1-2" },
+            { courier: "JT", tariff: 93000, codFee: 3150, netShipping: 65100, discountBps: 9999, etaText: "2-4" },
           ];
         }
         // Pass 2 for tariff 93000: codAmount = 50000 + 93000 = 143000 -> codFee = 4994
         return [
-          { courier: "JNE", tariff: 40000, codFee: 4994, netShipping: 32000, etaText: "1-2" },
-          { courier: "SiCepat", tariff: 40000, codFee: 4994, netShipping: 31000, etaText: "1-2" },
-          { courier: "JT", tariff: 93000, codFee: 4994, netShipping: 65100, etaText: "2-4" },
+          { courier: "JNE", tariff: 40000, codFee: 4994, netShipping: 32000, discountBps: 1, etaText: "1-2" },
+          { courier: "SiCepat", tariff: 40000, codFee: 4994, netShipping: 31000, discountBps: 1, etaText: "1-2" },
+          { courier: "JT", tariff: 93000, codFee: 4994, netShipping: 65100, discountBps: 3000, etaText: "2-4" },
         ];
       },
       {
@@ -260,9 +278,10 @@ describe("COD two-pass quoting and discontinued couriers (T-025)", () => {
     // 1 pass-1 call + 2 distinct tariff pass-2 calls (90000 and 143000)
     expect(seenCodAmounts).toEqual([50000, 90000, 143000]);
     expect(results).toEqual([
-      { courier: "JNE", tariff: 40000, codFee: 3150, netShipping: 32000, etaText: "1-2" },
-      { courier: "SiCepat", tariff: 40000, codFee: 3150, netShipping: 31000, etaText: "1-2" },
-      { courier: "JT", tariff: 93000, codFee: 4994, netShipping: 65100, etaText: "2-4" },
+      // The discount comes from the same (second) answer as the net cost and COD fee.
+      { courier: "JNE", tariff: 40000, codFee: 3150, netShipping: 32000, discountBps: 2000, etaText: "1-2" },
+      { courier: "SiCepat", tariff: 40000, codFee: 3150, netShipping: 31000, discountBps: 2250, etaText: "1-2" },
+      { courier: "JT", tariff: 93000, codFee: 4994, netShipping: 65100, discountBps: 3000, etaText: "2-4" },
     ]);
     // For JT: customer_charge = 93000 + 4994 = 97994; recipient COD = 50000 + 97994 = 147994 (fee applied once).
     const jt = results.find((r) => r.courier === "JT")!;
@@ -289,34 +308,89 @@ describe("COD two-pass quoting and discontinued couriers (T-025)", () => {
   });
 });
 
-describe("batch listing and pay-unpaid (T-026)", () => {
-  it("lists all active orders belonging to a batch and pays an unpaid batch via POST /order/pay-unpaid", async () => {
-    const batchRows = [
-      { ORDER_ID: "261014H0JAFR", batch: "26101416827JYE", destinationMark: REF, estimatedPrice: 111600, status: "active", isPaid: false, cnote_no: null, createdAt: "2026-10-14T09:12:10Z" },
-      { ORDER_ID: "261014OTHER1", batch: "26101499999999", destinationMark: "GX261014-OTHER1", estimatedPrice: 40000, status: "active", isPaid: true, cnote_no: "JO111", createdAt: "2026-10-14T09:10:00Z" },
-    ];
+describe("batch listing and pay-unpaid (T-026, T-033)", () => {
+  // The unpaid fixture holds one provider batch whose CODE and OBJECT id differ.
+  const CODE = "26101416827JYE";
+  const OBJECT_ID = "6acf476a6b00a9b494ff04b8";
+  const unpaidRow = () => fixture("order-find-by-id.json").data[0];
+
+  it("keeps the batch code and the batch object id apart from create and read responses", async () => {
+    const created = await clientFor({ body: fixture("order-create-jt-unpaid.json") }).api.createOrder(request);
+    expect(created).toMatchObject({ outcome: "unpaid", batch: CODE, batchId: OBJECT_ID });
+    expect(created).not.toMatchObject({ batch: OBJECT_ID });
+    const read = await clientFor({ body: fixture("order-find-by-id.json") }).api.findOrder("261014H0JAFR");
+    expect([read?.batch, read?.batchId]).toEqual([CODE, OBJECT_ID]);
+    // An unreadable object id is null, never copied from the code or guessed.
+    const odd = fixture("order-create-jt-unpaid.json");
+    odd.data[0].batch_id = CODE;
+    expect(await clientFor({ body: odd }).api.createOrder(request)).toMatchObject({ outcome: "unpaid", batch: CODE, batchId: null });
+  });
+
+  it("lists a batch by its code and pays it with the object id, reading the documented count", async () => {
+    const other = { ...unpaidRow(), ORDER_ID: "261014OTHER1", batch: "26101499999999", batch_id: "6acf476a6b00a9b494ff0000", destinationMark: "GX261014-OTHER1", isPaid: true, cnote_no: "JO111" };
     const { api, calls } = clientFor(
-      { body: { success: true, data: batchRows } },
-      { body: { success: true, data: [{ orderId: "261014H0JAFR", cnote_no: "JO6948371799", isPaid: true }] } },
+      { body: { success: true, data: [unpaidRow(), other] } },
+      { body: fixture("pay-unpaid-jt-success.json") },
     );
-    const listed = await api.listOrdersByBatch("26101416827JYE", "JT");
-    expect(listed).toEqual([
-      { orderId: "261014H0JAFR", batch: "26101416827JYE", price: 111600, reference: REF, trackingNumber: null, status: "active", paid: false, createdAt: "2026-10-14T09:12:10Z" },
-    ]);
-    const paid = await api.payUnpaidBatch("26101416827JYE", "JT");
+    const listed = await api.listOrdersByBatch(CODE, "JT");
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({ orderId: "261014H0JAFR", batch: CODE, batchId: OBJECT_ID, paid: false });
+    expect(new URL(calls[0].url).searchParams.get("batch")).toBe(CODE);
+
+    const paid = await api.payUnpaidBatch(OBJECT_ID, "JT");
     expect(paid).toEqual({ paidCount: 1, awbs: ["JO6948371799"] });
     expect(calls[1].url).toBe(`https://sandbox.mengantar.com/api/public/${KEY}/order/pay-unpaid`);
     expect(calls[1].init.method).toBe("POST");
-    expect(JSON.parse(String(calls[1].init.body))).toEqual({ batch_id: "26101416827JYE", courier: "JT" });
+    expect(JSON.parse(String(calls[1].init.body))).toEqual({ batch_id: OBJECT_ID, courier: "JT" });
   });
 
-  it("refuses invalid batchIds or couriers locally and preserves providerMessage on 400 pay-unpaid refusal", async () => {
+  it("refuses a code-valued payment body locally and a fake provider rejects it too", async () => {
+    // The fake accepts only the object id, like the documented endpoint ("Batch _id").
+    const calls: { method: string; url: string; body: unknown }[] = [];
+    const impl = (async (url: string | URL | Request, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      calls.push({ method: String(init?.method), url: String(url), body });
+      const reply = body && body.batch_id !== OBJECT_ID ? { status: 400, body: { success: false, message: "Batch tidak ditemukan" } } : { status: 200, body: fixture("pay-unpaid-jt-success.json") };
+      return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    const api = createMengantarPublicClient("sandbox", KEY, impl);
+    // The adapter never puts the code (uppercase, 14 chars) on the wire.
+    await expect(api.payUnpaidBatch(CODE, "JT")).rejects.toThrow("Invalid order request");
+    expect(calls).toHaveLength(0);
+    // A well-formed id that is not the batch's id is what the provider itself refuses.
+    const err = await codeOf(api.payUnpaidBatch("6acf476a6b00a9b494ff0000", "JT"));
+    expect([err.code, err.providerMessage]).toEqual(["rejected", "Batch tidak ditemukan"]);
+    expect((await api.payUnpaidBatch(OBJECT_ID, "JT")).paidCount).toBe(1);
+    expect(calls.map((c) => c.body)).toEqual([{ batch_id: "6acf476a6b00a9b494ff0000", courier: "JT" }, { batch_id: OBJECT_ID, courier: "JT" }]);
+  });
+
+  it("reads the count in data (a number) and treats any other answer as an unknown outcome", async () => {
+    for (const body of [
+      { success: true, data: [{ orderId: "261014H0JAFR" }], cnote_no: ["JO1"] }, // data is not the documented count
+      { success: true, data: "1", cnote_no: ["JO1"] },
+      { success: true, data: -1, cnote_no: ["JO1"] },
+      { success: true, cnote_no: ["JO1"] },
+      { success: true, data: 1, cnote_no: "JO1" },
+      { success: true, data: 1, cnote_no: [1] },
+    ]) {
+      expect((await codeOf(clientFor({ body }).api.payUnpaidBatch(OBJECT_ID, "JT"))).code, JSON.stringify(body)).toBe("unknown_outcome");
+    }
+    // A count without a tracking list is readable; the caller compares it with the batch.
+    expect(await clientFor({ body: { success: true, data: 2 } }).api.payUnpaidBatch(OBJECT_ID, "JT")).toEqual({ paidCount: 2, awbs: [] });
+    expect(await clientFor({ body: { success: true, data: 0, cnote_no: [] } }).api.payUnpaidBatch(OBJECT_ID, "JT")).toEqual({ paidCount: 0, awbs: [] });
+  });
+
+  it("refuses invalid batch ids or couriers locally and preserves providerMessage on 400 pay-unpaid refusal", async () => {
     const { api, calls } = clientFor({ status: 400, body: { success: false, message: "Saldo tidak mencukupi" } });
-    await expect(api.payUnpaidBatch("../bad", "JT")).rejects.toThrow("Invalid order request");
-    await expect(api.payUnpaidBatch("26101416827JYE", "Ninja")).rejects.toThrow("Invalid order request");
+    for (const bad of ["../bad", CODE, OBJECT_ID.toUpperCase(), OBJECT_ID.slice(1), ""]) {
+      await expect(api.payUnpaidBatch(bad, "JT"), bad).rejects.toThrow("Invalid order request");
+    }
+    await expect(api.payUnpaidBatch(OBJECT_ID, "Ninja")).rejects.toThrow("Invalid order request");
     expect(calls).toHaveLength(0);
 
-    const err = await codeOf(api.payUnpaidBatch("26101416827JYE", "JT"));
+    const err = await codeOf(api.payUnpaidBatch(OBJECT_ID, "JT"));
     expect([err.code, err.providerMessage]).toEqual(["rejected", "Saldo tidak mencukupi"]);
+    // The list filter still takes only the batch code shape.
+    await expect(api.listOrdersByBatch(OBJECT_ID, "JT")).rejects.toThrow("Invalid order request");
   });
 });

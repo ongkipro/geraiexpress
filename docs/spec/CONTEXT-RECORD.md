@@ -2,14 +2,17 @@
 
 - Status: Reviewed planning draft; unresolved decisions remain; not implementation-ready or production evidence.
 - Owner: Paduka Ongki
-- Updated: 2026-10-13
+- Updated: 2026-10-29
 - Depth profile: platform, because separate shipping businesses share an application.
 - Authority: Canonical repository specification at `docs/spec/`, promoted by the owner's request on 2026-10-13. Historical staging statements below describe earlier work; they do not override this authority.
 
 ## Decision brief
 
-The requested product is a new Cloudflare + Supabase shipping-outlet application,
-using LegacyReference as a workflow reference and Mengantar as the courier aggregator.
+Historical initial request (2026-10-13): the product was first requested as a Cloudflare + Supabase
+shipping-outlet application, using LegacyReference as a workflow reference and Mengantar as the courier aggregator.
+Current stack after owner decisions DEC-020 and DEC-021 (ADR-0002, 2026-10-29; built locally in T-062 and T-064..T-066, pending T-067 review):
+self-hosted Node.js container + plain PostgreSQL 17 behind PostgREST + application-owned auth module, retaining Cloudflare Turnstile as the CAPTCHA.
+The dated `CTX-*` entries below preserve their original 2026-10-13 / 2026-10-28 provenance and source excerpts as historical records.
 The current decision is how independent outlets obtain provider access and issue
 shipments for their customers, with reusable sender and recipient contacts.
 
@@ -36,7 +39,7 @@ shipments for their customers, with reusable sender and recipient contacts.
 - Source excerpt: "bikin project geraiexpress"; "ini untuk cludflare dan supabase".
 - Statement: GeraiExpress is a new project using Cloudflare and Supabase, with multiple users and tenants.
 - Confidence: High for requested direction; deployment region and account configuration remain unresolved.
-- Recheck trigger: Product owner changes the project or stack.
+- Recheck trigger: Product owner changes the project or stack. (Triggered 2026-10-29: DEC-020 replaced Cloudflare Workers with a self-hosted Node container, keeping Turnstile; DEC-021 / ADR-0002 replaced Supabase with plain PostgreSQL 17 + PostgREST + application-owned auth.)
 
 ### CTX-2 — Outlet shipping workflow
 - Status: Observed
@@ -106,7 +109,7 @@ shipments for their customers, with reusable sender and recipient contacts.
 - Source excerpt: "The Supabase client (`@supabase/supabase-js`) provides access to Supabase's various features".
 - Statement: Cloudflare documents a Workers integration using the Supabase JavaScript client.
 - Confidence: High for the supported integration path; no GeraiExpress runtime was built or tested.
-- Recheck trigger: Client or Workers runtime version selection.
+- Recheck trigger: Client or Workers runtime version selection. (Historical: superseded by DEC-020 and DEC-021 on 2026-10-29; `@supabase/supabase-js`, `@supabase/ssr` and Workers are removed, and only stand-alone `@supabase/postgrest-js` remains.)
 
 ### CTX-8 — Proposed application shape
 - Status: Proposal
@@ -118,7 +121,7 @@ shipments for their customers, with reusable sender and recipient contacts.
 - Supporting evidence: Vendor React/Vite and Supabase Workers guides; existing API-backed operator workflow.
 - Counterevidence: Existing LegacyReference server modules depend on Next.js and Node/PostgreSQL transactions and are not directly portable.
 - Consequence: Product behavior can transfer; authorization and provider orchestration need explicit adaptation.
-- Recheck trigger: Runtime selection before scaffolding application code.
+- Recheck trigger: Runtime selection before scaffolding application code. (Superseded in runtime/auth part on 2026-10-29 by DEC-020 and DEC-021 / ADR-0002: Next.js runs in a self-hosted Node container against PostgREST + PostgreSQL 17 and the application-owned auth module.)
 
 ### CTX-9 — Provider account ownership
 - Status: Decision
@@ -183,7 +186,7 @@ No task queue is generated while implementation requirements remain Proposed.
 - Tenant logo and branding on the official courier label: Unknown; distinguish the application brand, a customer receipt, and the official shipping label.
 - Contacts may serve as sender, recipient, or both: Proposal; contacts are not automatically login accounts.
 - Retention, archiving, contact export, support access, COD, markup, refunds, and account settlement: owned by Paduka Ongki before their respective implementation slices.
-- Supabase project region, Cloudflare/Supabase accounts, domain, sandbox access, and label whitelist: Unknown. No cloud provisioning or secret access performed.
+- Server provider/region and fixed IPv4, production PostgreSQL hosting/region and backup/PITR plan (replacing the earlier Cloudflare/Supabase account question under DEC-020 and DEC-021), domain DNS, sandbox access, and label whitelist: Unknown. No production provisioning or secret access performed.
 - Jurisdiction, data transfer, and regulatory applicability: Unknown; no legal conclusion is made by this draft.
 
 ## Reference review additions — 2026-10-13
@@ -310,7 +313,7 @@ a live provider proof, or deployment verification. No reference source was edite
 - Statement: Partner production source-IP allowlisting is mandatory. Workers VPC/Gateway with dedicated egress is a candidate within Cloudflare, with a Zero Trust Enterprise add-on requirement; ordinary Workers or Supabase Functions do not establish this static-IP guarantee.
 - Confidence: High for published components/requirements; the proposed combined route, entitlement, cost, approved addresses, and failover have not been tested.
 - Practical implication: ARCH-2 is a production enablement gate; no direct-fetch fallback or assumed IP-policy waiver.
-- Recheck trigger: Before infrastructure selection and again before production Partner enablement.
+- Recheck trigger: Before infrastructure selection and again before production Partner enablement. (Updated 2026-10-29 by DEC-020: the self-hosted server's fixed IPv4 address replaces the Cloudflare/Supabase egress candidates.)
 
 ### CTX-19 — User-selected shadcn/ui with Apple-inspired presentation
 - Status: Observed
@@ -333,7 +336,7 @@ a live provider proof, or deployment verification. No reference source was edite
 - Confidence: Medium until a scoped compatibility/runtime check. Cloudflare currently recommends vinext, which is beta; compatible Next.js APIs are not a guarantee of every reference dependency working.
 - Trade-offs: Next.js reduces routing/component adaptation from LegacyReference but adds adapter compatibility work. Astro supports server rendering and React islands, but a mostly interactive shipping console would still require substantial shared client state. Plain React/Vite remains technically viable; avoiding adapter dependence is its advantage.
 - Consequence: ARCH-1 now records the Next.js proposal; no Next.js-only business/auth module is copied without review. Pin the actual framework/adapter versions and verify auth, scoped reads/mutations, deep links, and queue/label flows before accepting runtime readiness.
-- Recheck trigger: Before application scaffolding or when the compatibility spike fails.
+- Recheck trigger: Before application scaffolding or when the compatibility spike fails. (Updated 2026-10-29 by DEC-020: Next.js App Router is retained on the self-hosted Node.js standalone runtime; the Cloudflare Workers adapter path is removed.)
 
 ## Partner/design update verification — 2026-10-13
 
@@ -600,7 +603,7 @@ browser/database/Workers success is inferred from the document checks.
 - Source excerpt: "If the user hasn't signed up yet, they are automatically signed up by default."
 - Statement: Native email OTP can establish an Auth session; password setup/recovery and SSR callbacks remain separate from application tenant permissions. User creation behavior, expiry and quotas require explicit project configuration.
 - Confidence: High for documented features; no GeraiExpress Auth instance or mail delivery has been tested.
-- Recheck trigger: Before Auth implementation, selected SDK/version change or signup release.
+- Recheck trigger: Before Auth implementation, selected SDK/version change or signup release. (Historical vendor evidence: superseded on 2026-10-29 by DEC-021 / ADR-0002, which replaces Supabase Auth with the application-owned auth module in `src/lib/auth/**` and `db/migrations/20261029100000_auth_core.sql`.)
 
 ### CTX-34 — Recommended registration operating policy
 - Status: Decision
@@ -625,7 +628,7 @@ browser/database/Workers success is inferred from the document checks.
 - Statement: Supabase supports custom SMTP and Cloudflare documents authenticated SMTP sending. Their composition is a candidate within the selected stack; Cloudflare sending eligibility/domain and actual interoperability/delivery remain unverified. Supabase's built-in test mailer is not a public-signup delivery solution.
 - Confidence: High for documented individual features; combined runtime outcome Unknown.
 - Practical implication: ARCH-3 proposes native custom SMTP first; no custom mail hook or third-party service is needed unless this composition fails and a revised design is accepted.
-- Recheck trigger: Before production email setup, public registration, or vendor/plan change.
+- Recheck trigger: Before production email setup, public registration, or vendor/plan change. (Historical vendor evidence: superseded by DEC-009, then DEC-020 and DEC-021 / ADR-0002; the app renders Bahasa code mail in `src/lib/auth-mail.ts` and sends via `src/lib/mail-transport.ts`, with production provider selection open in T-063.)
 
 Registration documentation verification, 2026-10-13: research-stage structural
 validator PASS with 12 specification Markdown files, 128 declarations, zero tasks
@@ -741,3 +744,81 @@ ARCH-4 adds the proposed code layout, trust diagram, module/deployment ownership
 and primary execution paths. No application source, dependencies, cloud resource,
 account, migration, live provider operation, Git commit/push or deployment is
 created by this promotion. Native generator is none.
+
+## Market direction and operating model (2026-10-28)
+
+### CTX-39 — Target market, operating model and pilot
+- Status: Decision
+- Status scope: Decision (owner-stated, 2026-10-28, amended the same day); items marked Unknown or Assumption are not decided
+- Evidence kind: human-policy
+- Owner: Paduka Ongki
+- Source: User conversation, 2026-10-28.
+- Source locator: Answers to the product-direction questions after the full review (docs/review/2026-10-28-full-review.md section 8).
+- Source excerpt: "gerai yang akan menggantikan gerai konvensional pada umumnya dengan kelebihan lengkapnya ekspedisi pengiriman dalam 1 dashboard"; "pembagian cashback dari mengantar ke kita dan ke user gerai (kita yang tentukan dari super admin)"; "bagi hasil dari keuntungan ... hasil dari biaya pengiriman dibagi ke kita dan ke user gerai"; "mungkin 50 tenant atau gerai"; "pickup ... masking resi ini yang penting".
+- Statement (Decision): The first target is the offline gerai or physical expedition counter. The product is a single dashboard that lets one gerai offer every supported courier, replacing a conventional single-courier counter. GeraiExpress owns the Mengantar Partner account (DEC-012). The sender (customer) pays the full normal tariff. The gerai receives a discount, and the Super Admin sets that discount. No separate platform fee is collected from the gerai in the first release ("diskon saja"). The owner runs the first pilot gerai. The first target scale is about 50 tenants.
+- Statement (Decision, scope): Pickup support and resi masking are the priority differentiators, ahead of reporting or finance extras. LegacyReference already supports pickup; the GeraiExpress build issues drop-off only (`type: "dropOff"`, public-api.ts) and must gain pickup (provider time reservation) before launch.
+- Decision: "Masking resi" follows LegacyReference (owner: "sesuaikan dengan [proyek lama]"): the gerai prints its own label that carries the Mengantar airway bill and shows the sender identity the gerai chooses, not the Mengantar pickup name. A switch ("Gunakan masking pengirim") selects between the gerai's own name, WhatsApp and pickup address, and an operator-entered sender name, phone and city; the Mengantar pickup name is never printed as the sender by default. The label is produced locally (10x15 cm default, 10x10 cm option) with a Code128 barcode that decodes to the AWB; no provider dropshipper mapping is used. LegacyReference evidence: its PRD requirement 71 and decisions D-14 and D-30, read 2026-10-28. This replaces the earlier assumption that the provider PDF label (PR-6) and a provider dropshipper (PR-3) are required.
+- Decision: The gerai discount is configuration, never a constant. The owner's current starting terms are in CTX-42 and may change.
+- Decision (2026-10-28, owner: "pengirim seperti [proyek lama]"): The sender shown on the masked label follows the legacy product. Observed in the legacy project (read 2026-10-28): the gerai WhatsApp is a tenant-level field captured at registration, shown on the label while masking is off, editable only by the tenant administrator through a dedicated audited function, and stored in the canonical form `0` plus the Indonesian national number (`^0[2-9][0-9]{7,11}$`). Observed here (2026-10-28): the registration application already stores `contact_phone`, but approval copies only the business name, pickup address and pickup area, and neither `tenants` nor `outlets` has a WhatsApp column. Decision: the gerai WhatsApp becomes a tenant-level field `contact_whatsapp`, initialized at approval from the application's business contact phone, normalized to the canonical form (a leading `+62` or `62` becomes `0`), editable only by a tenant administrator through an audited command, and printing the masked label is blocked with a prompt when it is empty. The gerai name comes from the tenant and the pickup address from the outlet. Proposal (until the migration task is accepted): the exact normalization and the backfill of existing tenants from their applications. Interpretation note: the owner's sentence was read as "source of the sender identity like the legacy product"; the owner may correct this.
+- Assumption: About 50 tenants is a planning figure ("mungkin"), not a commitment; Partner limits (1,000 registrations per day, 60 requests per minute shared) are not a constraint at that scale.
+- Confidence: High that this is the owner's stated direction; Low for volume, timing and commercial terms, which stay unmeasured.
+- Consequence: PR-23 (gerai discount administration) becomes core, not optional. Pickup (PR-5 extension) and the masked local label (PR-6, following legacy requirement 71) become launch requirements; PR-3 provider dropshipper stays deferred (DEC-013, DEC-017). Public marketing may not state any percentage until the terms are provider-verified (DEC-012).
+- Recheck trigger: Owner defines masking, the platform-share collection path or the commercial agreement; the pilot gerai goes live.
+
+### CTX-40 — Mengantar cashback or revenue-share capability
+- Status: Observed
+- Evidence kind: direct-observation
+- Owner: Integration owner
+- Source: Mengantar sandbox documentation pages read on 2026-10-28: the Public API documentation and the Partner API documentation (public sandbox host).
+- Source locator: Full-text search of both pages for cashback, commission, rebate, revenue, profit and payout, plus a read of the estimate, invoices and balance sections.
+- Source excerpt: "Discount calculation is based on user's shipping volume"; "/allEstimatePublic ... has a fixed 20% discount"; "Each user you register gets a normal Mengantar seller account in their own name ... They can ... see their balance, withdraw money".
+- Statement: Neither page documents cashback, commission, rebate or any revenue share between Mengantar, a partner and its sellers; the search terms return zero hits. The documented mechanisms are a per-seller volume discount (`discountPercent`, `estimatedSpecialPrice`, `discount`), undocumented `discountExtra*` fields, a fixed 20% discount on the public estimate, standardized raw rates on the 3PL estimate, and a seller-owned balance and withdrawal. The Partner API only registers sellers, lists them and reads or regenerates their key.
+- Confidence: High for what the two pages say; Unknown whether Mengantar offers partner cashback outside these pages or in a newer API version. The owner believes the newest API supports it ("sepertinya"); that is not confirmed by the pages read.
+- Practical implication: PR-23 cannot assume a provider endpoint. Two models stay open: (A) a commercial partner rebate from Mengantar, outside the API, which GeraiExpress records and splits itself; (B) a platform-defined share of the spread between the customer's normal tariff and the seller's discounted cost, both of which the Public API returns. Model B needs no provider agreement but needs a platform settlement path (CTX-39). The owner must obtain written confirmation from the Mengantar contact before any percentage, cashback claim or settlement design is accepted.
+- Recheck trigger: Mengantar confirms in writing, publishes a newer API version, or the `discountExtra*` fields are explained.
+
+### CTX-41 — Host topology and tenant naming
+- Status: Decision
+- Status scope: Decision (hosts and items 1 to 17; items 1 to 10 accepted on 2026-10-28 with "rekomendasimu dan sempurnakan", items 11 to 17 accepted the same day with "setuju")
+- Evidence kind: human-policy
+- Owner: Paduka Ongki
+- Source: User conversation, 2026-10-28.
+- Source locator: Request to settle the system and slug structure before development.
+- Source excerpt: "super admin domain langsung pakai owner.geraiexpress.com | gerai pakai app.geraiexpress.com sisanya kalo ada yang lain kau sempurnakan".
+- Statement (Decision): The Super Admin workspace is served only from `owner.geraiexpress.com`. The gerai (tenant) application is served only from `app.geraiexpress.com`. The public marketing site stays on the apex domain `geraiexpress.com` (current routes `/`, `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`).
+- Statement (Decision, accepted 2026-10-28): (1) One tenant host, not one host per tenant: the tenant comes from the verified membership and the `ge_tenant` cookie as today, never from the hostname. (2) A tenant `slug` is an immutable, unique, lower-case identifier used for display, shipment-reference prefixes and support lookups, never for authorization. (3) Session cookies are host-only and never set on `.geraiexpress.com`, so an app-host cookie is not sent to the owner host. (4) Host routing is enforced server-side: the owner host serves only platform routes, the tenant host serves only tenant routes, and each refuses the other's paths (404, not redirect); today both sets live on one host. (5) Optional second gate on the owner host: Cloudflare Access in front of `owner.` in addition to Supabase TOTP (aal2). (6) Provider webhooks (PR-12) get their own cookie-less host, for example `hooks.geraiexpress.com`, authenticated only by signature. (7) The Mengantar egress gateway (DEC-011) has no public product host; only the fixed egress address is published to Mengantar. (8) Non-production hosts are single-level names such as `app-staging.geraiexpress.com` and `owner-staging.geraiexpress.com`, because Cloudflare Universal SSL covers only one subdomain level. (9) All non-marketing hosts send `X-Robots-Tag: noindex`. (10) Auth links (OTP, invitation, redirect URLs, Send Email Hook) are built per environment from configuration, never from request headers.
+- Statement (Decision, accepted 2026-10-28): (11) Tenant slug format is `^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$`; reserved names (`www`, `app`, `owner`, `hooks`, `api`, `admin`, `mail`, `status`, `static`, `assets`, `staging`, `preview`, `demo`, `support`) and the blocked marketing keyword are refused; a display name stays editable while the slug is not. (12) The shipment reference becomes `<PREFIX>-<yymmdd>-<seq>` with a per-tenant prefix of 3 to 5 upper-case letters set at activation and a per-tenant, per-day counter taken under a row lock, replacing the 24-bit random suffix that can collide. (13) Entry points: `/` on the owner host redirects to platform sign-in and lands on the platform overview; `/` on the app host redirects to sign-in and lands on the shipment queue; the gerai chooser lives on the app host only. (14) One identity may be both a platform administrator and a tenant member, but each host keeps its own session and platform actions never run in a tenant context. (15) Environment matrix: preview, staging and production each have a separate Supabase project, a separate Worker, their own host names and their own Mengantar environment (sandbox for preview and staging, production for production); no credential or seller id is shared across environments. (16) Each host has its own health route, `not-found` and error pages in Bahasa Indonesia, and its own CSP; there is no cross-origin API, so CORS stays off. (17) Auth e-mail keeps the apex sender address; sending-domain verification and SPF/DKIM are a production gate (DEC-009).
+- Confidence: High for the two owner-selected hosts; Medium for the proposals, which come from the legacy host split and standard practice, not from measured need. The Universal SSL point is documented Cloudflare behavior but was not re-verified in this session.
+- Consequence: A host-routing task (T-042) replaces the single-host layout; per-environment origins, `src/proxy.ts`, Caddy host routing (`infra/proxy/Caddyfile`), CSP and `src/lib/db/cookies.ts` enforce it (updated 2026-10-29 for DEC-020 and DEC-021; the former Supabase redirect/hook and `wrangler.jsonc` settings are removed); the e2e suite uses host-aware base URLs.
+- Recheck trigger: Owner changes any item; a second tenant-facing product surface appears; a white-label domain per tenant is requested; the reserved-name rule's keyword precaution is reviewed (the market note found no official basis for it).
+
+### CTX-42 — Gerai discount terms and the provider discount facts
+- Status: Decision
+- Status scope: Decision (owner-stated starting terms, unverified); Observed (provider facts)
+- Evidence kind: human-policy
+- Supporting evidence: direct-observation (provider facts distinguished below)
+- Owner: Paduka Ongki (terms); Integration owner (provider facts)
+- Source: User conversation, 2026-10-28; Mengantar help page "Apa Kelebihan Mengantar?" and the Public API estimate documentation, both read 2026-10-28.
+- Source locator: Owner message on default discounts; the "Diskon Ongkos Kirim" section of the help page; estimate response fields `discountPercent`, `discountExtraPercent`, `estimatedSpecialPrice`.
+- Source excerpt: "default diskon dari mengantar 30% ... gerai dapat 20% diskon sisanya kita"; "Diskon Ongkos Kirim Mulai 20% ... Semakin banyak volume pengiriman kamu, maka diskonnya juga semakin bertambah"; "Lebih dari 10.000 mendapatkan 30%".
+- Statement (Decision, starting terms): The owner expects the Mengantar discount for GeraiExpress sellers to be 30% of the normal tariff, the gerai to receive 20%, and GeraiExpress to keep the remaining 10 points. These values may change. They are Super Admin configuration with an effective date, a source reference and an audit trail, stored as integer basis points; the platform remainder is derived (provider discount minus gerai discount) and never typed. Each value carries a status: owner-stated, provider-observed or provider-verified.
+- Statement (Observed): Mengantar publishes volume steps: from 20%, then 22.5%, 25%, 27.5% and 30% only above the 10,000 step (the page states neither the unit nor the period). The sandbox estimate example returns `discountPercent: 20` and `discountExtraPercent: 0`, and the public estimate has a fixed 20%. Nothing read states that a partner-registered seller starts at 30%, that a partner can set a per-seller discount, that a partner's sellers are pooled for volume, or that Mengantar pays a partner anything.
+- Confidence: High for the quoted provider facts; Low that the owner's 30% applies to new partner sellers.
+- Risk: With about 50 small sellers, each seller account would sit on its own volume step. If every seller is at 20%, the gerai's 20% equals the provider's and the platform keeps 0 points. If the provider charges the seller 30% while the gerai is promised 20%, the 10 points must be collected from the gerai (a settlement path the first release does not have) or paid to GeraiExpress by Mengantar (not documented).
+- Practical implication: Ask Mengantar in writing: (1) does a partner-registered seller get a negotiated discount and is it 30% from the first shipment; (2) can the partner set or change a per-seller discount, and how is it activated; (3) are the partner's sellers pooled for volume steps; (4) does Mengantar pay the partner a rebate, and how is it settled. Until answered, the platform remainder is shown as an estimate, a gerai discount larger than the provider-observed discount is blocked (no local subsidy, PR-23), and the observed provider percentage is recorded from each estimate response so drift is visible.
+- Recheck trigger: Mengantar answers in writing; the observed `discountPercent` for a seller changes; the owner changes the terms.
+- Owner answer (2026-10-28, "ya di atur per seller dari super admin"): the gerai discount is assigned per seller (per tenant) by the Super Admin inside GeraiExpress. This answers how GeraiExpress administers the discount; it does not answer whether Mengantar lets a partner set or change a seller's discount upstream (question 2 above), which stays open. Because the seller account is the gerai's own and Mengantar debits at that account's rate, the assigned discount is a cost basis and a variance is shown, not collected (DEC-018 item 1).
+
+### CTX-43 — Research evidence added on 2026-10-28 and the open questions it leaves
+- Status: Observed
+- Status scope: Observed (evidence); Unknown (open questions)
+- Evidence kind: direct-observation
+- Owner: Integration owner (provider facts); Paduka Ongki (policy)
+- Source: `docs/research/geraiexpress-market-and-regulatory-research.md` and `docs/research/geraiexpress-mengantar-operations-contract.md`, both read from public pages on 2026-10-28 (no credentials, no API calls).
+- Source locator: market note sections 1 to 6; operations-contract note sections 2 to 12.
+- Source excerpt: none quoted here; each claim carries its source and access date in the notes.
+- Statement (Observed): (a) Mengantar's Terms page requires proof of more than 2,500 shipments per month, sent to live chat, before a discount above 20% is applied; the sandbox example and the public estimate show 20%; no page says a partner seller starts at 30%. (b) Competing aggregators (Komship, AutoKirim, KiriminAja, Fastpay, Everpro and others) already publish multi-courier counter offers, some at 25% or more with an agent-set share; pickup is common, not a differentiator. (c) Sender substitution on labels is mainstream, but every documented case is entered in the provider's own system; no source says a courier hub accepts a locally printed label, and Mengantar advises hiding the sender address only when forced. (d) Mengantar treats the behavior of partner-registered sellers as the partner's responsibility and can switch off partner access entirely, so one tenant's misuse can affect all tenants. (e) The webhook payload carries no seller identifier, only the seller can set the Webhook URL, delivery is best effort with three retries and an automatic pause, and it comes from no fixed address. (f) The create-order example's discount arithmetic does not add up (a 30% reduction against a stated 20% discount); cause unknown. (g) `pay-unpaid` needs the batch `_id`, the code sends the batch code, and the response count is not read. (h) The provider label requires the `labelGeneration` permission; the 403 seen on 2026-10-14 cannot show the cause.
+- Statement (Unknown): The platform remainder under DEC-016 may be 0 for a long time; whether the owner accepts a model that earns nothing until volume grows is a business decision. The masking misuse policy (what the platform does when a tenant prints a false sender), courier acceptance of a locally printed label, whether each host must be entered in the electronic system provider registration, and the twelve legal items in market note section 4.7 are open. (The source of the gerai WhatsApp number was resolved in CTX-39 on 2026-10-28.)
+- Confidence: High for the quoted page content; Medium for competitor claims, which are vendor marketing; Low for any market-size or profitability statement, which the notes deliberately do not make.
+- Consequence: DEC-016 and DEC-017 are re-labelled as unproven in `DECISIONS.md`; T-048 holds the verification gates (written Mengantar answers, one real masked parcel per courier, a four-week pilot log, counsel review) and is the dependency for announcing masking or showing any discount percentage publicly.
+- Recheck trigger: Mengantar answers in writing; the courier test finishes; the pilot log exists; counsel answers.

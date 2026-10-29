@@ -1,24 +1,29 @@
+import { MessageCircle } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
-import { MarketingPageHero, MarketingShell } from "@/components/marketing/marketing-shell";
+import { Button } from "@/components/ui/button";
 import {
-  BRAND,
-  SIGN_IN_URL,
-  SIGN_UP_URL,
-  WHATSAPP_DISPLAY,
-  WHATSAPP_URL,
-} from "@/lib/marketing-data";
+  CtaLinks,
+  HEADLINE,
+  LEAD,
+  MarketingPageHero,
+  MarketingSection,
+  MarketingShell,
+} from "@/components/marketing/marketing-shell";
+import { BRAND, WHATSAPP_DISPLAY, WHATSAPP_URL } from "@/lib/marketing-data";
+import { cn } from "@/lib/utils";
+
+const TITLE = "Hubungi Tim Onboarding Loket Multi-Kurir";
+const DESCRIPTION =
+  "Hubungi tim GeraiExpress lewat WhatsApp untuk pertanyaan pendaftaran gerai, persetujuan, dan koneksi akun Mengantar.";
 
 export const metadata: Metadata = {
-  title: "Hubungi Tim Onboarding dan Bantuan Loket Multi-Kurir",
-  description:
-    "Hubungi tim GeraiExpress untuk panduan daftar loket kasir multi-kurir gratis, koneksi akun Mengantar, dan cetak resi thermal pertama lewat WhatsApp.",
+  title: TITLE,
+  description: DESCRIPTION,
   robots: { index: true, follow: true },
   alternates: { canonical: "/hubungi-kami" },
   openGraph: {
-    title: "Hubungi Tim Onboarding dan Bantuan Loket Multi-Kurir · GeraiExpress",
-    description:
-      "Hubungi tim GeraiExpress untuk panduan daftar loket kasir multi-kurir gratis, koneksi akun Mengantar, dan cetak resi thermal pertama lewat WhatsApp.",
+    title: `${TITLE} · GeraiExpress`,
+    description: DESCRIPTION,
     url: "https://geraiexpress.com/hubungi-kami",
     siteName: "GeraiExpress",
     locale: "id_ID",
@@ -26,104 +31,73 @@ export const metadata: Metadata = {
   },
 };
 
+const SIGN_UP_STEPS = [
+  "Daftar dengan email gerai, verifikasi kode 6 digit, lalu atur kata sandi.",
+  "Ajukan profil gerai Anda.",
+  `Tunggu persetujuan admin ${BRAND}. Pendaftaran dibuka bertahap; hubungi admin bila Anda belum bisa mendaftar.`,
+  "Setelah disetujui, hubungkan akun Mengantar gerai Anda di Pengaturan untuk membuat kiriman.",
+] as const;
+
+// The page's single contact action (owner rule: one WhatsApp CTA per page, secondary style,
+// monochrome icon) sits in the contact section; the hero carries no CTA.
 export default function HubungiKamiPage() {
   return (
     <MarketingShell currentPath="/hubungi-kami">
       <MarketingPageHero
-        title="Aktifkan loket di toko Anda, gratis"
-        lead={`Tim onboarding ${BRAND} memandu pendaftaran, koneksi akun Mengantar gerai, dan cetak resi thermal pertama Anda.`}
-        showSignUp={false}
+        title="Aktifkan loket di toko Anda"
+        lead={`Tim onboarding ${BRAND} menjawab pertanyaan seputar pendaftaran, persetujuan gerai, dan koneksi akun Mengantar.`}
+        cta="none"
       />
 
-      <section className="border-b border-border bg-background py-14 sm:py-20" aria-label="Cara menghubungi kami">
-        <div className="mx-auto grid max-w-6xl gap-x-10 gap-y-10 px-4 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr] lg:px-8">
-          <div className="border-t-4 border-primary pt-4">
-            <h2 className="text-lg font-semibold text-foreground">WhatsApp onboarding</h2>
-            <p className="mt-1.5 text-base leading-relaxed text-muted-foreground">
+      <MarketingSection tone="parchment" label="Cara menghubungi kami">
+        <div className="grid gap-14 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] md:gap-12 lg:gap-20">
+          <div>
+            <h2 className={cn(HEADLINE, "max-w-[14ch]")}>WhatsApp onboarding</h2>
+            <p className={cn(LEAD, "mt-5 max-w-[32rem]")}>
               Tanya langsung ke admin {BRAND} soal pendaftaran, persetujuan gerai, atau koneksi Mengantar.
             </p>
-            <p className="mt-3 text-xl font-semibold tabular-nums text-foreground">{WHATSAPP_DISPLAY}</p>
-            <a
-              href={WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 inline-flex min-h-11 min-w-11 items-center gap-2 rounded-full border border-border bg-card px-5 text-base font-semibold text-foreground transition-colors hover:border-primary hover:text-primary"
-            >
-              <svg
-                aria-hidden="true"
-                className="size-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
-              </svg>
-              Chat lewat WhatsApp
-            </a>
-          </div>
-
-          <div className="border-t-2 border-primary pt-4">
-            <h2 className="text-lg font-semibold text-foreground">Jam dukungan</h2>
-            <p className="mt-1.5 text-base leading-relaxed text-muted-foreground">
-              Kami membantu koneksi printer thermal dan transaksi pertama sampai lancar.
+            <p className="tabular mt-8 text-[clamp(1.75rem,1.4rem+1.4vw,2.5rem)] font-semibold tracking-tight">
+              {WHATSAPP_DISPLAY}
             </p>
-            <dl className="mt-3 space-y-1 text-base text-foreground">
-              <div className="flex justify-between gap-4">
-                <dt>Senin–Sabtu</dt>
-                <dd className="font-semibold tabular-nums">08.00–21.00 WIB</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt>Minggu &amp; libur</dt>
-                <dd className="font-semibold tabular-nums">09.00–17.00 WIB</dd>
-              </div>
-            </dl>
+            <Button asChild variant="outline" size="lg" className="mt-6 font-semibold hover:bg-info-soft">
+              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
+                <MessageCircle className="size-5" aria-hidden="true" />
+                Chat lewat WhatsApp
+              </a>
+            </Button>
           </div>
 
-          <div className="border-t-2 border-primary pt-4">
-            <h2 className="text-lg font-semibold text-foreground">Jangkauan</h2>
-            <p className="mt-1.5 text-base leading-relaxed text-muted-foreground">
-              Untuk konter pulsa, toko fotokopi, sembako, dan minimarket di Indonesia. Penjemputan mengikuti jangkauan
-              pickup kurir lewat Mengantar di area toko Anda.
+          <div className="md:self-center md:border-l md:border-border md:py-6 md:pl-12 lg:pl-20">
+            <h2 className="text-xl font-semibold leading-snug">Ingin mencoba dulu?</h2>
+            <p className="mt-2 text-base leading-relaxed text-muted-foreground">
+              Masuk lewat tombol demo untuk mencoba alur kasir dengan gerai contoh. Harga dan resi di demo adalah
+              simulasi.
             </p>
           </div>
         </div>
-      </section>
+      </MarketingSection>
 
-      <section className="py-14 sm:py-16" aria-labelledby="judul-daftar">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-          <h2 id="judul-daftar" className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+      <MarketingSection tone="white" labelledBy="judul-daftar">
+        <div className="max-w-[46rem]">
+          <h2 id="judul-daftar" className={HEADLINE}>
             Mendaftar sendiri
           </h2>
-          <ol className="mt-6 list-decimal space-y-3 pl-5 text-base leading-relaxed text-foreground marker:font-semibold marker:text-primary">
-            <li>Daftar dengan email gerai, verifikasi kode 6 digit, lalu ajukan profil gerai Anda.</li>
-            <li>Verifikasi email dari tautan atau kode yang kami kirim.</li>
-            <li>Masuk, lalu hubungkan akun Mengantar gerai Anda di Pengaturan.</li>
-            <li>
-              <strong className="font-semibold">Tunggu persetujuan admin {BRAND}.</strong> Setelah disetujui, gerai bisa
-              membuat kiriman.
-            </li>
+          <ol className="mt-10">
+            {SIGN_UP_STEPS.map((step, index) => (
+              <li
+                key={step}
+                className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-baseline gap-x-4 border-t border-border py-6 text-[19px] leading-[1.45] sm:text-xl md:grid-cols-[4rem_minmax(0,1fr)]"
+              >
+                <span className="tabular text-3xl font-semibold leading-none text-primary" aria-hidden="true">
+                  {index + 1}
+                </span>
+                <span>{step}</span>
+              </li>
+            ))}
           </ol>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link
-              href={SIGN_UP_URL}
-              data-cta="daftar"
-              className="inline-flex min-h-12 min-w-11 items-center justify-center rounded-full bg-primary px-8 text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-            >
-              Daftar gratis
-            </Link>
-            <Link
-              href={SIGN_IN_URL}
-              data-cta="demo"
-              className="inline-flex min-h-12 min-w-11 items-center justify-center rounded-full border border-border bg-card px-7 text-base font-semibold text-foreground transition-colors hover:bg-secondary"
-            >
-              Masuk / Coba demo
-            </Link>
-          </div>
+          <CtaLinks lead="daftar" className="mt-10" />
         </div>
-      </section>
+      </MarketingSection>
     </MarketingShell>
   );
 }

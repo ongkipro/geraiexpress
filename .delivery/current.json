@@ -1,14 +1,34 @@
 {
-  "activeRun": null,
-  "lastRun": {
-    "finishedAt": "2026-10-27T16:32:39Z",
-    "result": "PASS",
-    "runId": "RUN-20261027T154818Z-a871bd43"
+  "activeRun": "RUN-20261028T204220Z-c1d101ad",
+  "activeTask": "T-054",
+  "capability": "unattributed",
+  "job": "implementation",
+  "lastCheckpoint": {
+    "eventHash": "9f293ce2c373fe3eb87fb3042ecea88ab126100f640133c82787deaafeb97573",
+    "eventId": "fddaf7f2c6234d13b49d52c43f02335c",
+    "head": "5f85d8631cc21ad32c146dc9f34b1d991a8b6c2a",
+    "note": "Backend through 20261029200000. Third review FAIL (1 Medium: unknown batch close without 30-min window) fixed in 200000; fourth review of 190000/200000 PASS (0 C/H/M, 3 Low recorded). T-054/T-057/T-067 checked; T-056 backend complete, UI buttons+e2e open. gxdb migrated (45) via db:up, no reset. UI paths out of boundary belong to parallel UI session.",
+    "prevEventHash": "b7d256a0ea94806d24beee511e163b895e2567945724cb0aa99a375e62cd0fc4",
+    "runId": "RUN-20261028T204220Z-c1d101ad",
+    "state": "INTEGRATING",
+    "time": "2026-10-29T04:44:38Z",
+    "type": "checkpoint"
   },
-  "observedHead": "f059a9a14d46813bf94ef3424073914fcc2d8b47",
-  "observedState": "AWAITING_DEPLOY_APPROVAL",
+  "lastRun": {
+    "finishedAt": "2026-10-28T20:38:53Z",
+    "result": "PASS",
+    "runId": "RUN-20261028T202348Z-04a72f5c"
+  },
+  "model": "gpt-6",
+  "observedHead": "5f85d8631cc21ad32c146dc9f34b1d991a8b6c2a",
+  "observedState": "INTEGRATING",
   "project": "geraiexpress",
+  "provider": "openai",
+  "reasoningEffort": "high",
+  "requirement": "SEC-6",
+  "risk": "R4",
   "schemaVersion": 1,
   "statusAuthority": "STATUS.md",
-  "updatedAt": "2026-10-27T16:32:39Z"
+  "updatedAt": "2026-10-29T04:44:38Z",
+  "worker": "codex-backend-followup"
 }

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createPartnerClient, PartnerError, partnerSignature } from "../../src/lib/mengantar/partner-api";
 
@@ -142,5 +143,48 @@ describe("list sellers and seller keys", () => {
 
   it("only knows the sandbox until a production origin is provided", () => {
     expect(() => createPartnerClient("production" as "sandbox", "partner-x", SECRET)).toThrow();
+  });
+});
+
+// T-039 / PR-19: regenerate retires the old key immediately; bodies come from the Partner documentation.
+const fixture = (name: string) => JSON.parse(readFileSync(new URL(`fixtures/mengantar/${name}`, import.meta.url), "utf8"));
+const REGEN_SELLER = "66ab1234567890abcdef1234";
+
+describe("regenerate seller key (T-039)", () => {
+  it("signs the regenerate path, sends only the seller id and returns the key without the callback secret", async () => {
+    const { api, calls } = client({ status: 200, body: fixture("partner-regenerate-success.json") });
+    const key = await api.regenerateSellerKey(REGEN_SELLER);
+    expect(key).toBe("API-NEWKEY8F2QX7ZB1MT");
+    expect(typeof key).toBe("string");
+    const { url, init } = calls[0];
+    expect(url).toBe("https://sandbox.mengantar.com/api/partner/v1/sellers/api-key/regenerate");
+    expect(init.redirect).toBe("manual");
+    expect(JSON.parse(String(init.body))).toEqual({ sellerId: REGEN_SELLER });
+    const headers = init.headers as Record<string, string>;
+    expect(headers.signature).toBe(await partnerSignature("/api/partner/v1/sellers/api-key/regenerate", String(init.body), "1758790800", SECRET));
+    expect(headers.signature).not.toBe(await partnerSignature("/api/partner/v1/sellers/api-key", String(init.body), "1758790800", SECRET));
+    // The secret is neither returned nor kept anywhere the caller can reach.
+    expect(JSON.stringify(key)).not.toContain("CALLBACK-SECRET");
+    expect(await client({ status: 200, body: fixture("partner-regenerate-success-no-webhook.json") }).api.regenerateSellerKey(REGEN_SELLER)).toBe("API-NEWKEY8F2QX7ZB1MT");
+  });
+
+  it("accepts a key only for the seller asked for and treats a bad shape as malformed", async () => {
+    const reply = (data: unknown) => ({ status: 200, body: { success: true, data } });
+    expect((await failure(client(reply({ sellerId: "66ab1234567890abcdef9999", apiKey: "API-NEWKEY8F2QX7ZB1MT" })).api.regenerateSellerKey(REGEN_SELLER))).code).toBe("malformed");
+    expect((await failure(client(reply({ sellerId: REGEN_SELLER, apiKey: "../evil key" })).api.regenerateSellerKey(REGEN_SELLER))).code).toBe("malformed");
+    expect((await failure(client(reply({ sellerId: REGEN_SELLER })).api.regenerateSellerKey(REGEN_SELLER))).code).toBe("malformed");
+    await expect(client(reply({})).api.regenerateSellerKey("../x")).rejects.toThrow("Invalid sellerId");
+  });
+
+  it("maps the documented refusals and transport failures", async () => {
+    const stop = await failure(client({ status: 403, body: fixture("partner-error-seller-deactivated.json") }).api.regenerateSellerKey(REGEN_SELLER));
+    expect([stop.code, stop.status]).toEqual(["SELLER_DEACTIVATED", 403]);
+    expect((await failure(client({ status: 403, body: fixture("partner-error-api-key-disabled.json") }).api.regenerateSellerKey(REGEN_SELLER))).code).toBe("API_KEY_DISABLED");
+    expect((await failure(client({ status: 404, body: fixture("partner-error-seller-not-found.json") }).api.regenerateSellerKey(REGEN_SELLER))).code).toBe("SELLER_NOT_FOUND");
+    const limited = await failure(client({ status: 429, body: fixture("partner-error-rate-limited.json"), headers: { "retry-after": "23" } }).api.regenerateSellerKey(REGEN_SELLER));
+    expect([limited.code, limited.status, limited.retryAfterSeconds]).toEqual(["RATE_LIMITED", 429, 23]);
+    expect((await failure(client({ status: 502, body: "<html>", type: "text/html" }).api.regenerateSellerKey(REGEN_SELLER))).code).toBe("unavailable");
+    const throwing = (async () => { throw new TypeError("fetch failed"); }) as typeof fetch;
+    expect((await failure(createPartnerClient("sandbox", "partner-x", SECRET, throwing).regenerateSellerKey(REGEN_SELLER))).code).toBe("unavailable");
   });
 });

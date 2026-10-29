@@ -22,7 +22,7 @@ describe("machine-only commands (DEC-010)", () => {
     const callers = [client(), await signIn("owner-a@geraiexpress.test"), await signIn("operator-a@geraiexpress.test"), (await demoVisitor()).c];
     for (const c of callers) {
       expect((await c.rpc("dispatch_claim", { p_operation: f.op, p_env: "sandbox" })).error).not.toBeNull();
-      expect((await c.rpc("dispatch_begin_reconcile", { p_operation: f.op })).error).not.toBeNull();
+      expect((await c.rpc("dispatch_begin_reconcile", { p_operation: f.op, p_env: "sandbox" })).error).not.toBeNull();
       expect((await c.rpc("dispatch_record", { p_operation: f.op, p_attempt: 1, p_outcome: "issued", p_order_id: "261014AAAAAA", p_tracking: "JO000001", p_batch: "26101416AAAAAA" })).error).not.toBeNull();
     }
     expect(operation(f.op)).toBe("queued|0|-|-");
@@ -139,14 +139,33 @@ describe("record", () => {
     expect((await machine().rpc("dispatch_record", { p_operation: b.op, p_attempt: 1, p_outcome: "rejected", p_code: "bad code!" })).error?.message).toBe("invalid_code");
     expect((await machine().rpc("dispatch_record", { p_operation: b.op, p_attempt: 1, p_outcome: "not_created" })).error?.message).toBe("invalid_outcome");
   });
+
+  it("keeps the provider batch object id next to the batch code and refuses a malformed one (T-033)", async () => {
+    const batchId = (op: string) => sql(`select provider_batch || '|' || coalesce(provider_batch_id, '-') from public.provider_operations where id = '${op}'`);
+    const a = await claimed();
+    const unpaid = { p_operation: a.op, p_attempt: 1, p_outcome: "unpaid", p_order_id: "261014H0JAFR", p_batch: "26101416827JYE" };
+    // The code is never accepted as the object id (24 lowercase hex), and nothing is stored.
+    expect((await machine().rpc("dispatch_record", { ...unpaid, p_batch_id: "26101416827JYE" })).error?.message).toBe("invalid_batch_id");
+    expect((await machine().rpc("dispatch_record", { ...unpaid, p_batch_id: "6ACF476A6B00A9B494FF04B8" })).error?.message).toBe("invalid_batch_id");
+    expect(operation(a.op)).toBe("in_flight|1|-|-");
+    expect((await machine().rpc("dispatch_record", { ...unpaid, p_batch_id: "6acf476a6b00a9b494ff04b8" })).error).toBeNull();
+    expect(batchId(a.op)).toBe("26101416827JYE|6acf476a6b00a9b494ff04b8");
+    // A later resi record without the id keeps the stored one (never overwritten by null).
+    expect((await machine().rpc("dispatch_record", { p_operation: a.op, p_attempt: 1, p_outcome: "issued", p_order_id: "261014H0JAFR", p_tracking: "JO2222222222", p_batch: "26101416827JYE" })).error).toBeNull();
+    expect(batchId(a.op)).toBe("26101416827JYE|6acf476a6b00a9b494ff04b8");
+    // An operation recorded without an id (older rows) simply has none.
+    const b = await claimed();
+    await machine().rpc("dispatch_record", { p_operation: b.op, p_attempt: 1, p_outcome: "unpaid", p_order_id: "261014H0JAFS", p_batch: "26101416827JYF" });
+    expect(batchId(b.op)).toBe("26101416827JYF|-");
+  });
 });
 
 describe("unknown outcome and reconciliation (TD-3 step 5)", () => {
   it("a fresh in-flight operation is not reconciled; a stale one becomes unknown", async () => {
     const { op, shipment: s } = await claimed();
-    expect((await machine().rpc("dispatch_begin_reconcile", { p_operation: op })).error?.message).toBe("nothing_to_reconcile");
+    expect((await machine().rpc("dispatch_begin_reconcile", { p_operation: op, p_env: "sandbox" })).error?.message).toBe("nothing_to_reconcile");
     backdate(op, 3);
-    const { data, error } = await machine().rpc("dispatch_begin_reconcile", { p_operation: op });
+    const { data, error } = await machine().rpc("dispatch_begin_reconcile", { p_operation: op, p_env: "sandbox" });
     expect(error).toBeNull();
     expect((data as Record<string, unknown>).courier).toBe("JT");
     expect(operation(op)).toBe("unknown|1|STALE_IN_FLIGHT|-");
@@ -176,7 +195,7 @@ describe("unknown outcome and reconciliation (TD-3 step 5)", () => {
     await machine().rpc("dispatch_record", { p_operation: op, p_attempt: 1, p_outcome: "not_created" });
     expect(shipment(s)).toBe("failed|not_applicable|-");
     // It can be checked again, and a found order is recorded with an explicit correction event.
-    expect((await machine().rpc("dispatch_begin_reconcile", { p_operation: op })).error).toBeNull();
+    expect((await machine().rpc("dispatch_begin_reconcile", { p_operation: op, p_env: "sandbox" })).error).toBeNull();
     expect((await machine().rpc("dispatch_record", { p_operation: op, p_attempt: 1, p_outcome: "not_created" })).data).toEqual({ state: "failed", replayed: true });
     expect((await machine().rpc("dispatch_record", { p_operation: op, p_attempt: 1, p_outcome: "issued", p_order_id: "261014LATE01", p_tracking: "JO7777777777", p_batch: "26101416LATE01" })).error).toBeNull();
     expect(operation(op)).toBe("succeeded|1|CORRECTED|261014LATE01");
@@ -186,7 +205,7 @@ describe("unknown outcome and reconciliation (TD-3 step 5)", () => {
     const r = await claimed();
     await machine().rpc("dispatch_record", { p_operation: r.op, p_attempt: 1, p_outcome: "rejected", p_code: "PROVIDER_REJECTED" });
     expect((await machine().rpc("dispatch_record", { p_operation: r.op, p_attempt: 1, p_outcome: "issued", p_order_id: "261014LATE02", p_tracking: "JO8888888888", p_batch: "26101416LATE02" })).error?.message).toBe("already_recorded");
-    expect((await machine().rpc("dispatch_begin_reconcile", { p_operation: r.op })).error?.message).toBe("nothing_to_reconcile");
+    expect((await machine().rpc("dispatch_begin_reconcile", { p_operation: r.op, p_env: "sandbox" })).error?.message).toBe("nothing_to_reconcile");
   });
 
   it("after a key rotation, reconciliation gets no key instead of searching the new account", async () => {
@@ -196,13 +215,13 @@ describe("unknown outcome and reconciliation (TD-3 step 5)", () => {
     sql(`update private.seller_credentials set superseded_at = now(), ciphertext = null, iv = null where tenant_id = '${tenant}';
       insert into private.seller_credentials (tenant_id, mode, ciphertext, iv, key_version, hint, version)
       values ('${tenant}', 'byok', 'bmV3LWNpcGhlcnRleHQtMTIzNDU2', 'aXYtMTIzNDU2Nzg=', 'v1', 'NEW', 2)`);
-    const { data } = await machine().rpc("dispatch_begin_reconcile", { p_operation: op });
+    const { data } = await machine().rpc("dispatch_begin_reconcile", { p_operation: op, p_env: "sandbox" });
     expect((data as { credential: unknown }).credential).toBeNull();
   });
 
   it("queued or finished operations cannot be reconciled or recorded out of order", async () => {
     const f = await realOperation();
-    expect((await machine().rpc("dispatch_begin_reconcile", { p_operation: f.op })).error?.message).toBe("nothing_to_reconcile");
+    expect((await machine().rpc("dispatch_begin_reconcile", { p_operation: f.op, p_env: "sandbox" })).error?.message).toBe("nothing_to_reconcile");
     expect((await machine().rpc("dispatch_record", { p_operation: f.op, p_attempt: 0, p_outcome: "issued", p_order_id: "261014AAAAAA", p_tracking: "JO00000001", p_batch: "26101416AAAAAA" })).error?.message).toBe("not_dispatched");
   });
 });

@@ -2,7 +2,7 @@
 // or console errors. Usage: node scripts/ui-smoke.mjs <baseUrl> <path> [expectedText]
 import { chromium } from "@playwright/test";
 
-const [base = "http://127.0.0.1:8787", path = "/", expected] = process.argv.slice(2);
+const [base = "http://127.0.0.1:3100", path = "/", expected] = process.argv.slice(2);
 const browser = await chromium.launch();
 let failed = false;
 for (const width of [390, 768, 1280]) {

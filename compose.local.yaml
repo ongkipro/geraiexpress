@@ -1,0 +1,58 @@
+# T-062: local overrides, used together with compose.yaml (`pnpm docker:up` does this):
+#   docker compose --env-file .env.container -f compose.yaml -f compose.local.yaml --profile local up -d
+# Adds the plain-HTTP proxy profile for e2e and development against the production container, and joins the app
+# container to the local database stack's network (gxdb_default: gxdb-postgrest-1, gxdb-mailpit-1). Never used in production.
+# The scheduler is OPT-IN locally (profile `scheduler`, `GX_SCHEDULER=1 pnpm docker:up`): a dispatcher sweep
+# every five minutes against the shared local database would race the database suites and the e2e specs.
+services:
+  app:
+    # The wrapper exports GX_ENV_FILE; direct Compose calls must also set it because interpolation
+    # of the required production value happens before this override is merged.
+    env_file: !override
+      - ${GX_ENV_FILE:-.env.container}
+    networks: [internal, gxdb]
+
+  scheduler:
+    profiles: [scheduler]
+
+  proxy-local:
+    image: caddy:2.11.2-alpine@sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d
+    profiles: [local]
+    restart: "no"
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /data
+      - /config
+    ports:
+      # Loopback only: the local proxy is never reachable from other machines.
+      - "127.0.0.1:${GX_LOCAL_PORT:-8080}:8080"
+    volumes:
+      - ./infra/proxy/Caddyfile.local:/etc/caddy/Caddyfile:ro
+    cap_drop: [ALL]
+    # The caddy binary carries the cap_net_bind_service file capability, so the container cannot exec without it.
+    cap_add: [NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [internal]
+
+networks:
+  internal:
+    # Only this gateway may forward the synthetic visitor header to Caddyfile.local.
+    ipam:
+      config:
+        - subnet: 172.30.62.0/24
+          gateway: 172.30.62.1
+  # The disposable database stack (compose.db.yaml, project gxdb; `pnpm db:up`). It publishes on loopback only,
+  # so the container reaches PostgREST and Mailpit by their container names on this network instead.
+  gxdb:
+    external: true
+    name: gxdb_default

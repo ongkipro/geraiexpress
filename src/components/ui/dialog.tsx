@@ -39,7 +39,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/30 duration-100 supports-backdrop-filter:backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-black/40 duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -51,19 +51,38 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  // A11y (T-073): Radix returns focus to a <DialogTrigger> only. Dialogs opened from a plain button
+  // (controlled `open`) would drop focus to <body> on close, so remember the element that had focus when
+  // the content mounted and return focus there, unless the caller handled it.
+  const invoker = React.useRef<HTMLElement | null>(null)
+  const captureInvoker = React.useCallback((node: HTMLDivElement | null) => {
+    if (node && document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+      invoker.current = document.activeElement
+    }
+  }, [])
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
+        ref={captureInvoker}
         data-slot="dialog-content"
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] overflow-y-auto -translate-x-1/2 -translate-y-1/2 gap-6 rounded-lg bg-popover p-6 text-base text-popover-foreground ring-1 ring-foreground/5 duration-100 sm:max-w-md dark:ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event)
+          const target = invoker.current
+          invoker.current = null
+          if (event.defaultPrevented || !target?.isConnected) return
+          event.preventDefault()
+          target.focus()
+        }}
         {...props}
       >
         {children}
@@ -76,7 +95,7 @@ function DialogContent({
             >
               <XIcon
               />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">Tutup</span>
             </Button>
           </DialogPrimitive.Close>
         )}
@@ -115,7 +134,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
+          <Button variant="outline">Tutup</Button>
         </DialogPrimitive.Close>
       )}
     </div>

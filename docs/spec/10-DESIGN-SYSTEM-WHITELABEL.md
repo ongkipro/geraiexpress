@@ -1,8 +1,8 @@
 # GeraiExpress — shadcn/ui and Apple-Inspired Operator Presentation
 
-- Status: User-selected visual direction; component/screen contracts Proposed, no implemented UI.
+- Status: User-selected visual direction; component/screen contracts Proposed. Observed 2026-10-28: the shadcn/ui (radix base, rhea style) tokens are implemented for the operator, platform and public surfaces (ARCHITECTURE.md "Presentation"); UI-6 and the label sheet are not built.
 - Owner: Engineering owner
-- Updated: 2026-10-13
+- Updated: 2026-10-28
 - Sources: CTX-19 user-provided reference; [shadcn/ui theming](https://ui.shadcn.com/docs/theming) for semantic integration. Apple website facts have not been independently audited.
 
 ## UI-1 — Operator presentation and tenant identity
@@ -221,13 +221,15 @@ They cannot override the shared blue action/focus tokens, permissions, required
 text, or accessible state meaning. Do not show Apple logos/assets or reference
 LegacyReference brand strings as GeraiExpress branding.
 
-Application branding, a possible customer receipt, and an official courier PDF
-are separate surfaces. Supported customer sender name/phone uses the provider
-Dropshipper authority while pickup remains the seller's selected location.
-Arbitrary logo/layout replacement on official labels, custom domains and receipt
-content are not established by this design. Advanced local thermal/batch print
-and invoice composition remain TD-1 candidates, subject to accepted requirements
-and courier proof; UI customization cannot fabricate an AWB or routing authority.
+Application branding, a possible customer receipt, the local masked label and an
+official courier PDF are separate surfaces. Decision (DEC-017): the printed sender comes
+from the masking switch (UX-9, UI-6) and no provider Dropshipper mapping is used; the
+pickup address stays the seller's selected location and is not printed when masking is
+on. Arbitrary logo/layout replacement on an official courier PDF, custom domains and
+receipt content are not established by this design, and the provider PDF is deferred.
+Advanced batch print and invoice composition remain TD-1 candidates (TASKS T-047),
+subject to accepted requirements and courier proof; UI customization cannot fabricate
+an AWB or routing authority.
 
 ## UI-4 — Super Admin presentation and information priority
 - Status: Proposed
@@ -243,6 +245,11 @@ for Overview, Gerai, configured Registration Review, Diskon, Integrasi, Operasi,
 Audit and permitted Platform Access. Global scope and selected tenant detail
 have visible labels; neither looks like tenant impersonation. Keep normal
 gerai navigation/context separate.
+
+Observed (2026-10-28): the implemented platform navigation is Gerai, Pengajuan gerai,
+Integrasi Mengantar, Akses Super Admin and Audit (`src/app/admin/layout.tsx`). Overview,
+Operasi and Diskon (UX-12) are not built. Under DEC-015 this shell is served only from
+the owner host and keeps a persistent "Platform" context label.
 
 Overview order: urgent worklist → concise defined current/period signals →
 affected-tenant or operation table. A trend/chart is optional when it answers a
@@ -286,3 +293,40 @@ field. Status panels state what is pending, who acts next and what can be edited
 Use a clearly labelled manual-review branch if selected; do not tell users an
 email was delivered, a seller created or shipping enabled without that evidence.
 All account screens share UI-2 tokens, focus/reduced-motion rules and touch targets.
+
+## UI-6 — Local masked label sheet, error pages and host context
+- Status: Proposed; the label's content and size are a Decision (DEC-017, PR-34)
+- Owner: Engineering owner
+- Source: DEC-015, DEC-017; PR-34; UX-9, UX-11; DATA-10.
+- Statement: The local label sheet shall be a print-first surface sized exactly to the chosen label (10x15 cm default or 10x10 cm), black on white, with a scannable AWB barcode and legible printed fields, and the not-found and error pages shall use the shared tokens with a visible host context.
+- Acceptance: In print preview at 390, 768 and 1280 px the sheet is exactly the chosen size with no application chrome; long names and addresses wrap or shrink within stated limits without clipping; the barcode decodes to the AWB; the "Masking aktif" indicator is absent from the printout; error pages pass keyboard order, focus and 200% zoom checks in Bahasa Indonesia.
+- Constraints: UI-1, UI-2, UI-3, NFR-4, UX-9, UX-11; no new theme, gradient or decorative shadow.
+- Evidence: Specification only. Observed: the sample label page hides the application shell when printing (e2e label tests, ARCHITECTURE.md "Labels"); no masked sheet, no 10x10 option and no `not-found` or `error` page exists.
+
+| Surface | Contract |
+|---|---|
+| Page size | A print stylesheet sets the page to the selected label size; one label per page; no margin beyond what the printer imposes (printer-specific behavior is Unknown until a pilot print). |
+| Content order | Sender block, recipient block, courier and service, weight, COD collection instruction where it applies, then the barcode with the AWB printed in text below it (Proposal, PR-34). No private net cost or discount appears. No tenant logo until a logo on the label is accepted (Unknown). |
+| Colour and type | Black on white, system font (UI-2), no blue accent, gradients or shadows on the printed sheet. Minimum font sizes and barcode module width are Unknown and are set by the decode test and a pilot scan on the actual thermal printer. |
+| Barcode | Code128 drawn as vector shapes with quiet zones so print scaling does not blur it. Unknown: whether to reuse `encodeCode128B` from `src/lib/marketing-data.ts`, which exists only as a marketing illustration and has no decode test (Observed). |
+| Controls | The masking control is a labelled switch with visible on/off text; the size choice is a labelled two-option control; controls are at least 44px and the sticky action bar reserves its space (UI-3). At 390px the preview scales to fit with local scroll. |
+| Simulated shipments | Keep the conspicuous sample watermark and simulated reference (UX-3); they never use the real label sheet. |
+| Not-found and error pages | One Bahasa Indonesia page per state and per host using the shared card and button grammar, a heading that receives focus, one primary action and a host context label ("Platform" on the owner host); no technical detail (UX-11). |
+
+## UI-7 — Dashboard presentation v4 (amends UI-2, UI-3, UI-4, UI-5)
+- Status: Accepted by the owner direction of 2026-10-29 ("modern admin dashboard, shadcn/ui, Apple-latest tone"); implemented in the working tree, not yet released.
+- Owner: Engineering owner
+- Source: owner direction; geraicuan ergonomics (ADR-0001 of that product) as an inspected reference; UI-1 to UI-6.
+- Statement: The operator, Super Admin, account-entry and public surfaces shall share one calm, single-frame presentation on the existing blue/neutral tokens, with one shell, tone-based status chips, grouped lists and tables that become record cards on narrow screens.
+- Amendments to earlier items (the rest of UI-1 to UI-6 stands):
+  - Status tones (UI-2): `success`, `warning`, `danger`, `info` and `pending`, each with a `-soft` surface, text on its surface at least 5.6:1; a tone is always paired with an icon and a text label. `--destructive` is the danger red (the earlier ink destructive is withdrawn). An uncertain provider outcome (`unknown`) reads as `warning`, never as a failure.
+  - Geometry (UI-2): radius xs 5, sm 8, md 11, lg 18; the shadcn surface radii (`3xl`, `4xl`) map to 14. Cards are one frame level with a hairline and no shadow; no blur, gradient or decorative shadow anywhere (dialog and sheet overlays are a plain 40% scrim). Body 15-17px, meta 13-14px, badges 14px; controls at least 44px (switch track 48x28 with a padded 44px hit area; select trigger 44px).
+  - Shell (UI-3, UI-4): one `AppShell` for the gerai and platform workspaces: sidebar of 264px from 1024px (scope card, grouped navigation with icons, session actions), icon rail of 72px from 768px, top bar with the scope and a menu sheet below 1024px. The platform workspace names its scope in the scope card ("Super Admin") and the brand ("GeraiExpress · Platform").
+  - Lists (UI-3): shipments, contacts, members and the platform directory are tables from 768px and four-line record cards below; filters collapse into a sheet below 768px with removable chips; empty states distinguish first use from a filtered result. The shipment list opens with a stat strip of actionable counts that link to the matching list, queue or filter.
+  - Create flow (UI-3, UX-1, UX-13): five sections (Pengirim, Penerima, Paket & serah, Ongkir, Konfirmasi) on a progress spine with Selesai, Sedang diisi and Terkunci states; a 360px summary rail from 1280px and a sticky total bar with a "Rincian" sheet below; money and provider actions keep their label and width while pending.
+  - Print (UI-6, UX-9): label and "Resi + invoice" are two tabs of one print surface; the masking choice and label size are remembered per gerai and user for the browser tab only (sender fields are never stored); "Keduanya" prints as two print jobs (label, then invoice) so a thermal label and an A4 sheet never share one job.
+  - Account entry (UI-5): one centered card (440px; 640px for the gerai application) under the product mark, a visible registration stage, a six-digit one-time-code input, live password checks, and a recovery action on every error screen.
+  - Public site (T-036): a sticky 52px solid top bar, alternating white and parchment sections, display type with fluid sizes; only approved, implemented claims; no owner photo slot is shipped until an owner photo exists.
+- Acceptance: each changed route is viewed at 390, 768 and 1280 px with zero horizontal overflow; the existing e2e suites pass on the three viewports; touch targets are at least 44px except where this item documents the padded hit area.
+- Constraints: UI-1 to UI-6, NFR-3, NFR-4, UX-1, UX-13; light theme only.
+- Evidence: see TASKS.md T-069 and BUILD-LOG.md 2026-10-29 for the executed checks. The independent image review of the public site ended REVISE after five rounds on one finding (no owner photo slot, an owner decision); visual acceptance of the public pages is therefore UNVERIFIED.

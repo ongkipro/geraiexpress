@@ -1,13 +1,14 @@
-import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { parseEnv } from "node:util";
 
-// Reads the local Supabase stack's public URL and publishable (anon) key. User-facing assertions
-// use only the anon key: the same Data API/RPC surface a browser can reach (TEN-1, NFR-1). The
-// local secret key is exposed only for the machine-identity dispatcher tests (DEC-010).
+// Loads the local plain-PostgreSQL stack's settings from the gitignored infra/dev/.env (written by
+// `pnpm db:up`). Shell values win. A missing file is not an error here: unit tests never need
+// the stack, and the DB helpers fail with a clear message when they first need it.
 export default function setup() {
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY && process.env.SUPABASE_SECRET_KEY) return;
-  const out = execFileSync("pnpm", ["exec", "supabase", "status", "-o", "json"], { encoding: "utf8" });
-  const status = JSON.parse(out.slice(out.indexOf("{")));
-  process.env["SUPABASE_URL"] = status.API_URL;
-  process.env["SUPABASE_ANON_KEY"] = status.PUBLISHABLE_KEY ?? status.ANON_KEY;
-  process.env["SUPABASE_SECRET_KEY"] = status.SECRET_KEY ?? status.SERVICE_ROLE_KEY;
+  const file = process.env.GX_TEST_ENV_FILE ?? resolve(import.meta.dirname, "../../infra/dev/.env");
+  if (!existsSync(file)) return;
+  for (const [name, value] of Object.entries(parseEnv(readFileSync(file, "utf8")))) {
+    if (process.env[name] === undefined && value !== undefined) process.env[name] = value;
+  }
 }

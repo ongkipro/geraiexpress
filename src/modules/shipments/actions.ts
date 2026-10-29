@@ -2,16 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { env, supabaseServer } from "@/lib/supabase/server";
+import { dbServer, machineClient } from "@/lib/db/server";
 import { friendlyError } from "@/lib/errors";
-import { DROP_OFF_UNSUPPORTED, estimateTwoPassCod, InvalidOrderRequest } from "@/lib/mengantar/public-api";
+import { estimateTwoPassCod, InvalidOrderRequest } from "@/lib/mengantar/public-api";
+import { couriersForHandover } from "./handover";
 import { mengantarFailure, tenantMengantar } from "@/lib/mengantar/tenant";
-import { machineClient } from "@/lib/supabase/machine";
-import { workerSecret } from "@/lib/worker-secret";
+import { config } from "@/lib/config";
 import { checkPayment, dispatchOperation, payUnpaidShipmentBatch, reconcileOperation, type DispatchSummary } from "@/lib/mengantar/dispatcher";
 import { dispatcherDeps } from "@/lib/mengantar/machine-deps";
 import { requireWorkspace } from "@/lib/workspace";
-import { missingForQuote, parseDraft, type DraftField, type DraftValues } from "./draft";
+import { liveRecipientErrors, missingForQuote, parseDraft, pickupFieldErrors, type DraftField, type DraftValues } from "./draft";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type DraftState = {
   ok?: string;
@@ -23,8 +25,8 @@ export type DraftState = {
 
 export async function createDraftAction() {
   const ws = await requireWorkspace();
-  const supabase = await supabaseServer();
-  const { data, error } = await supabase.rpc("create_shipment_draft", { p_outlet: ws.outlet.id });
+  const db = await dbServer();
+  const { data, error } = await db.rpc("create_shipment_draft", { p_outlet: ws.outlet.id });
   if (error) redirect(`/pengiriman?galat=${encodeURIComponent(error.message)}`);
   redirect(`/pengiriman/${data}`);
 }
@@ -36,12 +38,16 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
   const id = String(form.get("shipment_id"));
   const expected = Number(form.get("revision"));
   const intent = form.get("intent") === "quote" ? "quote" : "save";
-  const { values, update, errors } = parseDraft(form);
+  const db = await dbServer();
+  // The persisted shipment mode is authoritative, including isolated simulated review fixtures.
+  const { data: mode } = await db.from("shipments").select("is_simulated")
+    .eq("id", id).eq("tenant_id", ws.tenant.id).maybeSingle();
+  if (!mode) return { error: friendlyError({ message: "not_found" }) };
+  const live = !mode.is_simulated;
+  const { values, update, errors } = parseDraft(form, intent === "quote" && live);
   if (Object.keys(errors).length) {
     return { error: "Periksa isian yang ditandai.", fieldErrors: errors, values };
   }
-  // A real (non-demo) gerai quotes live from Mengantar; demo gerai use the SQL simulation.
-  const live = !ws.isDemo;
   if (intent === "quote") {
     const missing = missingForQuote(update, live);
     if (missing.length) {
@@ -53,12 +59,11 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
     }
   }
 
-  const supabase = await supabaseServer();
   const senderContact = String(form.get("sender_contact_id") ?? "") || null;
   const recipientContact = String(form.get("recipient_contact_id") ?? "") || null;
 
   // Save the shipment first (optimistic revision), so a stale form never leaves orphan contacts.
-  const { data: saved, error } = await supabase.from("shipments")
+  const { data: saved, error } = await db.from("shipments")
     .update({ ...update, sender_contact_id: senderContact, recipient_contact_id: recipientContact })
     .eq("id", id).eq("tenant_id", ws.tenant.id).eq("revision", expected)
     .select("revision").maybeSingle();
@@ -77,12 +82,12 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
     const name = update[`${role}_name`];
     const phone = update[`${role}_phone`];
     if (!name || !phone) return "failed";
-    const { data: contact, error: ce } = await supabase.from("contacts")
+    const { data: contact, error: ce } = await db.from("contacts")
       .insert({ tenant_id: ws.tenant.id, name, phone, is_sender: role === "sender", is_recipient: role === "recipient" })
       .select("id").single();
     if (ce || !contact) return "failed";
     if (role === "recipient" && update.recipient_address && update.recipient_area) {
-      const { error: ae } = await supabase.from("contact_addresses").insert({
+      const { error: ae } = await db.from("contact_addresses").insert({
         tenant_id: ws.tenant.id, contact_id: contact.id, label: "Utama", address_line: update.recipient_address,
         area: update.recipient_area, area_id: update.recipient_area_id ?? null, postal_code: update.recipient_postal_code, is_primary: true,
       });
@@ -101,7 +106,7 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
     else links[`${role}_contact_id`] = result;
   }
   if (Object.keys(links).length) {
-    const { data: linked } = await supabase.from("shipments").update(links)
+    const { data: linked } = await db.from("shipments").update(links)
       .eq("id", id).eq("tenant_id", ws.tenant.id).eq("revision", revision).select("revision").maybeSingle();
     if (linked) revision = linked.revision as number;
     else notLinked = true;
@@ -113,22 +118,23 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
     (notLinked ? " Kontak baru tersimpan, tetapi belum tertaut ke draf ini karena draf berubah." : "");
   if (intent === "quote") {
     // Re-quoting an unchanged revision reuses its current quotes instead of duplicating them.
-    const { count } = await supabase.from("shipment_quotes").select("id", { count: "exact", head: true })
+    const { count } = await db.from("shipment_quotes").select("id", { count: "exact", head: true })
       .eq("tenant_id", ws.tenant.id).eq("shipment_id", id).eq("shipment_revision", revision)
       .gt("expires_at", new Date().toISOString());
     if (!count) {
       if (live) {
-        // Quote from the shipment's own outlet (dispatch uses the same outlet's pickup).
-        const { data: origin } = await supabase.from("shipments").select("outlets(mengantar_area_id)")
-          .eq("tenant_id", ws.tenant.id).eq("id", id).maybeSingle<{ outlets: { mengantar_area_id: string | null } | null }>();
-        const quoted = await liveQuotes(ws.tenant.id, origin?.outlets?.mengantar_area_id ?? null, id, revision, update);
+        // Bind the response to the exact pickup identity/area used for pricing, including when
+        // the admin changes pickup while the provider estimate is in flight.
+        const { data: origin } = await db.from("shipments").select("outlets(mengantar_area_id,mengantar_pickup_address_id)")
+          .eq("tenant_id", ws.tenant.id).eq("id", id).maybeSingle<{ outlets: { mengantar_area_id: string | null; mengantar_pickup_address_id: string | null } | null }>();
+        const quoted = await liveQuotes(ws.tenant.id, origin?.outlets ?? null, id, revision, update);
         if (quoted.error) return { error: quoted.error + contactNote, values };
         if (quoted.count === 0) {
           const emptyMsg = update.is_cod === true ? friendlyError({ message: "cod_not_supported" }) : "Tidak ada layanan Mengantar untuk rute dan berat ini.";
           return { error: emptyMsg + contactNote, values };
         }
       } else {
-        const { error: qe } = await supabase.rpc("request_quotes", { p_shipment: id, p_expected_revision: revision });
+        const { error: qe } = await db.rpc("request_quotes", { p_shipment: id, p_expected_revision: revision });
         if (qe) return { error: friendlyError(qe) + contactNote, values };
       }
     }
@@ -141,9 +147,11 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
 // requireWorkspace), written by the machine identity so the tariff cannot be forged. The counter
 // sees the normal tariff (plus COD fee when COD is requested); the net cost after the account
 // discount stays private.
-async function liveQuotes(tenantId: string, originAreaId: string | null, shipmentId: string, revision: number,
+async function liveQuotes(tenantId: string, origin: { mengantar_area_id: string | null; mengantar_pickup_address_id: string | null } | null,
+  shipmentId: string, revision: number,
   update: Record<string, unknown>): Promise<{ count: number; error?: undefined } | { error: string; count?: undefined }> {
-  if (!originAreaId) return { error: friendlyError({ message: "pickup_not_set" }) };
+  const originAreaId = origin?.mengantar_area_id;
+  if (!originAreaId || !origin.mengantar_pickup_address_id) return { error: friendlyError({ message: "pickup_not_set" }) };
   const isCod = update.is_cod === true;
   const goodsValueIdr = Number(update.goods_value_idr ?? 0);
   if (isCod && (!Number.isSafeInteger(goodsValueIdr) || goodsValueIdr < 1000)) {
@@ -151,7 +159,7 @@ async function liveQuotes(tenantId: string, originAreaId: string | null, shipmen
   }
   const mengantar = await tenantMengantar(tenantId);
   if (!mengantar.ok) return { error: friendlyError({ message: `mengantar_${mengantar.reason}` }) };
-  const machine = machineClient();
+  const machine = await machineClient();
   if (!machine) return { error: friendlyError({ message: "mengantar_not_configured" }) };
   const dims = {
     ...(typeof update.length_cm === "number" ? { lengthCm: update.length_cm } : {}),
@@ -182,11 +190,14 @@ async function liveQuotes(tenantId: string, originAreaId: string | null, shipmen
     }
     return { error: friendlyError({ message: mengantarFailure(error) }) };
   }
-  const rows = estimates.filter((e) => !DROP_OFF_UNSUPPORTED.has(e.courier))
+  // Anteraja is offered for pickup only (see couriersForHandover).
+  const rows = couriersForHandover(estimates, update.handover)
     .map((e) => ({
       courier: e.courier,
       tariff: e.tariff,
       net: e.netShipping,
+      // Provider discount in basis points; null (unknown) is stored as NULL, never 0.
+      discount_bps: e.discountBps,
       cod_fee: isCod ? e.codFee : 0,
       cod_supported: true,
       eta: (e.etaText ?? "").slice(0, 40),
@@ -196,28 +207,29 @@ async function liveQuotes(tenantId: string, originAreaId: string | null, shipmen
   }
   const { data, error } = await machine.rpc("record_live_quotes", {
     p_tenant: tenantId, p_shipment: shipmentId, p_expected_revision: revision, p_rows: rows,
+    p_origin_area_id: originAreaId, p_origin_address_id: origin.mengantar_pickup_address_id,
   });
   // invalid_input here means Mengantar sent data we could not store, not a form problem.
   if (error) return { error: friendlyError(error.message === "invalid_input" ? { message: "mengantar_data_unreadable" } : error) };
   return { count: Number(data) };
 }
 
-export type ConfirmState = { error?: string };
+export type ConfirmState = { error?: string; fieldErrors?: Partial<Record<DraftField, string>> };
 
-// DEC-010: the dispatcher's machine identity, from Worker bindings. Null => fail closed (the
-// operation stays queued and the cron sweep or "Kirim sekarang" sends it later).
+// DEC-010: the dispatcher's machine identity, from the container environment. Null => fail closed (the
+// operation stays queued and the scheduler's sweep or "Kirim sekarang" sends it later).
 function machineDeps() {
   return dispatcherDeps({
-    SUPABASE_URL: env("SUPABASE_URL"),
-    SUPABASE_SECRET_KEY: workerSecret("SUPABASE_SECRET_KEY"),
-    CREDENTIAL_KEY: workerSecret("CREDENTIAL_KEY"),
-    MENGANTAR_ENV: workerSecret("MENGANTAR_ENV"),
+    POSTGREST_URL: config("POSTGREST_URL"),
+    AUTH_JWT_SECRET: config("AUTH_JWT_SECRET"),
+    CREDENTIAL_KEY: config("CREDENTIAL_KEY"), CREDENTIAL_KEYS: config("CREDENTIAL_KEYS"), CREDENTIAL_KEY_CURRENT: config("CREDENTIAL_KEY_CURRENT"),
+    MENGANTAR_ENV: config("MENGANTAR_ENV"),
   });
 }
 
 // The newest create operation of a shipment the caller can see (RLS: members only).
 async function shipmentOperation(shipmentId: string, tenantId: string) {
-  const { data } = await (await supabaseServer()).from("provider_operations")
+  const { data } = await (await dbServer()).from("provider_operations")
     .select("id, state, result_code, is_simulated").eq("tenant_id", tenantId).eq("shipment_id", shipmentId)
     .eq("kind", "create_order").order("created_at", { ascending: false }).limit(1).maybeSingle();
   return data as { id: string; state: string; result_code: string | null; is_simulated: boolean } | null;
@@ -235,10 +247,23 @@ const outcomeFlag = (step: string, summary: DispatchSummary) => {
 };
 
 export async function confirmShipmentAction(_: ConfirmState, form: FormData): Promise<ConfirmState> {
-  await requireWorkspace();
+  const ws = await requireWorkspace();
   const id = String(form.get("shipment_id"));
-  const supabase = await supabaseServer();
-  const { data, error } = await supabase.rpc("confirm_shipment", {
+  const db = await dbServer();
+  const { data: recipient } = await db.from("shipments")
+    .select("recipient_name,recipient_address,recipient_phone,is_simulated,handover,pickup_date,pickup_slot_hour")
+    .eq("id", id).eq("tenant_id", ws.tenant.id).maybeSingle();
+  // T-043: a pickup slot that has passed (or is inside the 90-minute lead time) cannot be confirmed;
+  // the database re-checks it under lock (pickup_time_invalid).
+  if (recipient?.handover === "pickup") {
+    const fieldErrors = pickupFieldErrors({ pickup_date: String(recipient.pickup_date ?? ""), pickup_slot_hour: String(recipient.pickup_slot_hour ?? "") }, new Date());
+    if (Object.keys(fieldErrors).length) return { error: Object.values(fieldErrors).join(" "), fieldErrors };
+  }
+  if (recipient && !recipient.is_simulated) {
+    const fieldErrors = liveRecipientErrors(recipient);
+    if (Object.keys(fieldErrors).length) return { error: Object.values(fieldErrors).join(" "), fieldErrors };
+  }
+  const { data, error } = await db.rpc("confirm_shipment", {
     p_shipment: id,
     p_quote: String(form.get("quote_id")),
     p_expected_revision: Number(form.get("revision")),
@@ -281,8 +306,8 @@ export async function reconcileAction(form: FormData) {
     if (summary.status === "not_reconcilable") redirect(`/pengiriman/${id}?galat=${encodeURIComponent(summary.reason)}`);
     redirect(`/pengiriman/${id}?${outcomeFlag("reconcile", summary)}`);
   }
-  const supabase = await supabaseServer();
-  const { error } = await supabase.rpc("reconcile_shipment", { p_shipment: id });
+  const db = await dbServer();
+  const { error } = await db.rpc("reconcile_shipment", { p_shipment: id });
   redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : "?rekonsiliasi=1"}`);
 }
 
@@ -299,23 +324,27 @@ export async function checkPaymentAction(form: FormData) {
   redirect(`/pengiriman/${id}?${outcomeFlag("payment", summary)}`);
 }
 
-// T-026: tenant admin pays an unpaid Mengantar batch after reviewing its full membership and digest.
+// T-033: a tenant admin pays an unpaid Mengantar batch after reviewing its full membership and
+// digest. With the user session the database re-checks the admin role under lock and records an
+// audited, single-use, short-lived authorization of exactly that digest (IAM-2, TEN-4); the machine
+// client then claims it. When an earlier attempt for the batch is unresolved the authorization is
+// withheld and the dispatch only reconciles that attempt: it never sends a second payment.
 export async function payUnpaidBatchAction(form: FormData) {
   const ws = await requireWorkspace();
   const id = String(form.get("shipment_id"));
   const batchDigest = String(form.get("batch_digest") ?? "").trim();
   if (ws.role !== "tenant_admin") redirect(`/pengiriman/${id}?galat=admin_required`);
-  const supabase = await supabaseServer();
-  const { error: reviewError } = await supabase.rpc("review_unpaid_batch", { p_shipment: id });
-  if (reviewError) redirect(`/pengiriman/${id}?galat=${encodeURIComponent(reviewError.message)}`);
+  const db = await dbServer();
+  const { error: authorizeError } = await db.rpc("authorize_batch_payment", { p_shipment: id, p_batch_digest: batchDigest });
+  if (authorizeError) redirect(`/pengiriman/${id}?galat=${encodeURIComponent(authorizeError.message)}`);
   const deps = machineDeps();
   if (!deps) redirect(`/pengiriman/${id}?info=mengantar_not_configured`);
   const summary = await payUnpaidShipmentBatch(id, batchDigest, deps);
   revalidatePath("/pengiriman");
   revalidatePath(`/pengiriman/${id}`);
   if (summary.status === "not_reconcilable") {
-    const detailParam = summary.detail ? `&detail=${encodeURIComponent(summary.detail)}` : "";
-    redirect(`/pengiriman/${id}?galat=${encodeURIComponent(summary.reason)}${detailParam}`);
+    // Only the mapped reason code travels in the URL: provider text is never reflected into a page.
+    redirect(`/pengiriman/${id}?galat=${encodeURIComponent(summary.reason)}`);
   }
   redirect(`/pengiriman/${id}?${outcomeFlag("pay_batch", summary)}`);
 }
@@ -324,7 +353,7 @@ export async function payUnpaidBatchAction(form: FormData) {
 export async function reopenAction(form: FormData) {
   await requireWorkspace();
   const id = String(form.get("shipment_id"));
-  const { error } = await (await supabaseServer()).rpc("reopen_shipment", { p_shipment: id });
+  const { error } = await (await dbServer()).rpc("reopen_shipment", { p_shipment: id });
   redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : ""}`);
 }
 
@@ -333,17 +362,47 @@ export async function reopenAction(form: FormData) {
 export async function closeFailedAction(form: FormData) {
   await requireWorkspace();
   const id = String(form.get("shipment_id"));
-  const { error } = await (await supabaseServer()).rpc("close_failed_operation", {
+  const { error } = await (await dbServer()).rpc("close_failed_operation", {
     p_shipment: id, p_reason: String(form.get("reason") ?? ""),
   });
+  redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : "?info=closed"}`);
+}
+
+// T-056: a tenant admin closes a batch payment attempt that stays unknown after checking the Mengantar
+// app. No provider request; the database re-checks the role and state under the batch locks, records
+// the reason and the per-order reads, and frees the batch for a new authorization. A replay is a no-op.
+export async function closeUnknownBatchPaymentAction(form: FormData) {
+  await requireWorkspace();
+  const id = String(form.get("shipment_id"));
+  // The attempt the admin reviewed (review_unpaid_batch.payment_attempt_id); a newer one is refused.
+  const attempt = String(form.get("attempt_id") ?? "");
+  const { error } = UUID.test(attempt)
+    ? await (await dbServer()).rpc("close_unknown_batch_payment", {
+        p_shipment: id, p_attempt: attempt, p_reason: String(form.get("reason") ?? ""),
+      })
+    : { error: { message: "stale_attempt" } };
+  revalidatePath(`/pengiriman/${id}`);
+  redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : "?info=payment_closed"}`);
+}
+
+// T-056: a tenant admin closes a pickup reservation whose answer was lost and could not be tied to
+// one record, after checking the Mengantar app. Nothing is resent; the shipment can then be reopened.
+export async function closeAmbiguousReservationAction(form: FormData) {
+  await requireWorkspace();
+  const id = String(form.get("shipment_id"));
+  const { error } = await (await dbServer()).rpc("close_ambiguous_pickup_reservation", {
+    p_shipment: id, p_reason: String(form.get("reason") ?? ""),
+  });
+  revalidatePath(`/pengiriman/${id}`);
+  revalidatePath("/pengiriman");
   redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : "?info=closed"}`);
 }
 
 export async function requestLabelAction(form: FormData) {
   await requireWorkspace();
   const id = String(form.get("shipment_id"));
-  const supabase = await supabaseServer();
-  const { error } = await supabase.rpc("request_label", { p_shipment: id });
+  const db = await dbServer();
+  const { error } = await db.rpc("request_label", { p_shipment: id });
   if (error) redirect(`/pengiriman/${id}?galat=${encodeURIComponent(error.message)}`);
   redirect(`/pengiriman/${id}/label`);
 }

@@ -1,0 +1,18 @@
+{
+  "_fixture": "T-043: built from the Add Time documentation example (operations contract section 2.1). NOT a sandbox capture; the real response shape is Unknown until T-048.",
+  "success": true,
+  "data": {
+    "isSunday": false,
+    "status": "empty",
+    "_id": "6b0c2a1e9d3f4a5b6c7d8e90",
+    "date": "2026-02-03T00:00:00.000Z",
+    "time": "13:00",
+    "address": {
+      "_id": "6acf44a4771fe2b474c055ca",
+      "PICKUP_NAME": "GeraiExpress Sandbox Uji",
+      "PICKUP_ADDRESS": "Jl. Uji Sandbox No. 1",
+      "PICKUP_CITY": "JAKARTA SELATAN",
+      "PICKUP_REGION": "DKI JAKARTA"
+    }
+  }
+}

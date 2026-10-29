@@ -1,0 +1,93 @@
+// SEC-7 key ring maintenance: moves active credentials sealed under an older key version to the
+// ring's current key. Server-side (machine identity); the database only ever sees ciphertext. Run it
+// after adding a key to CREDENTIAL_KEYS and switching CREDENTIAL_KEY_CURRENT, and drop the old key
+// from the ring only when a run reports nothing left to re-wrap.
+import type { Db } from "./db/client";
+import { credentialAad, openCredential, resolveKeyRing, sealCredential, type CredentialKeyMaterial, type CredentialKeyRing } from "./credential-crypto";
+
+type RpcResult = PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>;
+export type RewrapRpc = (fn: string, args: Record<string, unknown>) => RpcResult;
+
+export type ReencryptOutcome = "rewrapped" | "current" | "no_credential" | "conflict" | "failed";
+export type ReencryptSummary = {
+  scanned: number;
+  rewrapped: number;
+  alreadyCurrent: number;
+  noCredential: number;
+  conflicts: number;
+  // Tenant id and a stable reason only: never key material, ciphertext or the provider key.
+  failed: { tenantId: string; reason: string }[];
+};
+
+// Key versions are "v" + digits (resolveKeyRing). Anything else counts as lowest, so it is re-wrapped.
+function keyVersionNumber(version: string): number {
+  const match = /^v(\d{1,4})$/.exec(version);
+  return match ? Number(match[1]) : 0;
+}
+
+type SealedRow = { ciphertext: string; iv: string; key_version: string; version: number };
+
+// One tenant: read the active credential of this environment, and when its key version is not the
+// current one, open it with the old key and seal it with the current key under the SAME credential
+// version (same AAD). Idempotent: a row already on the current version is skipped, and the database
+// fence (expected key version) makes a concurrent or repeated run harmless.
+async function rewrapTenant(rpc: RewrapRpc, ring: CredentialKeyRing, environment: string, tenantId: string): Promise<ReencryptOutcome> {
+  const read = await rpc("machine_seller_key", { p_tenant: tenantId, p_env: environment });
+  if (read.error) return "failed";
+  const row = read.data as SealedRow | null;
+  if (!row) return "no_credential";
+  // Never downgrade (security review L4): a row on the current key, or on a HIGHER one (the app
+  // was rolled back to an older key-ring configuration), is left alone; the database refuses a
+  // non-increasing rewrap as well.
+  if (keyVersionNumber(row.key_version) >= keyVersionNumber(ring.current)) return "current";
+  const aad = credentialAad(tenantId, row.version);
+  const plain = await openCredential(row, aad, ring);
+  const sealed = await sealCredential(plain, aad, ring);
+  const write = await rpc("rewrap_seller_credential", {
+    p_tenant: tenantId, p_version: row.version, p_expected_key_version: row.key_version,
+    p_ciphertext: sealed.ciphertext, p_iv: sealed.iv, p_new_key_version: sealed.keyVersion,
+  });
+  if (!write.error) return "rewrapped";
+  return write.error.code === "55000" || /stale_state/.test(write.error.message) ? "conflict" : "failed";
+}
+
+export async function reencryptCredentials(opts: {
+  rpc: RewrapRpc;
+  key: CredentialKeyMaterial;
+  environment: "sandbox" | "production";
+  tenantIds: Iterable<string>;
+}): Promise<ReencryptSummary> {
+  const ring = resolveKeyRing(opts.key);
+  const summary: ReencryptSummary = { scanned: 0, rewrapped: 0, alreadyCurrent: 0, noCredential: 0, conflicts: 0, failed: [] };
+  for (const tenantId of opts.tenantIds) {
+    summary.scanned += 1;
+    let outcome: ReencryptOutcome;
+    let reason = "rewrap_failed";
+    try {
+      outcome = await rewrapTenant(opts.rpc, ring, opts.environment, tenantId);
+    } catch (error) {
+      outcome = "failed";
+      reason = error instanceof Error ? error.name : "unknown";
+    }
+    if (outcome === "rewrapped") summary.rewrapped += 1;
+    else if (outcome === "current") summary.alreadyCurrent += 1;
+    else if (outcome === "no_credential") summary.noCredential += 1;
+    else if (outcome === "conflict") summary.conflicts += 1;
+    else summary.failed.push({ tenantId, reason });
+  }
+  return summary;
+}
+
+// Every non-demo tenant id, paged, through the machine client (service_role reads public.tenants).
+// Demo tenants hold no provider credential. Throws on a read error: a partial list must not look
+// like a finished run.
+export async function listTenantIds(machine: Db, pageSize = 500): Promise<string[]> {
+  const ids: string[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await machine.from("tenants").select("id").eq("is_demo", false)
+      .order("id").range(from, from + pageSize - 1);
+    if (error) throw new Error("tenant_list_failed");
+    ids.push(...(data ?? []).map((r: { id: string }) => r.id));
+    if (!data || data.length < pageSize) return ids;
+  }
+}

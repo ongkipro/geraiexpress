@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { dispatchOperation, reconcileOperation } from "../../src/lib/mengantar/dispatcher";
-import { machine, realOperation, sql } from "../db/helpers";
+import { dispatchOperation, payUnpaidShipmentBatch, reconcileOperation } from "../../src/lib/mengantar/dispatcher";
+import { machine, realOperation, signIn, sql } from "../db/helpers";
 
 // TD-3 / DEC-010 end to end against the local database and the Mengantar SANDBOX: the real
 // dispatcher claims an operation, sends one order with the Partner-registered sandbox seller's
@@ -51,5 +51,43 @@ describe.skipIf(!run)("dispatcher against the Mengantar sandbox (writes one sand
       update public.shipments set submission_state = 'unknown' where id = '${f.shipment}'`);
     expect(await reconcileOperation(f.op, deps())).toEqual({ status: "recorded", outcome: "not_created" });
     expect(state(f.op)).toBe("failed|NOT_CREATED|-|failed|not_applicable|-");
+  });
+});
+
+// T-033 supervised sandbox payment. NOT RUN in the T-033 change: it spends the sandbox seller's
+// wallet balance, so it needs the owner's explicit approval and a sandbox balance that covers one
+// order. Skipped unless both are given:
+//   MENGANTAR_CONTRACT_PAY_UNPAID=1 MENGANTAR_CONTRACT_SELLER_KEY_VAR=GERAIEXPRESS_MENGANTAR_SANDBOX_SELLER_KEY \
+//   secrets-env run -- pnpm exec vitest run tests/contract/dispatcher.live.test.ts -t "pay-unpaid"
+// It records the real answers the research note still lacks (research §7.1): the accepted `batch_id`,
+// the shape of `data` and `cnote_no`, and the refusal text for an insufficient balance.
+const runPay = process.env.MENGANTAR_CONTRACT_PAY_UNPAID === "1" && !!sellerKey;
+describe.skipIf(!runPay)("pay-unpaid against the Mengantar sandbox (OWNER-APPROVED; spends sandbox balance)", () => {
+  const sealKey = Buffer.alloc(32, 11).toString("base64");
+  const deps = () => {
+    const m = machine();
+    return { rpc: (fn: string, args: Record<string, unknown>) => m.rpc(fn, args), environment: "sandbox" as const, credentialKey: sealKey };
+  };
+
+  it("creates one unpaid order, authorizes and pays its batch with the batch object id, and reconciles by reads", async () => {
+    const f = await realOperation({ sellerKey, sealKey });
+    const created = await dispatchOperation(f.op, deps());
+    expect(created.status).toBe("recorded");
+    const row = sql(`select result_code || '|' || provider_batch || '|' || coalesce(provider_batch_id, '-') from public.provider_operations where id = '${f.op}'`).split("|");
+    // A funded sandbox seller would have the order issued at creation: then there is nothing to pay.
+    expect(row[0], "needs an UNPAID order: empty the sandbox balance first").toBe("UNPAID");
+    expect(row[2]).toMatch(/^[a-f0-9]{24}$/);
+    expect(row[2]).not.toBe(row[1]);
+
+    sql(`insert into public.memberships (tenant_id, user_id, role) values ('${f.tenant}', '00000000-0000-4000-a000-0000000000a1', 'tenant_admin')`);
+    const owner = await signIn("owner-a@geraiexpress.test");
+    const review = await owner.rpc("review_unpaid_batch", { p_shipment: f.shipment });
+    expect(review.error).toBeNull();
+    expect((await owner.rpc("authorize_batch_payment", { p_shipment: f.shipment, p_batch_digest: review.data.batch_digest })).data).toMatchObject({ authorized: true });
+
+    const paid = await payUnpaidShipmentBatch(f.shipment, review.data.batch_digest, deps());
+    console.log("pay-unpaid", paid, sql(`select state from private.batch_payment_attempts where tenant_id = '${f.tenant}'`));
+    // Whatever the provider answered, the batch is never paid twice: a second claim only reconciles.
+    expect(["recorded", "inconclusive", "not_reconcilable"]).toContain(paid.status);
   });
 });

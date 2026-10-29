@@ -4,22 +4,13 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import { IDS, client, demoVisitor, mailCode, signIn, sql, verifiedNewUser } from "./helpers";
+import { DB_CONTAINER, DB_NAME, IDS, authService, client, codeSignIn, demoVisitor, signIn, sql, verifiedNewUser } from "./helpers";
 
 const OWNER_A = "00000000-0000-4000-a000-0000000000a1";
 const OPERATOR_A = "00000000-0000-4000-a000-0000000000a2";
 
 function freshEmail(prefix = "staf") {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@geraiexpress.test`;
-}
-
-async function verifiedAs(email: string) {
-  const c = client();
-  const { error } = await c.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-  if (error) throw new Error(`otp ${email}: ${error.message}`);
-  const v = await c.auth.verifyOtp({ email, token: await mailCode(email), type: "email" });
-  if (v.error) throw new Error(`verify ${email}: ${v.error.message}`);
-  return { c, id: v.data.user!.id };
 }
 
 describe("who may invite", () => {
@@ -38,6 +29,21 @@ describe("who may invite", () => {
   });
 });
 
+describe("invitation cap", () => {
+  it("a gerai holds at most 20 pending invitations", async () => {
+    const TENANT_C = "00000000-0000-4000-b000-00000000000c";
+    const ownerC = await signIn("owner-c@geraiexpress.test");
+    try {
+      for (let n = 0; n < 20; n++) {
+        expect((await ownerC.rpc("invite_member", { p_tenant: TENANT_C, p_email: freshEmail(`cap${n}`), p_role: "operator" })).error).toBeNull();
+      }
+      expect((await ownerC.rpc("invite_member", { p_tenant: TENANT_C, p_email: freshEmail("cap-over"), p_role: "operator" })).error?.message).toBe("too_many_invitations");
+    } finally {
+      sql(`update public.tenant_invitations set status = 'revoked', revoked_at = now() where tenant_id = '${TENANT_C}' and status = 'pending'`);
+    }
+  });
+});
+
 describe("accepting (PR-31)", () => {
   it("an invited email can register while registration is closed and accepts exactly once", async () => {
     const owner = await signIn("owner-a@geraiexpress.test");
@@ -48,11 +54,13 @@ describe("accepting (PR-31)", () => {
     expect((await owner.rpc("invite_member", { p_tenant: IDS.tenantA, p_email: freshEmail(), p_role: null })).error?.message).toBe("transition_not_allowed");
     sql(`update private.settings set value = 'false' where key = 'registration_open'`);
     try {
-      // Not invited: refused while closed. Invited: allowed.
-      expect((await client().auth.signInWithOtp({ email: freshEmail("asing"), options: { shouldCreateUser: true } })).error).not.toBeNull();
-      const staff = await verifiedAs(email);
+      // Not invited: refused while closed, and no code exists to verify. Invited: allowed.
+      const uninvited = freshEmail("asing");
+      expect(await authService().requestEmailCode({ email: uninvited, captchaToken: undefined })).toEqual({ status: "withheld" });
+      expect(sql(`select count(*) from auth.otp_codes where email = '${uninvited}'`)).toBe("0");
+      const staff = await codeSignIn(email);
       const mine = await staff.c.rpc("my_invitations");
-      expect(mine.data).toEqual([expect.objectContaining({ id: inv.data, tenant_name: "Gerai Uji A", role: "operator" })]);
+      expect(mine.data).toEqual([expect.objectContaining({ id: inv.data, tenant_name: "Gerai Uji A", role: "operator", invited_by_email: "owner-a@geraiexpress.test" })]);
       const [first, second] = await Promise.all([
         staff.c.rpc("accept_invitation", { p_id: inv.data }),
         staff.c.rpc("accept_invitation", { p_id: inv.data }),
@@ -76,7 +84,7 @@ describe("accepting (PR-31)", () => {
     expect((await stranger.c.rpc("accept_invitation", { p_id: inv })).error?.message).toBe("not_found");
     expect((await stranger.c.rpc("my_invitations")).data).toEqual([]);
 
-    const staff = await verifiedAs(target);
+    const staff = await codeSignIn(target);
     sql(`update public.tenant_invitations set expires_at = now() - interval '1 minute' where id = '${inv}'`);
     expect((await staff.c.rpc("my_invitations")).data).toEqual([]);
     expect(((await owner.rpc("tenant_invitations_list", { p_tenant: IDS.tenantA })).data as { id: string }[]).map((x) => x.id)).not.toContain(inv);
@@ -91,24 +99,11 @@ describe("accepting (PR-31)", () => {
     // Issued by someone who is no longer an admin there: refused.
     const third = (await owner.rpc("invite_member", { p_tenant: IDS.tenantA, p_email: target, p_role: "operator" })).data as string;
     sql(`update public.tenant_invitations set invited_by = '${OPERATOR_A}' where id = '${third}'`);
+    // The inviter's email is shown only while they are still an admin there.
+    expect((await staff.c.rpc("my_invitations")).data).toEqual([expect.objectContaining({ id: third, invited_by_email: null })]);
     expect((await staff.c.rpc("accept_invitation", { p_id: third })).error?.message).toBe("invitation_unavailable");
     expect(sql(`select count(*) from public.memberships where user_id = '${staff.id}'`)).toBe("0");
     sql(`update public.tenant_invitations set status = 'revoked', revoked_at = now() where id = '${third}'`);
-  });
-});
-
-describe("invitation cap", () => {
-  it("a gerai holds at most 20 pending invitations", async () => {
-    const TENANT_C = "00000000-0000-4000-b000-00000000000c";
-    const ownerC = await signIn("owner-c@geraiexpress.test");
-    try {
-      for (let n = 0; n < 20; n++) {
-        expect((await ownerC.rpc("invite_member", { p_tenant: TENANT_C, p_email: freshEmail(`cap${n}`), p_role: "operator" })).error).toBeNull();
-      }
-      expect((await ownerC.rpc("invite_member", { p_tenant: TENANT_C, p_email: freshEmail("cap-over"), p_role: "operator" })).error?.message).toBe("too_many_invitations");
-    } finally {
-      sql(`update public.tenant_invitations set status = 'revoked', revoked_at = now() where tenant_id = '${TENANT_C}' and status = 'pending'`);
-    }
   });
 });
 
@@ -137,7 +132,7 @@ describe("member management (DEC-008)", () => {
     const owner = await signIn("owner-a@geraiexpress.test");
     const email = freshEmail();
     const inv = (await owner.rpc("invite_member", { p_tenant: IDS.tenantA, p_email: email, p_role: "operator" })).data as string;
-    const staff = await verifiedAs(email);
+    const staff = await codeSignIn(email);
     expect((await staff.c.rpc("accept_invitation", { p_id: inv })).error).toBeNull();
     expect((await staff.c.from("outlets").select("id").eq("tenant_id", IDS.tenantA)).data).toHaveLength(1);
     const rev = Number(sql(`select revision from public.memberships where tenant_id = '${IDS.tenantA}' and user_id = '${staff.id}'`));
@@ -151,7 +146,7 @@ const run = promisify(execFile);
 function asUser(user: string, body: string) {
   const claims = JSON.stringify({ sub: user, role: "authenticated", aal: "aal1", is_anonymous: false });
   const script = `begin; set local role authenticated; select set_config('request.jwt.claims', '${claims}', true); ${body} commit;`;
-  return run("docker", ["exec", "supabase_db_geraiexpress", "psql", "-U", "postgres", "-tA", "-v", "ON_ERROR_STOP=1", "-c", script])
+  return run("docker", ["exec", DB_CONTAINER, "psql", "-U", "postgres", "-d", DB_NAME, "-tA", "-v", "ON_ERROR_STOP=1", "-c", script])
     .then(() => "ok", (e: { stderr?: string }) => e.stderr ?? "error");
 }
 
@@ -180,7 +175,7 @@ describe("role re-check after lock (T-010 follow-up)", () => {
     const { data: me } = await demo.c.auth.getUser();
     const { data: s } = await demo.c.from("shipments").select("id").eq("tenant_id", demo.tenant).eq("submission_state", "unknown").single();
     // Hold the member rows locked while demoting, then let the reconcile call queue behind it.
-    const demote = run("docker", ["exec", "supabase_db_geraiexpress", "psql", "-U", "postgres", "-tA", "-v", "ON_ERROR_STOP=1", "-c",
+    const demote = run("docker", ["exec", DB_CONTAINER, "psql", "-U", "postgres", "-d", DB_NAME, "-tA", "-v", "ON_ERROR_STOP=1", "-c",
       `begin; update public.memberships set role = 'operator' where tenant_id = '${demo.tenant}'; select pg_sleep(1.5); commit;`]);
     await new Promise((r) => setTimeout(r, 400));
     const reconcile = asUser(me.user!.id, `select public.reconcile_shipment('${s!.id}');`);

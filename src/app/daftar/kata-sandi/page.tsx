@@ -1,27 +1,30 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase/server";
+import { AuthCard, AuthHeading, AuthShell } from "@/components/auth/auth-shell";
+import { RegistrationSteps } from "@/components/auth/registration-steps";
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
+import { currentUser, dbServer } from "@/lib/db/server";
 import { PasswordForm } from "../forms";
 
 export const metadata: Metadata = { title: "Buat kata sandi" };
 
 export default async function SetPasswordPage() {
-  const supabase = await supabaseServer();
-  const { data } = await supabase.rpc("my_account_state");
-  const account = (data as { has_password: boolean }[] | null)?.[0];
-  if (!account) redirect("/masuk");
-  if (account.has_password) redirect("/");
-
+  const user = await currentUser();
+  if (!user || user.isAnonymous) redirect("/masuk");
+  if (user.hasPassword) redirect("/");
+  // Same choice as setPasswordAction makes next: invited staff continue to their invitation.
+  const { data: invites } = await (await dbServer()).rpc("my_invitations");
+  const journey = (invites ?? []).length > 0 ? "staf" : "gerai";
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[440px] flex-col justify-center gap-8 px-5 py-12">
-      <header className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">GeraiExpress</p>
-        <h1 className="text-3xl tracking-tight">Buat kata sandi</h1>
-        <p className="text-muted-foreground">Email Anda sudah terverifikasi. Kata sandi ini dipakai untuk masuk ke GeraiExpress berikutnya — bukan kata sandi Mengantar.</p>
-      </header>
-      <section aria-label="Kata sandi" className="rounded-lg bg-card p-6 ring-1 ring-border">
-        <PasswordForm />
-      </section>
-    </main>
+    <AuthShell>
+      <AuthCard>
+        <RegistrationSteps journey={journey} current="sandi" />
+        <AuthHeading
+          title="Buat kata sandi"
+          description="Email Anda sudah terverifikasi. Kata sandi ini dipakai untuk masuk ke GeraiExpress berikutnya — bukan kata sandi Mengantar."
+        />
+        <PasswordForm minLength={MIN_PASSWORD_LENGTH} maxLength={MAX_PASSWORD_LENGTH} />
+      </AuthCard>
+    </AuthShell>
   );
 }

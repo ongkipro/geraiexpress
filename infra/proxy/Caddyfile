@@ -1,0 +1,63 @@
+# T-062 / DEC-020: the production reverse proxy. Caddy terminates TLS (automatic HTTPS, certificates kept
+# in the caddy_data volume) for the four hosts of DEC-015 and forwards everything else to the app over the
+# compose network. Host names come from the environment so staging can use its own names (compose.yaml):
+#   SITE_HOST (apex), APP_HOST, OWNER_HOST, HOOKS_HOST, ACME_EMAIL (certificate contact).
+#
+# Client address contract with the app (src/lib/client-address.ts):
+#   * This proxy is the edge: no `trusted_proxies` is configured, so no X-Forwarded-* header a client sends
+#     is believed. If a CDN or another proxy is ever placed in front, it must be declared under
+#     `servers { trusted_proxies ... }` AND this block revisited: X-Real-IP below is the TCP peer.
+#   * The app reads ONLY `X-Real-IP`, and only with TRUSTED_PROXY=1 (set by compose.yaml for the app).
+#     `header_up X-Real-IP {remote_host}` REPLACES any X-Real-IP a client sent (set, not append).
+#     Caddy's reverse_proxy already REPLACES X-Forwarded-For with the peer when the client is not a
+#     trusted proxy (verified against Caddy 2.11.2: a forged list never reaches the upstream), and the
+#     other client-address headers are dropped below, so a client-supplied address never reaches the app.
+#   * The app port (3000) is not published; only this proxy can reach it.
+#
+# /api/internal/* (the scheduler's cron routes) is never routed from the internet: it answers 404 here, and
+# the app refuses it on every Host except `internal.geraiexpress.local`, which this proxy does not serve.
+{
+	email {$ACME_EMAIL}
+	admin off
+}
+
+(gerai_app) {
+	encode zstd gzip
+	# No file uploads exist: cap bodies to Next's default Server Action limit. The hooks host (webhooks arrive
+	# in a later task) is served by this same block; no route of the app needs a path of its own here.
+	request_body {
+		max_size 1MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	# Case-insensitive and tolerant of repeated slashes; an encoded spelling is decoded before matching.
+	@internal path_regexp (?i)^/+api/+internal(/|$)
+	handle @internal {
+		respond "Not Found" 404
+	}
+
+	# The scheduler's name is never served through the proxy, whatever the path (it is not one of the four
+	# hosts this block answers, so this only matters if an operator adds it to the site address by mistake).
+	@internalhost host internal.geraiexpress.local
+	handle @internalhost {
+		respond "Not Found" 404
+	}
+
+	handle {
+		reverse_proxy app:3000 {
+			header_up X-Real-IP {remote_host}
+			header_up -Forwarded
+			header_up -CF-Connecting-IP
+			header_up -True-Client-IP
+			header_up -X-Client-IP
+		}
+	}
+}
+
+{$SITE_HOST:geraiexpress.com}, {$APP_HOST:app.geraiexpress.com}, {$OWNER_HOST:owner.geraiexpress.com}, {$HOOKS_HOST:hooks.geraiexpress.com} {
+	import gerai_app
+}

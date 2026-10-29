@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { friendlyError } from "@/lib/errors";
 import { mengantarFailure, tenantMengantar } from "@/lib/mengantar/tenant";
-import { supabaseServer } from "@/lib/supabase/server";
+import { dbServer } from "@/lib/db/server";
 import { requireWorkspace } from "@/lib/workspace";
 
 export type PickupState = { ok?: string; error?: string };
@@ -26,7 +26,7 @@ export async function setOutletPickupAction(_: PickupState, form: FormData): Pro
   }
   const address = addresses.find((a) => a.id === chosen);
   if (!address) return { error: friendlyError({ message: "pickup_not_found" }) };
-  const { error } = await (await supabaseServer()).rpc("set_outlet_mengantar_pickup", {
+  const { error } = await (await dbServer()).rpc("set_outlet_mengantar_pickup", {
     p_outlet: ws.outlet.id, p_address_id: address.id, p_area_id: address.areaId,
     p_address: address.address, p_area: address.area,
   });

@@ -1,10 +1,14 @@
-// Local mail capture (Mailpit): newest 6-digit code sent to an address.
+// Local mail capture (Mailpit of the gxdb stack, scripts/db-up.sh): the e2e runner reads the emailed codes from
+// its HTTP API on the host. E2E_MAILPIT_URL overrides the default loopback address.
+const MAILPIT = process.env.E2E_MAILPIT_URL ?? "http://127.0.0.1:58025";
+
+// Newest 6-digit code sent to an address.
 export async function mailCode(email: string): Promise<string> {
   for (let i = 0; i < 20; i++) {
-    const list = await (await fetch(`http://127.0.0.1:54324/api/v1/search?query=${encodeURIComponent(`to:"${email}"`)}&limit=1`)).json();
+    const list = await (await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:"${email}"`)}&limit=1`)).json();
     const id = list.messages?.[0]?.ID;
     if (id) {
-      const msg = await (await fetch(`http://127.0.0.1:54324/api/v1/message/${id}`)).json();
+      const msg = await (await fetch(`${MAILPIT}/api/v1/message/${id}`)).json();
       const code = String(msg.Text ?? msg.HTML).match(/\b(\d{6})\b/)?.[1];
       if (code) return code;
     }
@@ -15,6 +19,6 @@ export async function mailCode(email: string): Promise<string> {
 
 // Number of captured messages addressed to an address (DEC-009: refusal means none at all).
 export async function mailCount(email: string): Promise<number> {
-  const list = await (await fetch(`http://127.0.0.1:54324/api/v1/search?query=${encodeURIComponent(`to:"${email}"`)}&limit=50`)).json();
+  const list = await (await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:"${email}"`)}&limit=50`)).json();
   return Number(list.messages_count ?? list.messages?.length ?? 0);
 }

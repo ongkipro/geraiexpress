@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { createMengantarPublicClient, MengantarError, parseEstimates } from "../../src/lib/mengantar/public-api";
+import { createMengantarPublicClient, discountPercentToBps, MengantarError, parseEstimates } from "../../src/lib/mengantar/public-api";
 
 // Sanitized production responses captured read-only on 2026-10-14 (owner-approved); see
 // docs/research/geraiexpress-mengantar-public-api.md.
@@ -42,7 +42,7 @@ describe("Mengantar Public API estimate (DEL-1 stage 3)", () => {
     });
 
     expect(rows.map((r) => r.courier)).toEqual(["Sap", "spx", "JT", "SiCepat", "anteraja", "iDexpress", "pos", "JNE", "lion"]);
-    expect(rows.find((r) => r.courier === "JNE")).toEqual({ courier: "JNE", tariff: 20000, codFee: 4994, netShipping: 14000, etaText: "1 - 2 days" });
+    expect(rows.find((r) => r.courier === "JNE")).toEqual({ courier: "JNE", tariff: 20000, codFee: 4994, netShipping: 14000, discountBps: 3000, etaText: "1 - 2 days" });
     expect(rows.find((r) => r.courier === "pos")).toMatchObject({ tariff: 18000, netShipping: 15300 });
     // Undocumented variants (cargo, SAPLite) are not offered.
     expect(rows.some((r) => /cargo|lite/i.test(r.courier))).toBe(false);
@@ -51,16 +51,41 @@ describe("Mengantar Public API estimate (DEL-1 stage 3)", () => {
   it("normalizes a non-COD estimate with no COD fee", () => {
     const rows = parseEstimates(JSON.parse(fixture("estimate-all-noncod-depok-melawai-1kg.json")).data, false);
     expect(rows).toEqual([
-      { courier: "Sap", tariff: 7000, codFee: 0, netShipping: 6500, etaText: "1 - 3 days" },
-      { courier: "spx", tariff: 8700, codFee: 0, netShipping: 5655, etaText: "1 - 2 days" },
-      { courier: "JT", tariff: 9000, codFee: 0, netShipping: 6300, etaText: null },
-      { courier: "SiCepat", tariff: 9000, codFee: 0, netShipping: 6300, etaText: "2 - 3 Days" },
-      { courier: "anteraja", tariff: 9000, codFee: 0, netShipping: 6300, etaText: "1-2 Day" },
-      { courier: "iDexpress", tariff: 9000, codFee: 0, netShipping: 6300, etaText: null },
-      { courier: "pos", tariff: 9000, codFee: 0, netShipping: 7650, etaText: "4 HARI" },
-      { courier: "JNE", tariff: 10000, codFee: 0, netShipping: 7000, etaText: "1 - 2 days" },
-      { courier: "lion", tariff: 11160, codFee: 0, netShipping: 7811, etaText: "1 - 2 Hari" },
+      { courier: "Sap", tariff: 7000, codFee: 0, netShipping: 6500, discountBps: 0, etaText: "1 - 3 days" },
+      { courier: "spx", tariff: 8700, codFee: 0, netShipping: 5655, discountBps: 3000, etaText: "1 - 2 days" },
+      { courier: "JT", tariff: 9000, codFee: 0, netShipping: 6300, discountBps: 3000, etaText: null },
+      { courier: "SiCepat", tariff: 9000, codFee: 0, netShipping: 6300, discountBps: 3000, etaText: "2 - 3 Days" },
+      { courier: "anteraja", tariff: 9000, codFee: 0, netShipping: 6300, discountBps: 3000, etaText: "1-2 Day" },
+      { courier: "iDexpress", tariff: 9000, codFee: 0, netShipping: 6300, discountBps: 3000, etaText: null },
+      { courier: "pos", tariff: 9000, codFee: 0, netShipping: 7650, discountBps: 1500, etaText: "4 HARI" },
+      { courier: "JNE", tariff: 10000, codFee: 0, netShipping: 7000, discountBps: 3000, etaText: "1 - 2 days" },
+      { courier: "lion", tariff: 11160, codFee: 0, netShipping: 7811, discountBps: 3000, etaText: "1 - 2 Hari" },
     ]);
+  });
+
+  // T-053 / DATA-9: the documented `discountPercent` becomes integer basis points; unknown is null, never 0.
+  it("converts discountPercent to basis points exactly and keeps unknown apart from a real 0%", () => {
+    expect(discountPercentToBps(22.5)).toBe(2250);
+    expect(discountPercentToBps(20)).toBe(2000);
+    expect(discountPercentToBps(7.14)).toBe(714);
+    expect(discountPercentToBps(0.01)).toBe(1);
+    expect(discountPercentToBps(100)).toBe(10000);
+    expect(discountPercentToBps(0)).toBe(0); // present 0 is a real 0%
+    for (const unknown of [undefined, null, "abc", "22.5", true, {}, [], NaN, Infinity, -Infinity, -1, -0.01, 100.01, 120, 22.555, 1e-7, 5e-324]) {
+      expect(discountPercentToBps(unknown), String(unknown)).toBeNull();
+    }
+  });
+
+  it("stores the estimate's discountPercent per courier, null when absent or unreadable, and ignores discountExtraPercent", () => {
+    const data = JSON.parse(fixture("estimate-all-noncod-depok-melawai-1kg.json")).data;
+    data.JNE.discountPercent = 22.5;
+    delete data.JT.discountPercent;
+    data.pos.discountPercent = "abc";
+    data.spx.discountPercent = 120;
+    data.lion.discountExtraPercent = 12; // undocumented: never read
+    delete data.lion.discountPercent;
+    const bps = Object.fromEntries(parseEstimates(data, false).map((r) => [r.courier, r.discountBps]));
+    expect(bps).toMatchObject({ JNE: 2250, JT: null, pos: null, spx: null, lion: null, Sap: 0, SiCepat: 3000 });
   });
 
   it("drops SiCepat when its origin or pickup is not served", () => {

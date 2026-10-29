@@ -44,6 +44,7 @@ async function quotedRealDraft(overrides: Record<string, unknown> = {}) {
   expect(error).toBeNull();
   const revision = Number(sql(`select revision from public.shipments where id = '${id}'`));
   const quotes = await machine().rpc("record_live_quotes", { p_tenant: IDS.tenantA, p_shipment: id, p_expected_revision: revision,
+    p_origin_area_id: "5fc62f60f8f44b34aa4c0dcd", p_origin_address_id: "6acf44a4771fe2b474c055ca",
     p_rows: [{ courier: "JT", tariff: 9000, net: 6300, eta: "1 - 2 days" }] });
   expect(quotes.error).toBeNull();
   const quote = sql(`select id from public.shipment_quotes where shipment_id = '${id}' and expires_at > now()`);
@@ -97,6 +98,7 @@ describe("reopening after a definite refusal (T-024)", () => {
     // Quote and confirm again: a second operation is allowed, the first stays as history.
     const revision = Number(sql(`select revision from public.shipments where id = '${d.id}'`));
     await machine().rpc("record_live_quotes", { p_tenant: IDS.tenantA, p_shipment: d.id, p_expected_revision: revision,
+      p_origin_area_id: "5fc62f60f8f44b34aa4c0dcd", p_origin_address_id: "6acf44a4771fe2b474c055ca",
       p_rows: [{ courier: "SiCepat", tariff: 9500, net: 7000, eta: "" }] });
     const quote = sql(`select id from public.shipment_quotes where shipment_id = '${d.id}' and expires_at > now()`);
     expect((await confirm(d.owner, d.id, quote, revision)).data).toMatchObject({ state: "queued", replayed: false });
@@ -132,7 +134,7 @@ describe("due work and payment checks (machine only)", () => {
     await machine().rpc("dispatch_record", { p_operation: unpaid.op, p_attempt: 1, p_outcome: "unpaid", p_order_id: "261014H0JAFR", p_batch: "26101416827JYE" });
 
     const due = async () => {
-      const { data, error } = await machine().rpc("dispatch_due", { p_limit: 50 });
+      const { data, error } = await machine().rpc("dispatch_due", { p_limit: 50, p_env: "sandbox" });
       expect(error).toBeNull();
       return new Map((data as { operation_id: string; action: string }[]).map((r) => [r.operation_id, r.action]));
     };
@@ -142,13 +144,13 @@ describe("due work and payment checks (machine only)", () => {
     expect(map.get(stale.op)).toBe("reconcile");
     expect(map.get(unpaid.op)).toBe("payment");
 
-    const check = await machine().rpc("dispatch_begin_payment_check", { p_operation: unpaid.op });
+    const check = await machine().rpc("dispatch_begin_payment_check", { p_operation: unpaid.op, p_env: "sandbox" });
     expect(check.data).toMatchObject({ provider_order_id: "261014H0JAFR", provider_batch: "26101416827JYE", provider_env: "sandbox" });
-    await machine().rpc("dispatch_begin_reconcile", { p_operation: stale.op });
+    await machine().rpc("dispatch_begin_reconcile", { p_operation: stale.op, p_env: "sandbox" });
     map = await due();
     expect(map.has(unpaid.op)).toBe(false); // checked just now
     expect(map.has(stale.op)).toBe(false);
-    expect((await machine().rpc("dispatch_begin_payment_check", { p_operation: queued.op })).error?.message).toBe("nothing_to_check");
+    expect((await machine().rpc("dispatch_begin_payment_check", { p_operation: queued.op, p_env: "sandbox" })).error?.message).toBe("nothing_to_check");
 
     // Claims that would certainly be refused are not due.
     const keyless = await realOperation({ noCredential: true });
@@ -165,8 +167,8 @@ describe("due work and payment checks (machine only)", () => {
     expect((await due()).has(released.op)).toBe(false);
 
     for (const c of [client(), await signIn("owner-a@geraiexpress.test")]) {
-      expect((await c.rpc("dispatch_due", { p_limit: 5 })).error).not.toBeNull();
-      expect((await c.rpc("dispatch_begin_payment_check", { p_operation: unpaid.op })).error).not.toBeNull();
+      expect((await c.rpc("dispatch_due", { p_limit: 5, p_env: "sandbox" })).error).not.toBeNull();
+      expect((await c.rpc("dispatch_begin_payment_check", { p_operation: unpaid.op, p_env: "sandbox" })).error).not.toBeNull();
     }
   });
 });
@@ -195,7 +197,7 @@ describe("review and audit follow-ups (T-024)", () => {
     await machine().rpc("dispatch_claim", { p_operation: f.op, p_env: "sandbox" });
     await record(f.op, { p_outcome: "unknown" });
     await record(f.op, { p_outcome: "unpaid", p_order_id: "261014RECON1", p_batch: "26101416RECON1", p_code: "RECONCILED" });
-    expect((await machine().rpc("dispatch_begin_payment_check", { p_operation: f.op })).data).toMatchObject({ provider_order_id: "261014RECON1" });
+    expect((await machine().rpc("dispatch_begin_payment_check", { p_operation: f.op, p_env: "sandbox" })).data).toMatchObject({ provider_order_id: "261014RECON1" });
     expect((await record(f.op, { p_outcome: "issued", p_order_id: "261014RECON1", p_tracking: "JO5555555555", p_batch: "26101416RECON1" })).error).toBeNull();
     expect(sql(`select submission_state || '|' || payment_state || '|' || awb from public.shipments where id = '${f.shipment}'`)).toBe("issued|paid|JO5555555555");
   });
@@ -232,7 +234,7 @@ describe("review and audit follow-ups (T-024)", () => {
     expect((await operator.rpc("close_failed_operation", { p_shipment: d.id, p_reason: "Sudah dicek di aplikasi" })).error?.message).toBe("admin_required");
     expect((await d.owner.rpc("close_failed_operation", { p_shipment: d.id, p_reason: "Sudah dicek di aplikasi" })).error?.message).toBe("not_closable");
     // The re-check is allowed for a provider error item now.
-    expect((await machine().rpc("dispatch_begin_reconcile", { p_operation: op })).error).toBeNull();
+    expect((await machine().rpc("dispatch_begin_reconcile", { p_operation: op, p_env: "sandbox" })).error).toBeNull();
     sql(`update public.provider_operations set dispatched_at = now() - interval '40 minutes' where id = '${op}'`);
     expect((await d.owner.rpc("close_failed_operation", { p_shipment: d.id, p_reason: "x" })).error).not.toBeNull();
     expect((await d.owner.rpc("close_failed_operation", { p_shipment: d.id, p_reason: "Sudah dicek di aplikasi Mengantar" })).error).toBeNull();
@@ -251,9 +253,9 @@ describe("review and audit follow-ups (T-024)", () => {
     expect(sql(`select result_code from public.provider_operations where id = '${f.op}'`)).toBe("DUPLICATE_ORDERS");
     sql(`update public.provider_operations set dispatched_at = now() - interval '6 minutes' where id = '${f.op}'`);
     await record(f.op, { p_outcome: "not_created" });
-    const due = async () => new Map(((await machine().rpc("dispatch_due", { p_limit: 50 })).data as { operation_id: string; action: string }[]).map((r) => [r.operation_id, r.action]));
+    const due = async () => new Map(((await machine().rpc("dispatch_due", { p_limit: 50, p_env: "sandbox" })).data as { operation_id: string; action: string }[]).map((r) => [r.operation_id, r.action]));
     expect((await due()).get(f.op)).toBe("reconcile");
-    await machine().rpc("dispatch_begin_reconcile", { p_operation: f.op });
+    await machine().rpc("dispatch_begin_reconcile", { p_operation: f.op, p_env: "sandbox" });
     expect((await due()).has(f.op)).toBe(false);
 
     const owner = await signIn("owner-a@geraiexpress.test");

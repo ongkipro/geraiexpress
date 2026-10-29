@@ -1,6 +1,6 @@
 // PR-31 / PR-32 / UX-8 / DEC-007 / DEC-008: staff invitation, acceptance and member management.
 import { actAsVisitor, expect, randomVisitorIp, test } from "./fixtures";
-import { expectNoHorizontalOverflow, expectTouchTargets, localSql, mailCode, signIn, startDemo } from "./helpers";
+import { atDashboard, expectNoHorizontalOverflow, expectTouchTargets, localSql, mailCode, signIn, startDemo } from "./helpers";
 
 test("an admin invites staff who join through the email code while public registration is closed", async ({ page, browser }) => {
   test.setTimeout(90_000);
@@ -36,10 +36,13 @@ test("an admin invites staff who join through the email code while public regist
     await staff.getByRole("button", { name: "Simpan kata sandi" }).click();
     await expect(staff).toHaveURL(/\/undangan$/);
     const invite = staff.getByTestId("my-invitation").filter({ hasText: "Gerai Uji A" });
-    await expect(invite).toContainText("Sebagai Operator");
+    // UI v4: the invitation card lists Gerai, Peran and Berlaku sampai as separate rows (was "Sebagai Operator").
+    await expect(invite).toContainText(/PeranOperator/);
+    // T-075: the invitee sees who invited them (the inviter's sign-in email, only while they are an active admin).
+    await expect(invite.getByTestId("invitation-inviter")).toHaveText("owner-a@geraiexpress.test");
     await expectTouchTargets(staff);
     await invite.getByRole("button", { name: /Terima/ }).click();
-    await expect(staff).toHaveURL(/\/pengiriman$/);
+    await expect(staff).toHaveURL(atDashboard); // UX-16: accepting an invitation lands on the Dashboard.
     await expect(staff.getByTestId("tenant-name").first()).toHaveText("Gerai Uji A");
     // Operators do not manage members.
     expect((await staff.goto("/anggota"))?.status()).toBe(404);
@@ -50,8 +53,9 @@ test("an admin invites staff who join through the email code while public regist
   // The admin sees the new member and removes them again; access ends at once.
   await page.reload();
   const member = page.getByTestId("member").filter({ hasText: email });
-  await member.getByText(`Atur ${email}…`).click();
-  await member.getByRole("button", { name: "Nonaktifkan" }).click();
+  // Deactivation confirms in a dialog (destructive-action tier); the server action is unchanged.
+  await member.getByRole("button", { name: `Nonaktifkan ${email}` }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Nonaktifkan" }).click();
   await expect(page.getByTestId("member").filter({ hasText: email })).toHaveCount(0);
   await staff.goto("/pengiriman");
   await expect(staff).toHaveURL(/\/akses$/);
@@ -75,10 +79,12 @@ test("the only admin of a gerai cannot step down or remove themselves", async ({
   await signIn(page, "owner-b@geraiexpress.test");
   await page.goto("/anggota");
   const me = page.getByTestId("member").filter({ hasText: "owner-b@geraiexpress.test" });
-  await me.getByText("Atur owner-b@geraiexpress.test…").click();
-  await me.getByRole("radio", { name: "Operator" }).check();
-  await me.getByRole("button", { name: "Simpan peran" }).click();
-  await expect(me.getByRole("alert")).toHaveText(/minimal satu admin gerai/);
+  // Role changes are chosen and confirmed in a dialog.
+  await me.getByRole("button", { name: "Ubah peran owner-b@geraiexpress.test" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("radio", { name: /Operator/ }).check();
+  await dialog.getByRole("button", { name: "Simpan peran" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText(/minimal satu admin gerai/);
 });
 
 test("operators and demo sessions get no member management", async ({ page }) => {

@@ -1,22 +1,28 @@
+import { ShieldCheck } from "lucide-react";
+import { AppHeader } from "@/components/app-header";
+import { AccountMenu } from "@/components/app-header-account";
+import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { MobileNav } from "@/components/mobile-nav";
-import { WorkspaceNav, type NavItem } from "@/components/workspace-nav";
+import type { NavItem } from "@/components/workspace-nav";
 import { signOutAction } from "@/lib/auth-actions";
 import { requirePlatform, type Capability } from "@/lib/platform";
 
 const ITEMS: (NavItem & { capability: Capability })[] = [
-  { href: "/admin", label: "Gerai", capability: "tenant_governance" },
-  { href: "/admin/pengajuan", label: "Pengajuan gerai", capability: "tenant_governance" },
-  { href: "/admin/integrasi", label: "Integrasi Mengantar", capability: "integration_operations" },
-  { href: "/admin/akses", label: "Akses Super Admin", capability: "access_governance" },
-  { href: "/admin/audit", label: "Audit", capability: "audit_review" },
+  { href: "/admin", label: "Gerai", icon: "tenants", group: "Gerai", capability: "tenant_governance" },
+  { href: "/admin/pengajuan", label: "Pengajuan gerai", icon: "review", group: "Gerai", capability: "tenant_governance" },
+  { href: "/admin/integrasi", label: "Integrasi Mengantar", icon: "integration", group: "Operasional", capability: "integration_operations" },
+  { href: "/admin/diskon", label: "Diskon gerai", icon: "discount", group: "Operasional", capability: "integration_operations" },
+  { href: "/admin/akses", label: "Akses Super Admin", icon: "access", group: "Keamanan", capability: "access_governance" },
+  { href: "/admin/audit", label: "Audit", icon: "audit", group: "Keamanan", capability: "audit_review" },
 ];
 
 // PR-24 / TEN-4: a separate platform workspace with its own explicit context; it grants no
-// tenant membership and shows no customer data.
+// tenant membership and shows no customer data. UX-16: the same header with its own scope chip and
+// an account menu that only signs out (no search, no gerai actions).
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await requirePlatform();
-  const items = ITEMS.filter((i) => session.capabilities.includes(i.capability)).map(({ href, label }) => ({ href, label }));
+  const items: NavItem[] = ITEMS.filter((i) => session.capabilities.includes(i.capability)).map(({ capability: _capability, ...item }) => item);
+  const initials = (session.email?.charAt(0) || "S").toUpperCase();
 
   const scope = (
     <div className="flex min-w-0 flex-col">
@@ -31,27 +37,33 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   );
 
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
-      <a href="#konten" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-sm focus:bg-card focus:p-3">
-        Lewati ke konten
-      </a>
-      <div className="hidden border-r border-border bg-sidebar lg:block">
-        <aside className="flex flex-col gap-8 p-5 lg:sticky lg:top-0 lg:h-dvh">
-          <p className="text-sm text-muted-foreground">GeraiExpress · Platform</p>
-          {scope}
-          <WorkspaceNav items={items} />
-          <div className="mt-auto">{sessionActions}</div>
-        </aside>
-      </div>
-      <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-2 backdrop-blur lg:hidden">
-          <MobileNav items={items}>{sessionActions}</MobileNav>
-          {scope}
-        </header>
-        <main id="konten" tabIndex={-1} className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 lg:px-8 lg:py-8">
-          {children}
-        </main>
-      </div>
-    </div>
+    <AppShell
+      brand="GeraiExpress"
+      scope={scope}
+      scopeNote="Tanpa akses data pelanggan gerai"
+      initials="P"
+      items={items}
+      session={sessionActions}
+      header={
+        <AppHeader
+          scope={
+            <span className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full bg-info-soft px-3 text-sm font-semibold text-info">
+              <ShieldCheck className="size-4" aria-hidden="true" />
+              Super Admin
+            </span>
+          }
+          account={
+            <AccountMenu
+              initials={initials}
+              title="Super Admin"
+              details={session.email ? [session.email] : []}
+              actions={[{ label: "Keluar", pendingLabel: "Keluar…", icon: "sign-out", action: signOutAction }]}
+            />
+          }
+        />
+      }
+    >
+      {children}
+    </AppShell>
   );
 }

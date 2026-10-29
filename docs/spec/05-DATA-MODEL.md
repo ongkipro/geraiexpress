@@ -1,16 +1,16 @@
 # GeraiExpress — Data Model
 
-- Status: Proposed logical model; not executable SQL or an approved migration.
+- Status: Proposed logical model with Observed local SQL implementation; amended 2026-10-29 for DEC-006, DEC-016, DEC-017, DEC-020, DEC-021 (ADR-0002), CTX-41, CTX-42 and the 2026-10-28 review (DATA-4, DATA-5, DATA-8 to DATA-10); each statement is labelled Observed, Decision, Proposal or Unknown.
 - Owner: Engineering owner
-- Updated: 2026-10-13
-- Basis: CTX-3, CTX-11, CTX-13; reference schema and repositories.
+- Updated: 2026-10-29
+- Basis: CTX-3, CTX-11, CTX-13, CTX-41, CTX-42; reference schema/repositories; local migrations in `db/foundation/20261001000000_pg_foundation.sql` and `db/migrations/` through `20261029100000_auth_core.sql` (35 files total, applied by `scripts/db-migrate.sh`). Built-state evidence below is not a deployed-schema claim.
 
 ## DATA-1 — Tenant-owned entities and relationships
 - Status: Proposed
 - Owner: Engineering owner
 - Source: CTX-1, CTX-3, CTX-11.
-- Statement: Persisted operational entities shall carry explicit ownership and database-enforced same-tenant relationships, with Supabase identity separate from contacts.
-- Acceptance: Local schema checks reject a contact address, shipment, snapshot, or label bound to another tenant's parent, including a direct insert/update through the Data API.
+- Statement: Persisted operational entities shall carry explicit ownership and database-enforced same-tenant relationships, with authentication identity (`auth.users`, DEC-021, ADR-0002; formerly Supabase identity) separate from contacts.
+- Acceptance: Local schema checks reject a contact address, shipment, snapshot, or label bound to another tenant's parent, including a direct insert/update through the PostgREST Data API.
 - Constraints: TEN-1, IAM-1, PRIV-1. Cardinality/permissions remain proposed.
 - Evidence: Reference composite foreign keys observed; GeraiExpress schema not created.
 
@@ -18,8 +18,8 @@ Names below are proposed logical entities, not existing tables or promised SDK A
 
 | Entity | Ownership and keys | Essential information / relationship |
 |---|---|---|
-| Application profile | Supabase `auth.users` identity, not tenant-owned customer data | App identity state/display fields; do not copy Better Auth sessions/accounts/verifications. |
-| Tenant | Business access boundary | Name, branding reference, lifecycle; accepted lifecycle policy pending. |
+| Application profile and auth state | `auth.users`, `auth.sessions`, `auth.otp_codes`, `auth.mfa_factors` (schema `auth`, `db/foundation/20261001000000_pg_foundation.sql` and `db/migrations/20261029100000_auth_core.sql`, ADR-0002); not tenant-owned customer data | Identity state, `scrypt` password hash, server-held sessions with SHA-256 refresh hashes, HMAC code digests and AES-GCM sealed TOTP factors; all `auth.*` table privileges are revoked from API roles and accessed only through 14 `service_role`-only `public.auth_*` RPCs. |
+| Tenant | Business access boundary | Name, immutable `slug`, `shipment_prefix`, `contact_whatsapp`, `masking_allowed`, branding reference, lifecycle. Observed on disk (`db/migrations/20261028120000_tenant_slug_reference.sql`, `20261028150000_masked_label.sql`): `name`, `lifecycle`, `is_demo`, `slug`, `shipment_prefix`, `contact_whatsapp`, `contact_whatsapp_revision` and `masking_allowed` exist (DATA-8, DATA-10). |
 | Membership | Tenant + auth user; unique pair | Role/state, revision; no client-owned promotion fields. |
 | Outlet | Tenant + outlet ID | Physical pickup and provider-account binding; proposed multiple outlets per tenant. |
 | Contact | Tenant + contact ID | Name, phone, sender/recipient flags, archive/revision; phone is not a unique person identifier. |
@@ -30,10 +30,13 @@ Names below are proposed logical entities, not existing tables or promised SDK A
 | Provider connection binding | Tenant/outlet → provider account | Non-secret account reference, environment, capabilities, authority/credential version; encrypted secret storage is private. |
 | Provider operation / outbox | Tenant + shipment(s) + operation ID | Actor, account/version, idempotency, immutable input digest, dispatch attempt, guarded state, recoverable handoff. |
 | Provider order snapshot | Tenant + shipment + account + provider order | Provider order/batch identifiers, `cnote_no`, paid state, observed/resolved timestamps and bounded normalized result. |
-| Customer sender mapping | Tenant + contact + account + source revision | Saved provider dropshipper ID and canonical name/phone; changes create/revalidate mappings rather than mutating unrelated historical identities. |
-| Label job | Tenant + shipment + account + format + generation ID | Pending/processing/completed/failed, metadata and document reference. Signed download capabilities are transient secrets, not list DTOs. |
-| Print attempt | Tenant + shipment/label + actor + attempt ID | Request sequence, allowed/blocked outcome, timestamp; not proof of physical printing. |
+| Customer sender mapping | Deferred (DEC-013, DEC-017): provider dropshipper master mapping is not used; the printed sender is local (DATA-10) | No table is created for it. Tenant + contact + account + source revision would be the key if a provider sender identity is ever accepted. |
+| Label job | Tenant + shipment + account + format + generation ID | Pending/processing/completed/failed, metadata and document reference for the deferred provider PDF path (gated on Mengantar whitelisting, TASKS Deferred) and for the simulated sample label. Observed: `public.label_jobs` (state, format, `is_simulated`). Signed download capabilities are transient secrets, not list DTOs. |
+| Print attempt | Tenant + shipment/label + actor + attempt ID | Request sequence, allowed/blocked outcome, timestamp; not proof of physical printing. For the masked label this is the append-only print history in DATA-10. |
 | Audit event | Tenant/object + actor or machine + event ID | Command/outcome/reason/correlation with minimal metadata; no full contact or credential payload. |
+| Gerai discount terms | Tenant or platform template + provider environment + version | Basis points, effective date, source reference, status per value, actor; DATA-9. Private; no operator projection. |
+| Masked label snapshot | Tenant + shipment + snapshot ID | Immutable printed content (mask switch, printed sender, AWB barcode value, size, template version); DATA-10. |
+| Shipment reference counter | Tenant + day | Last allocated sequence for the per-day reference; DATA-8. |
 
 Use composite unique parent keys and composite foreign keys where records have
 tenant-owned parents. Restrict changes to ownership/authority columns; RLS row
@@ -82,31 +85,38 @@ Do not use raw API keys as object names, public identifiers, or correlation
 values. Credential rotation and account change are different events. Never infer
 the true account from different outlet IDs or private secret-reference strings.
 A platform-account authority record belongs to a private control boundary;
-tenant users see only their safe binding/readiness projection. CTX-9 must decide
-the supported ownership modes before executable account tables are finalized.
+tenant users see only their safe binding/readiness projection. Decision (DEC-006,
+accepted 2026-10-14): one tenant business owns exactly one Mengantar seller
+(Partner-created or BYOK), all outlets of the tenant map to it, and there is no
+central platform seller or silent fallback; DATA-4 holds the integrity rules.
 
 ## Migration and lifecycle boundary
 
-Use one fresh Supabase migration history for accepted contracts; do not run the
+Use one fresh PostgreSQL migration history (`db/foundation/` and `db/migrations/`,
+applied by `scripts/db-migrate.sh` with the checksum ledger `private.schema_migrations`,
+DEC-021, ADR-0002; renamed from `supabase/migrations/` in T-064/T-066); do not run the
 reference Drizzle migrations against the new project. Retain useful constraints
 after adapting identity and policies. No automatic import of old contacts,
 users, credentials, or orders is authorized. Retention, erasure, and archiving
 follow PRIV-1 rather than the old product's five-year/90-day policy.
 Ledger, COD settlement, reconciliation finance, analytics materialization, and
-bulk-preview persistence activate only when their requirements are accepted.
+bulk-preview persistence activate only when their requirements are accepted. Decision
+(DEC-016): the first release collects no platform fee from the gerai and builds no
+platform ledger.
 
 ## DATA-4 — Seller binding, agreement, and credential operation history
-- Status: Proposed
+- Status: Proposed logical contract; Observed local implementation includes machine-only seller binding, provider-environment scope and key ring (T-032, T-034, T-039, T-050, wave F); SQL consent-version enforcement and reconcile caller-environment checks remain open
 - Owner: Engineering owner
 - Source: CTX-17, CTX-9.
 - Statement: Tenant seller onboarding and key lifecycle shall preserve immutable provider identity, explicit connection mode, accepted account-owner agreement, versioned private secrets, and recoverable external-operation state.
 - Acceptance: Duplicate external IDs/managed seller bindings fail safely, a contact/staff ID cannot become onboarding authority, no API/secret projection is exposed through the Data API, and interrupted onboarding/rotation can resume without changing seller identity or losing a known result.
 - Constraints: PR-17, PR-18, PR-19, PR-20, TD-7, TD-8, TEN-3, PRIV-2.
-- Evidence: Proposed logical additions; no executable table/migration exists.
+- Evidence: Observed (2026-10-28, local): `20261028230000_environment_scope_key_ring.sql` adds `provider_env` (`sandbox`/`production`, default sandbox) to private credentials/onboarding, active-credential uniqueness per tenant/environment and seller-id uniqueness per environment. Its backfill assumes all existing rows are sandbox and must be checked before applying to another database. Machine key reads/claims are environment-scoped. F1's `20261028250000_reconcile_across_key_regeneration.sql` permits only same-tenant/same-environment Partner-key substitution for original-operation recovery, blocks onboarding in `rotation_unknown` and refuses rewrap downgrade. Tests: environment-scope, key-regeneration-reconcile, credential-keyring (worker-reported). Reconcile RPCs still lack caller `p_env`, and consent versions are enforced only in the application server (T-057); a separate staging database and supervised provider capture remain unproved.
+- Change history: 2026-10-28 — Added the seller-binding integrity subsection below for review P0-1 (a tenant admin could bind another tenant's seller). Scope by provider environment added for review P1-13.
 
 | Logical record | Required information / invariant |
 |---|---|
-| Partner environment | Private configuration reference, Partner ID, confirmed origin, quota entitlement and egress readiness; global Partner Secret remains a Worker binding |
+| Partner environment | Private configuration reference, Partner ID, confirmed origin, quota entitlement and egress readiness; global Partner Secret remains a server-only environment secret (DEC-020; formerly a Worker binding) |
 | Tenant seller binding | Tenant, mode `partner_created` or `existing_byok`, provider environment, stable local account ID, sellerId when verified, stable externalUserId for managed onboarding, owner name/email/phone, binding revision and status |
 | Account-owner agreement | Tenant/actor/account owner, accepted Terms/Privacy URLs and version/digest, disclosure version, affirmative acceptance time; access/retention under PRIV-2 |
 | Credential versions | Private encrypted API key and independently versioned webhook secret, encryption-key version, credential revision/status and rotation operation; no key fragment readback |
@@ -119,6 +129,41 @@ Multiple outlets can reference that tenant binding; foreign tenants cannot.
 Key version changes do not create new seller IDs or new coordinator identities.
 A seller account replacement requires explicit new authority and preserves
 historical shipment bindings.
+
+### Seller-binding integrity (review P0-1; TASKS T-032, T-034)
+
+Observed historical gap (before T-032/T-050, not current state): the original onboarding
+writers accepted authenticated callers' seller ids without binding uniqueness or environment
+scope. T-032 made the writers machine-only, added write-once uniqueness and the application server's
+`sellers/list` ownership proof; T-034 added the expected-version fence; T-050 scopes credentials
+and seller-id uniqueness by provider environment. Current definitions are in migrations
+`20261028100000_partner_seller_binding.sql`, `20261028230000_environment_scope_key_ring.sql`
+and `20261028250000_reconcile_across_key_regeneration.sql`; user sessions cannot call the
+machine writers. Bindings written before T-032 still require operator verification before
+a shared-environment migration; no historical binding was silently declared verified.
+
+Required invariants (Decision for the direction in DEC-006 and DEC-010; Proposal for
+the mechanism):
+
+1. **Machine-only writers.** Both RPCs are executable by `service_role` only, called
+   through the machine client after the user-session tenant-admin check, like
+   `dispatch_*` (DEC-010). No user-callable path accepts a seller id.
+2. **Unique per environment.** Unique `(provider_environment, partner_seller_id)`
+   where the id is not null, so one Partner seller binds to one tenant in one
+   environment. A sandbox seller never satisfies a production binding (review P1-13).
+3. **Write-once.** After the id is set no caller can change or clear it; replacement
+   is an explicit governed action with new authority that preserves historical
+   shipment bindings.
+4. **Ownership proof before key access.** The application server opens or seals a seller key only
+   after the Partner seller list filtered by the server-derived
+   `externalUserId = geraiexpress:tenant:<tenantId>` returns exactly the stored id; a
+   mismatch makes no `sellers/api-key` call and no completion write.
+5. **Version fence.** Completion carries the expected credential version and raises
+   `stale_state` on mismatch, mirroring `store_seller_credential` (review P1-4).
+6. **Projection.** The seller id and owner details are returned to tenant admins only,
+   never to every member (Observed: implemented by `partner_onboarding_status`).
+7. **Proof.** Tenant B's admin calling either RPC with tenant A's seller id gets 42501
+   and no row changes; a mismatching seller list never reaches `sellers/api-key`.
 
 For BYOK, a vendor key alone does not establish a canonical seller identity.
 Select a verified identity/owner-binding mechanism before enabling it; reject
@@ -161,7 +206,8 @@ four decimals are a universal future provider limit.
 For full COD across several customer senders, retain the submitted sender/goods
 ownership reference. A customer-payables/settlement ledger is conditional on its
 financial contract; it cannot be inferred from this snapshot table or a margin
-number. No financial record or liability workflow is implemented by this draft.
+number. Decision (DEC-016): no platform ledger and no platform fee record exist in the
+first release. No financial record or liability workflow is implemented by this draft.
 
 ### Selected pricing fields and discount assignment
 
@@ -172,16 +218,15 @@ source/phase, confirmed amount and observed actual-charge adjustment. Customer
 label amounts read the frozen retail projection, not the net record. Keep null
 (unknown) distinct from verified zero and not-applicable.
 
-A proposed private discount assignment records tenant + actual provider account,
-negotiated terms/reference, covered courier/service/tier, effective period,
-version, authorized actor/audit, provider activation evidence and status
-(pending, verified-active, mismatch, expired or suspended). The terms may cover
-shipping, COD fee or insurance only as explicitly negotiated; no automatic
-cross-component percentage application. Exact types/constraints remain a
-reviewed migration concern. Assigned policy and observed provider net quote are
-separate facts, both referenced by confirmation; a later edit cannot rewrite a
-previous quote or submitted amount. Enforce tenant/account scope and prevent
-overlapping active authority with ambiguous terms.
+Superseded in part by DATA-9 (2026-10-28): the discount assignment is the versioned
+terms record defined there (integer basis points, effective date, source reference,
+status owner-stated, provider-observed or provider-verified, audit actor). The
+earlier per-courier/service/tier scoping and the pending, verified-active, mismatch,
+expired and suspended status list are replaced by that model and by the observed
+provider percentage recorded per quote. Assigned terms and the observed provider net
+quote remain separate facts, both referenced by confirmation; a later edit cannot
+rewrite a previous quote or submitted amount. The terms may apply to shipping only: no
+automatic percentage on COD fee or insurance (DEC-003, TD-9).
 
 ## DATA-6 — Platform governance, monitoring and audit scope
 - Status: Proposed
@@ -194,7 +239,7 @@ overlapping active authority with ambiguous terms.
 
 | Logical owner / record | Essential data and invariant |
 |---|---|
-| Platform grant | Supabase user reference, active/revoked state, approved capability set, revision, grant/revocation actor/reason/time; server-owned and unavailable to public signup/metadata writes |
+| Platform grant | `auth.users` reference, active/revoked state, approved capability set, revision, grant/revocation actor/reason/time; server-owned and unavailable to public signup/metadata writes |
 | Tenant business projection | Tenant name/lifecycle, minimum authorized owner contact, outlet/member counts and readiness summary; no sender/recipient contact directory |
 | Tenant review decision, if enabled | Tenant/application revision, decision/reason, actor/time and idempotent request reference; provider onboarding status remains a separate record |
 | Monitoring projections | Defined current-state or event-period aggregates plus tenant/object correlation, safe status/code, age, account/mode/version and observed time; no raw provider bodies or customer values |
@@ -218,7 +263,7 @@ enabled; immutable audit does not mean unlimited legal retention is assumed.
 - Status: Proposed
 - Owner: Engineering owner
 - Source: CTX-31, CTX-32, CTX-34; PR-29 through PR-32.
-- Statement: Onboarding and invitations shall persist bounded versioned application state, scoped decisions, idempotent command receipts and explicit acceptance independently of Supabase Auth credentials and seller provisioning.
+- Statement: Onboarding and invitations shall persist bounded versioned application state, scoped decisions, idempotent command receipts and explicit acceptance independently of authentication credentials (`auth.users`, `auth.sessions`, `auth.otp_codes`, DEC-021; formerly Supabase Auth) and seller provisioning.
 - Acceptance: Unique same-application submissions and invitation acceptance converge once; invalid/foreign revisions and roles fail; rejected application history cannot erase or reassign Auth identity, seller or another tenant membership.
 - Constraints: TEN-5, IAM-8, SEC-5, PRIV-3, DATA-1, DATA-4, DATA-6; logical names only, no migration created.
 - Evidence: Proposed entity/constraint model; database checks not executed.
@@ -291,7 +336,88 @@ recreates/reactivates membership. Restoration needs an explicitly authorized
 membership action or a new eligible invitation under the selected policy.
 
 
-Never store Supabase passwords, password hashes, OTPs, refresh tokens or sessions
-in these application records. Credential-readiness hints are server-owned safe
-projections only; they do not replace Auth. Uncompleted application/invitation
+Never store passwords, password hashes, OTPs, refresh tokens or sessions in these
+`public` onboarding/invitation records: they live exclusively in schema `auth`
+(as `scrypt` password hashes, HMAC code digests, SHA-256 refresh hashes and
+AES-GCM sealed TOTP secrets, ADR-0002), with no API-role table grants. Credential-readiness hints are server-owned safe
+projections only; they do not replace the auth store. Uncompleted application/invitation
 retention and identity-erasure consequences require PRIV-3 policy acceptance.
+
+## DATA-8 — Tenant slug, shipment reference and seller-binding keys
+- Status: Decision (CTX-41 items 2, 11 and 12, accepted 2026-10-28); slug/prefix/counter built (T-049), per-provider-environment seller key built (T-050); no production deployment claimed
+- Owner: Engineering owner
+- Source: CTX-41 items 2, 11 and 12; PR-37; review P0-1, P1-13 and the 24-bit reference note (section 3, P3); TASKS T-032, T-042, T-044.
+- Statement: A tenant shall have an immutable, unique, lower-case `slug` and a per-tenant shipment prefix; each shipment reference shall come from a per-tenant per-day counter allocated under a row lock; and each Partner seller shall bind to at most one tenant per provider environment.
+- Acceptance: A second tenant with the same slug, a slug update, a reserved or malformed slug, and a duplicate seller binding in the same provider environment are each rejected by the database; two concurrent drafts for one tenant on one day receive distinct sequences with no unique-violation error; an existing reference is not rewritten.
+- Constraints: DATA-1, DATA-4, TEN-1, TEN-6, DEC-006; the slug is display, reference-prefix and support-lookup data and never authorizes anything.
+- Evidence: Observed (2026-10-28, local): slug, prefix and counter tests cover format, reserved/keyword refusal, immutability, uniqueness and concurrent drafts (T-049). T-050 migration `20261028230000_environment_scope_key_ring.sql` adds immutable onboarding `provider_env`, environment-qualified seller-id uniqueness and one active credential per tenant/environment; tests/db environment-scope exercise sandbox/production separation (worker-reported). This does not provide separate staging infrastructure.
+
+**Tenant slug.** Decision (CTX-41 items 2 and 11, accepted 2026-10-28): immutable, unique, lower-case, never an authorization input; format `^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$`; reserved names `www`, `app`, `owner`, `hooks`, `api`, `admin`, `mail`, `status`, `static`, `assets`, `staging`, `preview`, `demo`, `support` and the repository's blocked marketing keyword are refused; the display name stays editable while the slug is not. Observed (2026-10-28, `db/migrations/20261028120000_tenant_slug_reference.sql`, `20261028210000_catalog_slug_lock_fixes.sql`): `public.tenants.slug` is set by the `tenants_identity` trigger at insert when absent, so at approval and by the system rather than by the applicant or the reviewer; it is generated from the business name (accent-folded, hyphenated, at most 32 characters, a numeric suffix after a collision, a reserved name or a short result; demo tenants get `demo-<8 hex>`), validated against the format, the reserved names and the blocked keyword, unique (`tenants_slug_key`) and immutable (`slug_immutable`, SQLSTATE 55000); existing tenants were backfilled. The earlier Unknown about who chooses the slug is closed in practice; whether a Super Admin should be able to override the generated slug at approval is not decided.
+
+**Shipment reference.** Decision (CTX-41 item 12, accepted 2026-10-28): `<PREFIX>-<yymmdd>-<seq>`, a per-tenant prefix of 3 to 5 upper-case letters and a per-tenant, per-day counter taken under a row lock. Observed (2026-10-28): `tenants.shipment_prefix` is derived from the slug letters by `private.derive_shipment_prefix` (the first four letters, then other windows, then suffixes; never the blocked keyword or `DEMO` for a non-demo tenant), assigned by the same trigger (so at approval, not at a separate activation step), immutable (`prefix_immutable`) and unique across non-demo tenants (partial unique index `tenants_shipment_prefix_real_key`; demo tenants share `DEMO`; DEC-019). This replaces the earlier Proposal that the prefix is immutable only once a shipment exists. `private.reference_counters (tenant_id, day)` is an upsert under a row lock inside `private.next_reference`, called by `create_shipment_draft` and the demo seeding; the day is the Asia/Jakarta date, the sequence has at least three digits and widens past 999. Old-shape references (`GX<yymmdd>-<6 chars>`) are not rewritten, and `unique (tenant_id, reference)` stays; the reference stays separate from the AWB and the database id (TD-1). Demo references repeat across tenants. The one-time backfill re-derives shared prefixes inside the migration with the identity trigger disabled for that block only, and refuses when a new-shape reference already exists.
+
+**Seller binding keys.** Observed: T-050 adds `provider_env` to both private tables, makes the onboarding environment immutable and scopes seller-id uniqueness by `(provider_env, partner_seller_id)`. There is still one onboarding row per tenant; this is not multi-environment onboarding for one tenant.
+
+## DATA-9 — Gerai discount terms and observed provider discount
+- Status: Decision (DEC-016, CTX-39, CTX-42; rounding DEC-018); terms, observed-provider column and tenant/admin UI built locally (T-041, T-053); provider verification and environment-scoped terms remain open
+- Owner: Engineering owner
+- Source: DEC-012, DEC-016; CTX-39, CTX-40, CTX-42; TASKS T-041; docs/review/2026-10-28-full-review.md section 8 item 3.
+- Statement: The discount a gerai receives shall be versioned configuration set per tenant by a Super Admin, stored as integer basis points with an effective date, a source reference and a status per value; the platform remainder shall be derived and never typed; the provider discount actually returned shall be recorded per quote; a gerai discount above the provider-observed discount shall be refused by the database; and every rupiah amount derived from basis points shall use integer arithmetic with the discount amount rounded down to whole rupiah.
+- Acceptance: A terms row cannot be written without effective date, source reference and status; no writer can set the remainder; an estimate without a provider percentage stores NULL, not zero; a gerai discount larger than the provider-observed discount is refused at the database with a test; a later terms edit changes no stored quote or confirmed amount; the sender-facing price equals the normal tariff in every case; the owner's starting terms exist only as owner-stated configuration, never as a constant in code; the test vectors below pass, including an unknown input yielding NULL instead of 0.
+- Constraints: DATA-5, DATA-6, IAM-5, TEN-4, BILL-3, PR-23; DEC-003, DEC-012; no percentage in public marketing until provider-verified; no platform fee and no ledger (DEC-016).
+- Evidence: Observed (2026-10-28, local): T-041 terms/ceiling/version-at-quote-time read models plus T-053 migration `20261028240000_discount_recording_and_ui.sql` are built. `private.quote_costs.provider_discount_bps` is nullable, checked 0–10000; `record_live_quotes` keeps six arguments and reads optional per-row `discount_bps`. `discountPercentToBps` accepts whole hundredths of a percent (22.5 → 2250); invalid/absent values stay NULL, present zero stays zero; `discountExtraPercent` is not read. Observations prefer provider bps, otherwise the amount-derived ceil. Tenant-admin-only gerai-cost detail and assigned-terms settings callers exist. Worker-reported coverage: discount-recording DB, gerai-discount DB/e2e and public-api/pricing-display unit tests. Terms themselves have no `provider_env`; no written provider verification or live activation is inferred.
+
+Terms record (private to the platform capability; tenant admins see only their own gerai discount and its status):
+
+| Field | Rule |
+|---|---|
+| Scope | One tenant, or the platform default template (no tenant), within one provider environment. Decision (DEC-016, T-041): per-tenant terms plus a template. |
+| Version | Monotonic per scope; a new version supersedes the previous and at most one version is active per scope (Proposal, following `seller_credentials_one_active`, Observed in `20261014150000_credentials.sql:25-26`). |
+| Provider discount | Integer basis points 0 to 10,000; NULL means unknown, never zero. The owner-stated starting value is 3,000 (30%), Observed in CTX-42 as unverified. |
+| Gerai discount | Integer basis points 0 to 10,000. The owner-stated starting value is 2,000 (20%). |
+| Effective date | Timestamp from which the version applies; each quote records the version it used. |
+| Source reference | Required, bounded text naming where the value comes from (for example the written Mengantar confirmation or the owner statement and its date). |
+| Status per value | `owner_stated`, `provider_observed` or `provider_verified` (CTX-42). `provider_verified` requires a written Mengantar confirmation named in the source reference (DEC-012). Proposal: the gerai value is a GeraiExpress commercial setting and is expected to stay `owner_stated`; Unknown whether the provider can verify it. |
+| Actor and audit | Super Admin actor and time on every create or supersede, plus an append-only audit event (Observed: `public.audit_events` exists, `20261014120000_platform_admin.sql:19-29`). |
+| Platform remainder | Derived as provider discount minus gerai discount by a view, function or generated column with no writer; displayed as an estimate unless the provider value is `provider_verified`; a negative result means the terms are invalid and blocked. |
+| Variance (derived) | Observed provider discount minus the assigned gerai discount, per tenant, shown to the Super Admin (UX-12). It has no writer, is not collected from or paid to anyone, and is NULL when the observed value is NULL. Decision (DEC-018, BILL-3). |
+
+Observed provider discount per quote (T-053, local): nullable `private.quote_costs.provider_discount_bps` stores the valid estimate `discountPercent`, not `discountExtraPercent`. Absent/invalid or non-hundredth values stay NULL without a per-value log; zero is stored as zero. The earlier proposal to record the extra percentage separately and log invalid percentages is not implemented. The sandbox example in CTX-42 is source evidence, not proof of universal activated terms.
+
+Database rule (Decision for the requirement, DEC-016 and PR-23; Proposal for the mechanism): the database enforces `gerai_discount_bps <= provider-observed discount` where the two facts meet. A table CHECK cannot span tables, so the rule lives in a trigger or the quote and confirm RPCs: it compares the active terms with the quote's observed value at quote recording and at confirmation, and refuses the discounted gerai cost when the gerai value is larger. There is no local subsidy, and the check never rewrites the sender-facing tariff. Unknown (PR-23): when the observed value is NULL, whether a gerai discount may apply; Proposal (PR-23): hold the discount as pending, show the gerai cost as unknown, and let the sender pay the normal tariff as usual.
+
+Computation (Decision for the rule, DEC-018; Proposal for the mechanism): gerai cost = normal tariff minus the gerai discount applied to shipping only, never to COD fee or insurance (DEC-003, TD-9). Every rupiah amount derived from basis points uses integer arithmetic only (no floating point) and rounds the discount amount DOWN to whole rupiah: discount = floor(tariff x bps / 10,000), so the derived gerai cost never understates the provider-observed cost. Any unknown input (tariff, observed provider discount or applicable terms version) yields NULL, never 0. A confirmed shipment stores the terms version and the observed basis points it used; later edits do not rewrite it (DATA-5).
+
+Built state (Observed 2026-10-28; supersedes mechanisms above where different): append-only `public.gerai_discount_terms` stores tenant/template, version, basis points, effective date, source/status, verification reference, observed bps at creation, actor/time. Writes use `platform_set_gerai_discount` (`integration_operations`, `aal2`, advisory lock, expected version, audit); platform read models show observations/history and tenant admins read only assigned bps/status/date. Terms have no provider-environment column. T-053 adds per-quote `provider_discount_bps`; observed bps is `coalesce(provider_discount_bps, ceil((tariff-net)*10000/tariff))`, NULL when no usable observation exists. The latest real batch maximum caps assignments, `provider_observed` must equal it, and an owner-stated assignment without observations may exist but reads unverified. Per-quote effective discount is the lesser of assigned/observed; `gerai_cost_for_quote` selects terms whose effective/created dates precede `quoted_at`, preserves old prices and returns NULL for unknown input. No confirmed terms-version column is added: the quote-time lookup supplies it. Variance is maximum observed minus assigned and remains an estimate until verified. UI callers now render tenant-admin gerai-cost estimates and assigned terms, never the provider percentage or remainder; operators, labels, invoices and CSV have no private cost projection.
+
+Test vectors (Observed 2026-10-28: the discount and cost amounts, the NULL case and the refusal are asserted in tests/db gerai-discount per the T-041 delivery report; the amount-variance figure in row 3 was not separately verified; arithmetic also checked by hand):
+
+| Case | Arithmetic | Result |
+|---|---|---|
+| Tariff 23,000; 2,000 bps | 23,000 x 2,000 = 46,000,000; / 10,000 = 4,600 exactly | Discount 4,600; gerai cost 23,000 - 4,600 = 18,400 |
+| Tariff 12,345; 2,250 bps | 12,345 x 2,250 = 27,776,250; / 10,000 = 2,777.625; floor = 2,777 (remainder 6,250 is dropped) | Discount 2,777; gerai cost 12,345 - 2,777 = 9,568 |
+| Tariff 12,345; 3,000 bps observed provider discount | 12,345 x 3,000 = 37,035,000; / 10,000 = 3,703.5; floor = 3,703 | Provider-observed discount 3,703; with 2,250 bps assigned the amount variance is 3,703 - 2,777 = 926 and the basis-point variance is 750 |
+| Tariff 23,000; observed provider discount unknown | No computation possible | Variance and derived provider cost NULL, not 0; the gerai cost is shown as unknown (PR-23 pending rule) |
+| Tariff 23,000; assigned 3,000 bps; observed 2,000 bps | 3,000 > 2,000 | Refused by the database; no amount is derived |
+
+## DATA-10 — Masked label snapshot and print history
+- Status: Decision (label behavior: DEC-017, CTX-39); Proposal (record design, built as described in "Built state"); built (T-044); the acceptance record for the activation statement and retention are not built
+- Owner: Engineering owner
+- Source: DEC-017, DEC-013; CTX-39; PR-34; TASKS T-044, T-047; PR-3 and PR-6 as amended by DEC-017.
+- Statement: Each printable local label shall be an immutable snapshot of what was printed (including the masking choice, the sender block shown, and, stored next to it, the true tenant identity and the pickup identity), and every print request shall append a history row; the label shall carry the courier AWB as a Code128 barcode and shall not depend on the provider PDF or provider dropshipper identity.
+- Acceptance: A real shipment yields a snapshot whose barcode decodes to the AWB; reprinting uses the stored snapshot, not current settings; changing the masking switch creates a new snapshot version and leaves earlier ones unchanged; the Mengantar pickup name never appears as the default printed sender; snapshot and history rows cannot be updated or deleted through API roles; a masked snapshot holds the true tenant and pickup identity beside the printed sender and still holds them after the tenant or outlet is edited; a masked snapshot cannot be written for a tenant with `masking_allowed` false, including by a direct RPC call.
+- Constraints: DATA-1, DATA-2, PRIV-1, TEN-1, UX-9, UI-6; no provider dropshipper call and no provider PDF call (DEC-017).
+- Evidence: Observed (2026-10-28, local, `db/migrations/20261028150000_masked_label.sql`): the tables, commands and label page in "Built state" exist and are tested (tests/db masked-label, tests/unit code128, tests/e2e label on 390 and 1280). The Code128 encoder is `src/lib/label-code128.ts`; the marketing illustration's encoder was removed with T-036. The watermarked sample label for simulated shipments is unchanged.
+
+| Record | Content and invariant (Proposal) |
+|---|---|
+| Label snapshot | Tenant, shipment, version, AWB and courier, label size (10x15 cm default or 10x10 cm), masking switch value, the printed sender block (gerai name, WhatsApp, pickup address when masking is off; operator-entered name, phone and city when on), the true tenant identity (tenant name and slug) and the pickup identity (outlet name, address and area) copied at print time and stored whether or not masking is on, recipient block, template version, creator, time and a content digest. Immutable. Decision (DEC-018): the true identity fields are retained for the audit retention period, which is Unknown and stays for counsel (T-048); the fields are Proposal mechanics. |
+| Print history | Append-only: tenant, shipment, snapshot, actor, time, size. It records that a print request was issued, not that paper came out (DATA-1 print attempt). |
+
+The real pickup address stays visible on the shipment detail for returns and is not printed when masking is on (DEC-017). Operator-entered sender fields are third-party personal data held only in the snapshot, bounded in length, and never copied into contacts automatically (PRIV-1). The printed sender is never written back to Mengantar. Simulated shipments keep the sample watermark and never produce a real label snapshot.
+
+Source of the printed gerai sender (Decision, PR-34, owner-selected "like the legacy project", 2026-10-28): the gerai name comes from the tenant, the WhatsApp number from the tenant-level `contact_whatsapp` and the pickup address from the outlet; the snapshot copies these values at print time, so a later edit of the tenant or outlet never rewrites a printed label. If `contact_whatsapp` is empty the masked print is blocked rather than printed blank. Proposal (until the migration task is accepted): the field is stored as `0` plus the Indonesian national number (a leading `+62` or `62` becomes `0`), constrained to `^0[2-9][0-9]{7,11}$`, written only by an audited tenant-administrator command and never by a direct browser write, initialized at approval from the application's `contact_phone` (PR-30), and backfilled for existing approved tenants only where that value validates.
+
+Masking policy data (Decision for the policy, DEC-018; Proposal for the fields): masking is a per-shipment choice, off by default, and printing with it on requires all three operator-entered sender fields; the tenant flag `masking_allowed` (tenant entity) is checked by the snapshot command, which refuses a masked snapshot when it is false; the tenant administrator's acceptance, at activation, of the statement that the tenant is responsible for the accuracy of the sender data and the goods shipped is stored as a versioned acceptance record (actor, time, statement version); the statement wording belongs to counsel (T-048).
+
+Built state (Observed 2026-10-28): `public.label_snapshots` holds tenant, shipment, `version` (unique per shipment), `size` (`10x15` or `10x10`), `template_version`, `mask_sender`, the printed sender name, phone, address and city (no address when masking is on), `true_tenant_name`, `true_tenant_slug`, `true_pickup_name`, `true_pickup_address`, `true_pickup_area`, AWB, shipment reference, courier, service, weight, COD fields, item description, the recipient block, `content_digest` (SHA-256 hex), creator and time; `public.label_print_events` is the append-only history. A trigger blocks update, delete and truncate on both even for a superuser (only a foreign-key cascade from the shipment or tenant may remove rows). `create_label_snapshot` (tenant member; operators print) returns the existing snapshot when the switch, size and sender fields are unchanged, so a reprint is a print event and not a new version, and refuses with `masking_disabled`, `sender_fields_required`, `whatsapp_missing`, `simulated_shipment` or `no_awb`; `record_label_print` appends the history; `masking_allowed` is enforced inside both. `tenants.contact_whatsapp` (CHECK `^0[2-9][0-9]{7,11}$`, with `contact_whatsapp_revision`) is set at approval, backfilled and changed only by `set_tenant_contact_whatsapp` (tenant admin, audited, stale revision: 55000); `tenants.masking_allowed` defaults to true and is changed only by `platform_set_masking_allowed` (`tenant_governance`, `aal2`, exposed on `/admin/tenant/[id]` in T-053). The Proposal rows above are built as stated. The invoice record is a separate append-only table, `public.invoice_snapshots` (T-047): the gerai identity, the sender-facing `shipping_charge_idr` (`customer_charge_idr`, never net cost, discount or remainder), a parties summary without phone or street address, and a `<PREFIX>-INV-<yymmdd>-<seq>` number from `private.invoice_counters`. Not built: the versioned responsibility-statement acceptance record and the retention period (Unknown, T-048).

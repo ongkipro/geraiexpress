@@ -1,0 +1,203 @@
+# T-062 / DEC-020 / ADR-0002: the production shape. `app` (the Next.js image), `scheduler` (same image, runs the two
+# schedules), `postgrest` (the data API, internal only), `proxy` (Caddy, TLS, the four hosts of DEC-015) and,
+# optionally, `postgres` (profile `db`). Only the proxy publishes ports; the app is
+# reachable on the compose network alone, which is what makes TRUSTED_PROXY=1 safe (src/lib/client-address.ts).
+#
+# Secrets stay in Coolify runtime variables or a 0600 env file outside this checkout.
+# `docker compose --env-file /etc/geraiexpress/production.env --profile prod up -d`
+# runs the standalone edge. For Vultr + Coolify use compose.coolify.yaml instead.
+# The application receives an explicit allowlist; database owner credentials stay out.
+# Local development uses compose.local.yaml and the isolated gxdb stack.
+name: geraiexpress
+
+x-image: &image ${GX_IMAGE:-geraiexpress:local}
+
+x-logging: &logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  app:
+    image: *image
+    logging: *logging
+    restart: unless-stopped
+    environment:
+      # Explicit allowlist: migration credentials and the PostgreSQL owner password
+      # must never enter the application container through a shared env_file.
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      SITE_ORIGIN: ${SITE_ORIGIN:-}
+      APP_ORIGIN: ${APP_ORIGIN:-}
+      OWNER_ORIGIN: ${OWNER_ORIGIN:-}
+      HOOKS_ORIGIN: ${HOOKS_ORIGIN:-}
+      MENGANTAR_ENV: ${MENGANTAR_ENV:-}
+      PARTNER_ID: ${PARTNER_ID:-}
+      MENGANTAR_PARTNER_SECRET: ${MENGANTAR_PARTNER_SECRET:-}
+      GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET: ${GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET:-}
+      PARTNER_TERMS_VERSION: ${PARTNER_TERMS_VERSION:-}
+      PARTNER_PRIVACY_VERSION: ${PARTNER_PRIVACY_VERSION:-}
+      PARTNER_TERMS_URL: ${PARTNER_TERMS_URL:-}
+      PARTNER_PRIVACY_URL: ${PARTNER_PRIVACY_URL:-}
+      CREDENTIAL_KEY: ${CREDENTIAL_KEY:-}
+      CREDENTIAL_KEYS: ${CREDENTIAL_KEYS:-}
+      CREDENTIAL_KEY_CURRENT: ${CREDENTIAL_KEY_CURRENT:-}
+      CRON_SECRET: ${CRON_SECRET:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-}
+      # The proxy below is the only peer that can reach this container; it overwrites X-Real-IP.
+      TRUSTED_PROXY: "1"
+      # Compose-internal PostgREST unless the env file names another one.
+      POSTGREST_URL: ${POSTGREST_URL:-http://postgrest:3000}
+    expose:
+      - "3000"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache:uid=1000,gid=1000,mode=0700
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # The image's HEALTHCHECK probes /healthz on the internal host name.
+    networks: [internal]
+
+  scheduler:
+    image: *image
+    logging: *logging
+    restart: unless-stopped
+    command: ["node", "scheduler.mjs"]
+    environment:
+      # The scheduler holds the cron secret only, never the app's other secrets.
+      CRON_SECRET: ${CRON_SECRET:?CRON_SECRET must be set in the env file passed with --env-file}
+      SCHEDULER_TARGET: http://app:3000
+    depends_on:
+      app:
+        condition: service_healthy
+    # The image's HEALTHCHECK is the app's (port 3000); it does not apply to this process.
+    healthcheck:
+      disable: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    networks: [internal]
+
+  proxy:
+    image: caddy:2.11.2-alpine@sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d
+    logging: *logging
+    profiles: [prod]
+    restart: unless-stopped
+    environment:
+      # Required for production: Caddy refuses to start without it (the Caddyfile `email` directive). Not a
+      # compose-level `:?` check because Compose interpolates inactive profiles too (the local profile has none).
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      SITE_HOST: ${SITE_HOST:-geraiexpress.com}
+      APP_HOST: ${APP_HOST:-app.geraiexpress.com}
+      OWNER_HOST: ${OWNER_HOST:-owner.geraiexpress.com}
+      HOOKS_HOST: ${HOOKS_HOST:-hooks.geraiexpress.com}
+    ports:
+      # IPv4 only: Docker's IPv6-to-IPv4 userland proxy collapses client addresses to the bridge gateway.
+      # Do not publish AAAA records until the entire container network supports native IPv6.
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+      - "0.0.0.0:443:443/udp"
+    volumes:
+      - ./infra/proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [internal]
+
+  # PostgREST (ADR-0002): the only data API the app talks to; internal network only, no published port. It
+  # verifies the access tokens the app signs (PGRST_JWT_SECRET is the app's AUTH_JWT_SECRET) and connects as the
+  # `authenticator` role of the schema in db/. PGRST_DB_URI and AUTH_JWT_SECRET come from the env file through
+  # `--env-file` interpolation. Where the database runs is the owner's decision: an external PostgreSQL (put its
+  # address in PGRST_DB_URI) or the optional `postgres` service below.
+  postgrest:
+    image: postgrest/postgrest:v14.18@sha256:c7cd7e265a85b05248abf53f4473fcec7e327c282d0bd0cf60f1551996d09fcf
+    logging: *logging
+    profiles: [prod]
+    restart: unless-stopped
+    environment:
+      # Not a compose-level `:?` check because Compose interpolates inactive profiles too (the local profile
+      # has neither value); `pnpm check:environments` requires both for a real environment file.
+      PGRST_DB_URI: ${PGRST_DB_URI:-}
+      PGRST_JWT_SECRET: ${AUTH_JWT_SECRET:-}
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_DB_EXTRA_SEARCH_PATH: public, extensions
+      PGRST_JWT_AUD: authenticated
+      PGRST_DB_MAX_ROWS: "1000"
+      PGRST_DB_POOL: "10"
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: "5"
+      # The admin server answers `postgrest --ready` for the health check below (never published; the image has
+      # no shell). `--ready` refuses the default wildcard bind, so name the IPv4 one explicitly.
+      PGRST_SERVER_HOST: 0.0.0.0
+      PGRST_ADMIN_SERVER_PORT: "3001"
+    expose:
+      - "3000"
+    healthcheck:
+      test: [CMD, postgrest, --ready]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    networks: [internal]
+
+  # OPTIONAL, the owner's "same server" choice: PostgreSQL next to the app (`--profile prod --profile db`). Absent
+  # by default; the schema is applied with scripts/db-migrate.sh and DATABASE_URL (never seeded: db/seed.sql
+  # refuses to run outside the local stack). The migration creates the `authenticator` role without a password:
+  # set the one used in PGRST_DB_URI after the first migration. No published port; back up the `postgres_data` volume.
+  postgres:
+    image: postgres:17@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
+    logging: *logging
+    profiles: [db]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-geraiexpress}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run/postgresql
+    # The image entrypoint initialises the data directory as root, then drops to the postgres user.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt:
+      - no-new-privileges:true
+    networks: [internal]
+
+networks:
+  internal: {}
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+  postgres_data: {}

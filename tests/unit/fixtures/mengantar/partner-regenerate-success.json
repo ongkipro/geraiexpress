@@ -1,0 +1,8 @@
+{
+ "success": true,
+ "data": {
+  "sellerId": "66ab1234567890abcdef1234",
+  "apiKey": "API-NEWKEY8F2QX7ZB1MT",
+  "callbackSecret": "cbs-FIXTURE-CALLBACK-SECRET-0001"
+ }
+}

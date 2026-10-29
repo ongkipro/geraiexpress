@@ -1,8 +1,8 @@
 # GeraiExpress — Identity and Permission Draft
 
-- Status: Proposed role policy, pending product-owner confirmation.
+- Status: Role policy accepted by owner (DEC-007, DEC-008); identity and TOTP assurance implemented in the application-owned auth module on PostgreSQL 17 + PostgREST (DEC-021, ADR-0002, T-064..T-066; T-067 security review open).
 - Owner: Paduka Ongki
-- Updated: 2026-10-13
+- Updated: 2026-10-29
 
 **Terminology:** Super Admin is the product/UI name for the platform
 administrator below. Platform pricing, integration, monitoring and recovery
@@ -13,10 +13,10 @@ remain tenant-owned roles; no UI label creates a database permission.
 - Status: Proposed
 - Owner: Paduka Ongki
 - Source: CTX-1, CTX-4, CTX-11.
-- Statement: Supabase identity shall be separate from tenant membership, customer contacts, and bounded machine permissions; each command requires an authorized role and object scope.
+- Statement: Authentication identity (`auth.users`, DEC-021, ADR-0002; formerly Supabase identity) shall be separate from tenant membership, customer contacts, and bounded machine permissions; each command requires an authorized role and object scope.
 - Acceptance: An operator cannot invoke tenant/platform administration, a tenant administrator cannot invoke platform actions, and a saved sender/recipient receives no login or membership merely by being saved.
-- Constraints: TEN-1, TEN-2, DATA-1. Invitation/signup policy and outlet assignments need owner decisions.
-- Evidence: Reference roles and governance observed; this matrix is not yet accepted or implemented.
+- Constraints: TEN-1, TEN-2, DATA-1. Invitation/signup policy and role cells resolved in DEC-007 and DEC-008; per-outlet assignments remain deferred.
+- Evidence: Observed in `db/migrations/`, `src/lib/auth/**`, `src/lib/db/**`, `tests/db/{isolation,invitations,platform,auth-core}.test.ts`.
 
 | Action | Operator | Tenant administrator | Platform administrator | Machine worker |
 |---|---|---|---|---|
@@ -33,13 +33,17 @@ remain tenant-owned roles; no UI label creates a database permission.
 | Assign/verify tenant seller discounts | Denied | Own terms/net inspection as permitted | Explicit pricing capability; IAM-6 | Only authorized verification operation |
 | Grant/revoke platform administrator access | Denied | Denied | Governed privileged action; final-admin guard; IAM-7 | Bootstrap/recovery only through approved bounded path |
 
-Supabase Auth owns passwords, sessions, and token lifecycle. Do not port Better
-Auth session/account/verification tables, auth routes, cookie defaults, or role
-fields into Supabase-managed identities. The app owns active tenant memberships,
-platform-role grants, outlet assignments if selected, and authorization audit.
-Never derive permissions from writable user metadata or rely exclusively on
-potentially stale JWT role claims. Reload authoritative membership where actions
-can change data or create provider effects.
+The application-owned auth module (`src/lib/auth/**` and PostgreSQL schema `auth`
+behind 14 `service_role`-only `public.auth_*` RPCs, DEC-021, ADR-0002; replacing
+Supabase Auth) owns passwords (`scrypt`), 6-digit email OTPs, server-held sessions
+(`auth.sessions` with rotating `gx_rt` refresh hashes), 10-minute HS256 access JWTs
+(`gx_at`) and Super Admin TOTP (`auth.mfa_factors`). Do not port Better Auth
+session/account/verification tables, auth routes, cookie defaults, or role fields.
+The app's `public` schema owns active tenant memberships, platform-role grants,
+outlet assignments if selected, and authorization audit. Never derive permissions
+from writable user metadata or rely exclusively on potentially stale JWT role
+claims. Reload authoritative membership where actions can change data or create
+provider effects.
 
 Login destinations and hidden navigation are presentation, not permission
 enforcement. A platform administrator's identity does not imply support
@@ -54,14 +58,14 @@ audit of the real and acted-as principals; none is granted by this draft.
 - Statement: Membership and tenant-lifecycle commands shall validate current authority atomically, preserve required administrator access, and separate new operation authorization from truthful processing of already-started effects.
 - Acceptance: Concurrent final-admin removal is denied safely, an operator cannot promote itself through direct database/RPC calls, repeated invitations do not duplicate membership effects, and revocation blocks future issuance without discarding a valid in-flight provider result.
 - Constraints: TEN-1, TEN-2, TD-3, SEC-1.
-- Evidence: Reference governance patterns inspected; Supabase flow not executed.
+- Evidence: Observed in `db/migrations/20261014140000_invitations.sql`, `20261029100000_auth_core.sql` and `tests/db/invitations.test.ts` (task 014, T-065).
 
 Email invitation, identity creation, membership activation, and role assignment
-are different effects. Define failure/retry behavior before connecting Supabase
-identity invitations: an email-send failure must not be hidden as an activated
-membership, and an Auth identity alone must not expose a workspace. PR-29 through PR-32 and IAM-8 now specify proposed initial creation, public
-signup, invitation and recovery behavior. Their policy choices, owner transfer,
-operator contact-archive rights and last-admin exceptions still need acceptance.
+are different effects. An email-send failure must not be hidden as an activated
+membership, and an `auth.users` identity alone must not expose a workspace. PR-29
+through PR-32 and IAM-8 specify initial creation, closed-by-default public signup,
+invitation and recovery behavior (accepted in DEC-007 and DEC-008; owner transfer
+and last-admin exceptions remain open).
 
 Machine processing uses a dedicated bounded command surface. If privileged
 database execution is necessary, allow only the specific transition on an
@@ -88,7 +92,7 @@ must remain possible after the initiating access token expires.
 | Reconcile partner-wide seller inventory / configure partner access and egress | Explicit platform operations role or narrowly bounded machine permission; no ordinary tenant endpoint |
 | Complete or reconcile onboarding/rotation | Machine command bound to durable operation and account; no arbitrary seller target |
 
-Provider account ownership is independent of Supabase user membership. Removing
+Provider account ownership is independent of application user membership (`auth.users`). Removing
 staff access must not create/reassign/delete a seller. Account-owner transfer,
 shared-owner tenants, and incident rotation authority need explicit product
 policy before enablement; there is no default platform impersonation permission.
@@ -98,7 +102,7 @@ policy before enablement; there is no default platform impersonation permission.
 - Owner: Engineering owner
 - Source: CTX-21.
 - Statement: Demo access shall use a dedicated demo identity and tenant with bounded operator permissions, synthetic data, and server-enforced simulation of shipping effects.
-- Acceptance: Demo login succeeds in its sample workspace, while direct Worker/Data API/RPC attempts to access real tenant data, provision sellers, spend funds, manage keys/members or grant broader roles are denied; removing a browser demo flag cannot enable a live provider operation.
+- Acceptance: Demo login succeeds in its sample workspace, while direct application-server/PostgREST Data API/RPC attempts to access real tenant data, provision sellers, spend funds, manage keys/members or grant broader roles are denied; removing a browser demo flag cannot enable a live provider operation.
 - Constraints: PR-21, TEN-1, SEC-1, IAM-1. Demo identity is not a platform administrator and shares no real provider credential or customer record.
 - Evidence: Proposed access contract only; no account or policy has been provisioned.
 
@@ -136,7 +140,7 @@ change credentials, grant roles or inspect another tenant's business economics.
 - Owner: Paduka Ongki
 - Source: CTX-27, CTX-28.
 - Statement: Discount assignment/activation shall require an explicit platform pricing permission and scoped audited authority; tenant administrators may inspect their own assigned terms/net cost as permitted, while operators and customers receive only the retail projection.
-- Acceptance: An operator, foreign tenant administrator or ungranted platform user cannot assign/backdate/activate discounts through Worker/Data API/RPC; a permitted administrator can manage the intended tenant/account version without claiming an unverified provider activation.
+- Acceptance: An operator, foreign tenant administrator or ungranted platform user cannot assign/backdate/activate discounts through application-server/PostgREST Data API/RPC; a permitted administrator can manage the intended tenant/account version without claiming an unverified provider activation.
 - Constraints: PR-23, DATA-5, TEN-1, IAM-5, SEC-1. Platform pricing permission does not grant customer-directory access, general impersonation or arbitrary live provider mutation.
 - Evidence: Proposed permission contract; no grant, account change or discount interface exists.
 
@@ -152,12 +156,15 @@ effective period, actor and safe outcome, not raw credentials or customer data.
 - Statement: Super Admin access shall combine current platform grants, explicit capability/object scope and required verified session assurance, with governed role changes and a bounded investigation/recovery surface.
 - Acceptance: Tenant/demo/self-edited-metadata and revoked grants cannot access platform functions; direct API/RPC assurance checks match UI behavior, privileged actions recheck current authority, and final-admin governance preserves a recovery path without a universal bypass.
 - Constraints: PR-24 through PR-28, IAM-6, TEN-4, SEC-4. Platform access does not automatically confer tenant membership, customer access, secret readback or spending authority.
-- Evidence: Reference role guard and official Supabase MFA capability inspected; target policy not implemented.
+- Evidence: Observed in `db/migrations/20261014120000_platform_admin.sql`, `20261029100000_auth_core.sql`, `src/lib/auth/totp.ts` and `tests/db/{platform,auth-core}.test.ts` (task 012, T-065, T-066; T-067 security review open).
 
-Use Supabase Auth's native second-factor flow; require verified `aal2` for the
-proposed platform workspace and privileged commands. Enforce it in backend and
-exposed database boundaries as well as the UI. Enrolment/challenge access is
-separate from platform data access. Session assurance alone is not a role;
+Use the application-owned TOTP second-factor flow (`src/lib/auth/totp.ts`,
+`auth.mfa_factors` with AES-256-GCM sealed secrets and `last_used_step` replay
+protection, and `public.auth_mfa_verify` upgrading `auth.sessions` to `aal2`,
+DEC-021, ADR-0002; replacing Supabase MFA); require verified `aal2` for the
+platform workspace and privileged commands (`private.platform_capable`). Enforce
+it in backend and exposed database boundaries as well as the UI. Enrolment/challenge
+access is separate from platform data access. Session assurance alone is not a role;
 reload the server-owned current grant. Factor recovery/removal must not become
 a public shortcut around privileged authorization.
 
@@ -195,8 +202,8 @@ No fixed session lifetime or recovery exception is copied from Better Auth.
 - Statement: Authentication, own application access, active tenant membership and platform grants shall remain independent authorities, with explicit current-state routing and acceptance of scoped staff invitations.
 - Acceptance: Verification/password recovery alone grants no tenant/platform role, a pending owner can complete only their setup, a wrong-email invitation is denied, and expired/revoked/suspended authority is rechecked on every sensitive transition.
 - Constraints: IAM-1, IAM-2, IAM-7, TEN-5, SEC-5, DATA-7; policy proposals are not provisioned accounts.
-- Evidence: Official Auth features and proposed permission lifecycle; no runtime access verified.
-- Change history: 2026-10-13 — Added in the registration and documentation-completeness review.
+- Evidence: Observed in `src/lib/auth/**`, `src/lib/registration-actions.ts`, `db/migrations/20261029100000_auth_core.sql` and `tests/db/{auth-core,registration,invitations}.test.ts` (T-065, T-066; T-067 review open).
+- Change history: 2026-10-13 — Added in the registration and documentation-completeness review. 2026-10-29 — Updated for DEC-021 (ADR-0002): application-owned auth replaces Supabase Auth.
 
 | Identity/access condition | Proposed permitted destination / authority |
 |---|---|
@@ -210,14 +217,15 @@ No fixed session lifetime or recovery exception is copied from Better Auth.
 | Current platform grant | Separate platform assurance/capabilities under IAM-7; public registration cannot grant this role |
 | Demo identity | Only dedicated simulation under IAM-4; no real signup, invite acceptance or provider effect |
 
-Recommend native email OTP first, password setup after verified inbox control,
-and password login afterward. Choosing this UX requires owner acceptance before
-implementation. Previously completed app users sign in/recover; registration
-does not silently reset their credentials. Initial/partial identities follow
-TD-11's inbox-proof, explicit password replacement and session-freshness guard
-even if a password exists from direct unverified signup. Never use an admin Auth API to mark a
-public registrant confirmed, set their password or trust user-provided role data.
-
+Decision (DEC-007, DEC-021, ADR-0002): 6-digit email OTP first (`requestEmailCode` /
+`verifyEmailCode` in `src/lib/auth/service.ts` backed by `public.auth_issue_otp` and
+`public.auth_verify_otp`), password setup after verified inbox control (`setPassword`
+backed by `public.auth_set_password`), and password login afterward (`signInWithPassword`).
+Previously completed app users sign in or recover; registration does not silently
+reset their credentials. Initial/partial identities follow TD-11's inbox-proof,
+explicit password replacement (`discard_pre_verification_password` trigger) and
+session-revocation guard (`auth_set_password` revokes all other sessions of the user).
+Never mark a public registrant confirmed without code verification or trust user-provided role data.
 Proposed staff flow: same-tenant administrator issues an allowed role/outlet
 invitation; recipient verifies their email/signs in, reviews the business and
 role, then explicitly accepts. Recheck tenant, invitation expiry/revocation,
@@ -225,7 +233,8 @@ issuer authority and current target membership in the acceptance transaction.
 Expiry/role policy remains pending acceptance. An Auth invitation or email
 delivery receipt is not membership; contacts never receive invitations by being saved.
 
-Password recovery and secure email change use native Supabase flows. Changing
-app email does not change stored tenant ownership or the Mengantar seller email.
+Password recovery (scheduled under PR-32 and DEC-013 behind the T-063 production
+mail gate) and future email change will use the same application-owned OTP primitive
+(ADR-0002 section 5; formerly native Supabase flows). Changing app email does not change stored tenant ownership or the Mengantar seller email.
 Owner/seller transfer, privileged factor recovery and administrative exceptions
 require their separately selected policy; no public shortcut is supplied.

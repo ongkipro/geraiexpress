@@ -1,0 +1,31 @@
+# DEC-022: standalone Compose entrypoint for Coolify on Vultr.
+# Coolify owns public TLS and ports 80/443. Assign all four HTTPS domains ONLY
+# to service proxy, port 8080. No application/database port is published.
+# Supply variables through Coolify; GX_IMAGE names an already built immutable image.
+services:
+  app:
+    extends: {file: compose.yaml, service: app}
+  scheduler:
+    extends: {file: compose.yaml, service: scheduler}
+  postgrest:
+    extends: {file: compose.yaml, service: postgrest}
+    profiles: !reset []
+  proxy:
+    extends: {file: compose.yaml, service: proxy}
+    profiles: !reset []
+    ports: !reset []
+    expose: ["8080"]
+    environment:
+      # Exact IP/CIDR of the Coolify edge proxy on this resource's network;
+      # do not trust all private ranges or all addresses. Verify on the host.
+      COOLIFY_PROXY_CIDR: ${COOLIFY_PROXY_CIDR:?Set the verified Coolify proxy IP/CIDR}
+    volumes: !override
+      - ./infra/proxy/Caddyfile.coolify:/etc/caddy/Caddyfile:ro
+    tmpfs: [/tmp, /data, /config]
+  postgres:
+    extends: {file: compose.yaml, service: postgres}
+
+networks:
+  internal: {}
+volumes:
+  postgres_data: {}

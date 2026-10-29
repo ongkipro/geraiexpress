@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase/server";
+import { dbServer } from "@/lib/db/server";
 import { friendlyError } from "@/lib/errors";
 import { requireWorkspace } from "@/lib/workspace";
 import { normalizePhone } from "@/modules/shipments/draft";
@@ -50,14 +50,14 @@ export async function createContactAction(_: ContactState, form: FormData): Prom
   const values = { ...c.values, ...a.values };
   if (Object.keys(fieldErrors).length) return { error: "Periksa isian yang ditandai.", fieldErrors, values };
 
-  const supabase = await supabaseServer();
-  const { data, error } = await supabase.from("contacts").insert({
+  const db = await dbServer();
+  const { data, error } = await db.from("contacts").insert({
     tenant_id: ws.tenant.id, name: c.values.name, phone: c.phone,
     is_sender: Boolean(c.values.is_sender), is_recipient: Boolean(c.values.is_recipient),
   }).select("id").single();
   if (error || !data) return { error: friendlyError(error), values };
   if (wantsAddress) {
-    const { error: addressError } = await supabase.from("contact_addresses").insert({
+    const { error: addressError } = await db.from("contact_addresses").insert({
       tenant_id: ws.tenant.id, contact_id: data.id, label: a.values.label || "Utama", address_line: a.values.address_line,
       area: a.values.area, postal_code: a.values.postal_code || null, is_primary: true,
     });
@@ -77,8 +77,8 @@ export async function updateContactAction(_: ContactState, form: FormData): Prom
   const revision = Number(form.get("revision"));
   const c = readContact(form);
   if (Object.keys(c.fieldErrors).length) return { error: "Periksa isian yang ditandai.", fieldErrors: c.fieldErrors, values: c.values };
-  const supabase = await supabaseServer();
-  const { data, error } = await supabase.from("contacts")
+  const db = await dbServer();
+  const { data, error } = await db.from("contacts")
     .update({ name: c.values.name, phone: c.phone, is_sender: Boolean(c.values.is_sender), is_recipient: Boolean(c.values.is_recipient) })
     .eq("tenant_id", ws.tenant.id).eq("id", id).eq("revision", revision).select("id").maybeSingle();
   if (error) return { error: friendlyError(error), values: c.values };
@@ -92,10 +92,10 @@ export async function addAddressAction(_: ContactState, form: FormData): Promise
   const contactId = String(form.get("contact_id"));
   const a = readAddress(form);
   if (Object.keys(a.fieldErrors).length) return { error: "Periksa isian yang ditandai.", fieldErrors: a.fieldErrors, values: a.values };
-  const supabase = await supabaseServer();
-  const { count } = await supabase.from("contact_addresses").select("id", { count: "exact", head: true })
+  const db = await dbServer();
+  const { count } = await db.from("contact_addresses").select("id", { count: "exact", head: true })
     .eq("tenant_id", ws.tenant.id).eq("contact_id", contactId).is("archived_at", null);
-  const { error } = await supabase.from("contact_addresses").insert({
+  const { error } = await db.from("contact_addresses").insert({
     tenant_id: ws.tenant.id, contact_id: contactId, label: a.values.label || null, address_line: a.values.address_line,
     area: a.values.area, postal_code: a.values.postal_code || null, is_primary: (count ?? 0) === 0,
   });
@@ -107,17 +107,17 @@ export async function addAddressAction(_: ContactState, form: FormData): Promise
 export async function archiveAddressAction(form: FormData) {
   const ws = await requireWorkspace();
   const contactId = String(form.get("contact_id"));
-  const supabase = await supabaseServer();
-  const { data: archived, error } = await supabase.from("contact_addresses")
+  const db = await dbServer();
+  const { data: archived, error } = await db.from("contact_addresses")
     .update({ archived_at: new Date().toISOString(), is_primary: false })
     .eq("tenant_id", ws.tenant.id).eq("contact_id", contactId).eq("id", String(form.get("address_id")))
     .is("archived_at", null).select("id").maybeSingle();
   if (error || !archived) redirect(`/kontak/${contactId}?alamat=arsip-gagal`);
   // Keep exactly one primary address while any active address remains.
-  const { data: remaining } = await supabase.from("contact_addresses").select("id, is_primary")
+  const { data: remaining } = await db.from("contact_addresses").select("id, is_primary")
     .eq("tenant_id", ws.tenant.id).eq("contact_id", contactId).is("archived_at", null).order("created_at");
   if (remaining?.length && !remaining.some((r) => r.is_primary)) {
-    await supabase.from("contact_addresses").update({ is_primary: true }).eq("tenant_id", ws.tenant.id).eq("id", remaining[0].id);
+    await db.from("contact_addresses").update({ is_primary: true }).eq("tenant_id", ws.tenant.id).eq("id", remaining[0].id);
   }
   revalidatePath(`/kontak/${contactId}`);
   redirect(`/kontak/${contactId}?alamat=diarsipkan`);
@@ -127,8 +127,8 @@ export async function archiveContactAction(_: ContactState, form: FormData): Pro
   const ws = await requireWorkspace();
   const contactId = String(form.get("contact_id") ?? "");
   const expectedVersion = Number(form.get("revision"));
-  const supabase = await supabaseServer();
-  const { error } = await supabase.rpc("archive_contact", {
+  const db = await dbServer();
+  const { error } = await db.rpc("archive_contact", {
     p_tenant: ws.tenant.id,
     p_contact: contactId,
     p_expected_version: expectedVersion,

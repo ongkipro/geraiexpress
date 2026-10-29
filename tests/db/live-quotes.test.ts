@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { IDS, client, demoVisitor, machine, realOperation, signIn, sql } from "./helpers";
 
 const PICKUP = { p_address_id: "6acf44a4771fe2b474c055ca", p_area_id: "5fc62f60f8f44b34aa4c0dcd", p_address: "Jl. Uji Sandbox No. 1", p_area: "MELAWAI, KEBAYORAN BARU, JAKARTA SELATAN" };
+const ORIGIN = { p_origin_area_id: PICKUP.p_area_id, p_origin_address_id: PICKUP.p_address_id };
 
 describe("outlet Mengantar pickup (T-023)", () => {
   it("only a tenant admin of a real gerai sets it, with valid ids, and it is audited", async () => {
@@ -51,13 +52,13 @@ describe("machine-only seller key read and live quotes (DEC-010)", () => {
     const rev = Number(sql(`select revision from public.shipments where id = '${f.shipment}'`));
     const rows = [{ courier: "JT", tariff: 9000, net: 6300, eta: "1 - 2 days" }];
     for (const c of [client(), await signIn("owner-a@geraiexpress.test"), (await demoVisitor()).c]) {
-      expect((await c.rpc("machine_seller_key", { p_tenant: f.tenant })).error).not.toBeNull();
-      expect((await c.rpc("record_live_quotes", { p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev, p_rows: rows })).error).not.toBeNull();
+      expect((await c.rpc("machine_seller_key", { p_tenant: f.tenant, p_env: "sandbox" })).error).not.toBeNull();
+      expect((await c.rpc("record_live_quotes", { ...ORIGIN, p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev, p_rows: rows })).error).not.toBeNull();
     }
-    const key = await machine().rpc("machine_seller_key", { p_tenant: f.tenant });
+    const key = await machine().rpc("machine_seller_key", { p_tenant: f.tenant, p_env: "sandbox" });
     expect(key.data).toMatchObject({ version: 1, key_version: "v1" });
-    expect((await machine().rpc("machine_seller_key", { p_tenant: (await demoVisitor()).tenant })).data).toBeNull();
-    expect((await machine().rpc("machine_seller_key", { p_tenant: randomUUID() })).data).toBeNull();
+    expect((await machine().rpc("machine_seller_key", { p_tenant: (await demoVisitor()).tenant, p_env: "sandbox" })).data).toBeNull();
+    expect((await machine().rpc("machine_seller_key", { p_tenant: randomUUID(), p_env: "sandbox" })).data).toBeNull();
   });
 
   it("records live quotes for the current revision only, keeps net cost private, and replaces older quotes", async () => {
@@ -66,29 +67,29 @@ describe("machine-only seller key read and live quotes (DEC-010)", () => {
     const rev = Number(sql(`select revision from public.shipments where id = '${f.shipment}'`));
     const m = machine();
     const rows = [{ courier: "JT", tariff: 9000, net: 6300, eta: "1 - 2 days" }, { courier: "spx", tariff: 8700, net: 5655, eta: "" }];
-    expect((await m.rpc("record_live_quotes", { p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev + 1, p_rows: rows })).error?.message).toBe("stale_revision");
-    expect((await m.rpc("record_live_quotes", { p_tenant: IDS.tenantB, p_shipment: f.shipment, p_expected_revision: rev, p_rows: rows })).error?.message).toBe("not_found");
+    expect((await m.rpc("record_live_quotes", { ...ORIGIN, p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev + 1, p_rows: rows })).error?.message).toBe("stale_revision");
+    expect((await m.rpc("record_live_quotes", { ...ORIGIN, p_tenant: IDS.tenantB, p_shipment: f.shipment, p_expected_revision: rev, p_rows: rows })).error?.message).toBe("not_found");
     for (const bad of [[{ courier: "JT", tariff: 0, net: 0 }], [{ courier: "JT", tariff: 9000, net: 9001 }], [{ courier: "J T!", tariff: 9000, net: 1 }], [{ courier: "JT", tariff: "9000; drop", net: 1 }]]) {
-      expect((await m.rpc("record_live_quotes", { p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev, p_rows: bad })).error?.message).toBe("invalid_input");
+      expect((await m.rpc("record_live_quotes", { ...ORIGIN, p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev, p_rows: bad })).error?.message).toBe("invalid_input");
     }
-    expect((await m.rpc("record_live_quotes", { p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev, p_rows: rows })).data).toBe(2);
+    expect((await m.rpc("record_live_quotes", { ...ORIGIN, p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev, p_rows: rows })).data).toBe(2);
     expect(sql(`select string_agg(courier || ':' || normal_tariff_idr || ':' || eta_days || ':' || is_simulated, ',' order by normal_tariff_idr)
       from public.shipment_quotes where shipment_id = '${f.shipment}' and expires_at > now()`)).toBe("spx:8700:—:false,JT:9000:1 - 2 days:false");
     expect(sql(`select string_agg(c.net_shipping_idr::text, ',' order by c.net_shipping_idr) from private.quote_costs c
       join public.shipment_quotes q on q.id = c.quote_id where q.shipment_id = '${f.shipment}'`)).toBe("5655,6300");
     expect(sql(`select submission_state from public.shipments where id = '${f.shipment}'`)).toBe("estimated");
     // A second live estimate retires the first set; only one current set remains.
-    expect((await m.rpc("record_live_quotes", { p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev, p_rows: rows.slice(0, 1) })).data).toBe(1);
+    expect((await m.rpc("record_live_quotes", { ...ORIGIN, p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev, p_rows: rows.slice(0, 1) })).data).toBe(1);
     expect(sql(`select count(*) from public.shipment_quotes where shipment_id = '${f.shipment}' and expires_at > now()`)).toBe("1");
     // No route: zero rows leave the draft unquoted.
-    expect((await m.rpc("record_live_quotes", { p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev, p_rows: [] })).data).toBe(0);
+    expect((await m.rpc("record_live_quotes", { ...ORIGIN, p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev, p_rows: [] })).data).toBe(0);
     expect(sql(`select submission_state from public.shipments where id = '${f.shipment}'`)).toBe("draft");
     // Submitted shipments and demo tenants are refused.
     sql(`update public.shipments set submission_state = 'queued' where id = '${f.shipment}'`);
-    expect((await m.rpc("record_live_quotes", { p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev, p_rows: rows })).error?.message).toBe("shipment_locked");
+    expect((await m.rpc("record_live_quotes", { ...ORIGIN, p_tenant: f.tenant, p_shipment: f.shipment, p_expected_revision: rev, p_rows: rows })).error?.message).toBe("shipment_locked");
     const demo = await demoVisitor();
     const { data: draft } = await demo.c.rpc("create_shipment_draft", { p_outlet: demo.outlet });
-    expect((await m.rpc("record_live_quotes", { p_tenant: demo.tenant, p_shipment: draft, p_expected_revision: 1, p_rows: rows })).error?.message).toBe("demo_restricted");
+    expect((await m.rpc("record_live_quotes", { ...ORIGIN, p_tenant: demo.tenant, p_shipment: draft, p_expected_revision: 1, p_rows: rows })).error?.message).toBe("demo_restricted");
   });
 
   it("members still cannot read net cost through the Data API", async () => {

@@ -6,8 +6,7 @@
 // returned seller API keys are secrets the caller must seal (credential-crypto) before storing.
 // Contract: docs/research/geraiexpress-mengantar-partner-api.md.
 // lazy: sandbox only. Production needs the provider-given origin and approved egress addresses
-// (Partner research §2); add it to PARTNER_ORIGINS then. Key regeneration is not implemented
-// until the rotation workflow (§7) is built.
+// (Partner research §2); add it to PARTNER_ORIGINS then.
 
 import { MengantarError, readBounded } from "./public-api";
 
@@ -18,6 +17,7 @@ const PATHS = {
   list: "/api/partner/v1/sellers/list",
   register: "/api/partner/v1/sellers",
   apiKey: "/api/partner/v1/sellers/api-key",
+  regenerate: "/api/partner/v1/sellers/api-key/regenerate",
 } as const;
 
 // Provider codes we branch on (Partner research §8); anything else is "unknown".
@@ -56,6 +56,8 @@ export async function partnerSignature(path: string, body: string, timestamp: st
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`POST:${path}::${body}:${timestamp}:${secret}`));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+export type PartnerClient = ReturnType<typeof createPartnerClient>;
 
 export function createPartnerClient(
   environment: PartnerEnvironment,
@@ -153,6 +155,21 @@ export function createPartnerClient(
     async getSellerApiKey(sellerId: string): Promise<string> {
       if (!SELLER_ID.test(sellerId)) throw new Error("Invalid sellerId");
       const { status, envelope } = await post(PATHS.apiKey, { sellerId });
+      const data = envelope.data;
+      if (!isRecord(data) || data.sellerId !== sellerId || typeof data.apiKey !== "string" || !API_KEY.test(data.apiKey)) {
+        throw new PartnerError("malformed", status);
+      }
+      return data.apiKey;
+    },
+
+    // T-039: retires the old key at the provider IMMEDIATELY and returns the new one once. The response also
+    // carries `callbackSecret`, which is deliberately never read: the server neither stores, logs nor
+    // returns it (PR-19). A thrown PartnerError is not proof that nothing changed: only a refusal with a
+    // known provider code is definite (partner-key-rotation.ts). The Partner docs promise no idempotency,
+    // so never call this twice for one intent; lost responses recover through getSellerApiKey.
+    async regenerateSellerKey(sellerId: string): Promise<string> {
+      if (!SELLER_ID.test(sellerId)) throw new Error("Invalid sellerId");
+      const { status, envelope } = await post(PATHS.regenerate, { sellerId });
       const data = envelope.data;
       if (!isRecord(data) || data.sellerId !== sellerId || typeof data.apiKey !== "string" || !API_KEY.test(data.apiKey)) {
         throw new PartnerError("malformed", status);

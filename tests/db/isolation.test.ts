@@ -2,14 +2,20 @@
 // denial for anonymous, outsider, other-tenant, escalation and reparenting attempts, through the
 // same Data API and RPC surface a browser can call directly.
 import { beforeAll, describe, expect, it } from "vitest";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { IDS, client, demoVisitor, mailCode, signIn, sql } from "./helpers";
-import { mailCount } from "../mail";
+import type { TestClient } from "./helpers";
+import { randomUUID } from "node:crypto";
+import { hashPassword } from "../../src/lib/auth/password";
+import { IDS, anonymousSession, authService, client, codeSignIn, demoVisitor, sessionClient, signIn, sql } from "./helpers";
 
-let ownerA: SupabaseClient;
-let operatorA: SupabaseClient;
-let ownerB: SupabaseClient;
-let outsider: SupabaseClient;
+// SEC-5: the only way a password can exist on an address before its owner proved the inbox is a row nobody confirmed.
+async function plantUnconfirmed(email: string, password: string) {
+  sql(`insert into auth.users (id, email, encrypted_password, raw_app_meta_data) values ('${randomUUID()}', '${email}', '${await hashPassword(password)}', '{"provider":"email","providers":["email"]}')`);
+}
+
+let ownerA: TestClient;
+let operatorA: TestClient;
+let ownerB: TestClient;
+let outsider: TestClient;
 
 beforeAll(async () => {
   [ownerA, operatorA, ownerB, outsider] = await Promise.all([
@@ -188,28 +194,8 @@ describe("demo isolation (IAM-4)", () => {
   });
 });
 
-describe("registration gate (PR-29 pending)", () => {
-  it("an anonymous demo identity cannot start an email or phone conversion at all (PR-31)", async () => {
-    const anon = client();
-    const { data } = await anon.auth.signInAnonymously();
-    const id = data.user!.id;
-    const email = `convert-${Date.now()}@geraiexpress.test`;
-    expect((await anon.auth.updateUser({ email })).error).not.toBeNull();
-    // DEC-009: the Worker's Send Email Hook refuses anonymous identities, so no mail went out at all.
-    await new Promise((r) => setTimeout(r, 500));
-    expect(await mailCount(email)).toBe(0);
-    expect((await anon.auth.updateUser({ phone: "+6281200000000" })).error).not.toBeNull();
-    expect((await anon.auth.updateUser({ password: "convert-password-123" })).error).not.toBeNull();
-    // No pending change was stored, so no confirmation link exists for an inbox owner to click.
-    expect(sql(`select coalesce(email,'') || '|' || coalesce(email_change,'') || '|' || coalesce(phone_change,'') || '|' || is_anonymous from auth.users where id = '${id}'`)).toBe("|||true");
-    const login = await client().auth.signInWithPassword({ email, password: "convert-password-123" });
-    expect(login.error).not.toBeNull();
-    // The session itself keeps working for the demo.
-    expect((await anon.auth.refreshSession()).error).toBeNull();
-    expect((await anon.rpc("start_demo")).error).toBeNull();
-  });
-
-  it("the conversion outcome is refused in the database even if Auth attempted it directly", async () => {
+describe("registration gate (PR-29)", () => {
+  it("the conversion outcome is refused in the database even if a direct update attempted it", async () => {
     const anon = client();
     const { data } = await anon.auth.signInAnonymously();
     const id = data.user!.id;
@@ -229,46 +215,95 @@ describe("registration gate (PR-29 pending)", () => {
     expect(sql(`update auth.users set last_sign_in_at = now() where id = '${id}' returning is_anonymous`)).toContain("t");
   });
 
+  it("an anonymous demo identity cannot start an email, phone or password conversion at all (PR-31)", async () => {
+    const auth = authService();
+    const anon = await anonymousSession();
+    const email = `convert-${Date.now()}@geraiexpress.test`;
+    // IAM-8: an anonymous requester never gets a code, so no mail can go out at all.
+    expect(await auth.requestEmailCode({ email, captchaToken: undefined, requesterId: anon.id })).toEqual({ status: "withheld" });
+    expect(sql(`select count(*) from auth.otp_codes where email = '${email}'`)).toBe("0");
+    // Neither a password nor a second factor can be attached to the identity.
+    expect(await auth.setPassword({ userId: anon.id, sessionId: anon.session.sessionId, password: "convert-password-123" })).toEqual({ ok: false, reason: "invalid" });
+    expect(await auth.enrollTotp({ userId: anon.id, email })).toEqual({ ok: false, reason: "invalid" });
+    // The row itself refuses every conversion attempted through SQL.
+    for (const change of [`email = '${email}'`, "phone = '+6281200000000'", "encrypted_password = 'convert-password-123'"]) {
+      expect(() => sql(`update auth.users set ${change} where id = '${anon.id}'`), change).toThrow(/anonymous_identity_is_demo_only/);
+    }
+    // No pending change was stored, so no confirmation exists for an inbox owner to complete.
+    expect(sql(`select coalesce(email,'') || '|' || coalesce(email_change,'') || '|' || coalesce(phone_change,'') || '|' || is_anonymous from auth.users where id = '${anon.id}'`)).toBe("|||true");
+    expect(await auth.signInWithPassword({ email, password: "convert-password-123", captchaToken: undefined })).toEqual({ ok: false, reason: "invalid_credentials" });
+    // The session itself keeps working for the demo, and the refreshed identity is still anonymous.
+    const refreshed = await auth.refresh(anon.session.refreshToken!);
+    if (!refreshed.ok) throw new Error(`refresh: ${refreshed.reason}`);
+    expect(refreshed.session).toMatchObject({ userId: anon.id, isAnonymous: true, email: null, hasPassword: false });
+    const verified = await auth.verifyAccessToken(refreshed.session.accessToken);
+    expect(verified).toMatchObject({ ok: true, claims: { sub: anon.id, is_anonymous: true, email: "" } });
+    expect(await auth.sessionLive(anon.session.sessionId)).toMatchObject({ live: true, isAnonymous: true });
+    expect((await sessionClient(refreshed.session).rpc("start_demo")).error).toBeNull();
+  });
+
   it("while registration is closed, new real accounts are refused and demo sign-in still works", async () => {
+    const auth = authService();
+    const early = `closed-early-${Date.now()}@geraiexpress.test`;
+    const sent = await auth.requestEmailCode({ email: early, captchaToken: undefined });
+    if (sent.status !== "sent") throw new Error(`code not sent: ${sent.status}`);
     sql(`update private.settings set value = 'false' where key = 'registration_open'`);
     try {
       const email = `closed-${Date.now()}@geraiexpress.test`;
-      expect((await client().auth.signInWithOtp({ email, options: { shouldCreateUser: true } })).error).not.toBeNull();
-      expect((await client().auth.signUp({ email, password: "probe-password-123" })).error).not.toBeNull();
+      expect(await auth.requestEmailCode({ email, captchaToken: undefined })).toEqual({ status: "withheld" });
+      expect(await auth.signInWithPassword({ email, password: "probe-password-123", captchaToken: undefined })).toEqual({ ok: false, reason: "invalid_credentials" });
       expect(sql(`select count(*) from auth.users where email = '${email}'`)).toBe("0");
-      expect((await client().auth.signInAnonymously()).error).toBeNull();
+      expect(sql(`select count(*) from auth.otp_codes where email = '${email}'`)).toBe("0");
+      // A code mailed before the gate closed cannot create the account afterwards.
+      expect(await auth.verifyEmailCode({ email: early, code: sent.code, captchaToken: undefined })).toEqual({ ok: false, reason: "invalid" });
+      expect(sql(`select count(*) from auth.users where email = '${early}'`)).toBe("0");
+      expect((await authService().signInAnonymous({ captchaToken: undefined })).ok).toBe(true);
     } finally {
       sql(`update private.settings set value = 'true' where key = 'registration_open'`);
     }
   });
 
   it("a password pre-planted on someone else's email dies when the owner verifies (SEC-5)", async () => {
+    const auth = authService();
+    // Self-asserted profile data has no entry point: extra fields are ignored and nothing exists before the code is verified.
+    const probe = `preplant-data-${Date.now()}@geraiexpress.test`;
+    const withData = { email: probe, captchaToken: undefined, data: { role: "tenant_admin", planted: true } };
+    const probeCode = await auth.requestEmailCode(withData);
+    if (probeCode.status !== "sent") throw new Error(`code not sent: ${probeCode.status}`);
+    expect(sql(`select count(*) from auth.users where email = '${probe}'`)).toBe("0");
+    const probeSession = await auth.verifyEmailCode({ email: probe, code: probeCode.code, captchaToken: undefined });
+    if (!probeSession.ok) throw new Error("probe not verified");
+    expect(sql(`select raw_user_meta_data::text from auth.users where email = '${probe}'`)).toBe("{}");
+    expect(JSON.stringify(await auth.verifyAccessToken(probeSession.session.accessToken))).not.toContain("planted");
+
+    // The attacker's only way to hold a password on a stranger's address is a row nobody confirmed.
     const email = `preplant-${Date.now()}@geraiexpress.test`;
-    // Self-asserted profile data is refused outright; the attacker falls back to a bare password.
-    expect((await client().auth.signUp({ email, password: "attacker-pass-123", options: { data: { role: "tenant_admin", planted: true } } })).error).not.toBeNull();
-    expect((await client().auth.signInWithOtp({ email, options: { shouldCreateUser: true, data: { planted: true } } })).error).not.toBeNull();
+    const planted = "attacker-pass-123";
+    expect(await auth.signInWithPassword({ email, password: planted, captchaToken: undefined })).toEqual({ ok: false, reason: "invalid_credentials" });
     expect(sql(`select count(*) from auth.users where email = '${email}'`)).toBe("0");
-    await new Promise((r) => setTimeout(r, 1200));
-    expect((await client().auth.signUp({ email, password: "attacker-pass-123" })).error).toBeNull();
-    expect((await client().auth.signInWithPassword({ email, password: "attacker-pass-123" })).error).not.toBeNull();
-    // The owner proves inbox control with a code (Auth allows one mail per address per second locally).
-    await new Promise((r) => setTimeout(r, 1200));
-    const owner = client();
-    expect((await owner.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })).error).toBeNull();
-    expect((await owner.auth.verifyOtp({ email, token: await mailCode(email), type: "email" })).error).toBeNull();
+    await plantUnconfirmed(email, planted);
+    expect(await auth.signInWithPassword({ email, password: planted, captchaToken: undefined })).toEqual({ ok: false, reason: "invalid_credentials" });
+    // The owner proves inbox control with a code.
+    const owner = await codeSignIn(email);
     // The planted password no longer works; the owner has no password until they set one.
-    expect((await client().auth.signInWithPassword({ email, password: "attacker-pass-123" })).error).not.toBeNull();
-    expect(((await owner.rpc("my_account_state")).data as { has_password: boolean }[])[0].has_password).toBe(false);
-    expect((await owner.auth.getUser()).data.user?.user_metadata).not.toHaveProperty("planted");
-    expect((await owner.auth.updateUser({ password: "owner-pass-12345" })).error).toBeNull();
-    expect((await client().auth.signInWithPassword({ email, password: "owner-pass-12345" })).error).toBeNull();
+    expect(owner.session.hasPassword).toBe(false);
+    expect(sql(`select encrypted_password = '' from auth.users where email = '${email}'`)).toBe("t");
+    expect(await auth.signInWithPassword({ email, password: planted, captchaToken: undefined })).toEqual({ ok: false, reason: "invalid_credentials" });
+    expect(((await owner.c.rpc("my_account_state")).data as { has_password: boolean }[])[0].has_password).toBe(false);
+    expect(await auth.setPassword({ userId: owner.id, sessionId: owner.session.sessionId, password: "owner-pass-12345" })).toEqual({ ok: true });
+    expect(await auth.signInWithPassword({ email, password: "owner-pass-12345", captchaToken: undefined })).toMatchObject({ ok: true, session: { userId: owner.id, hasPassword: true } });
+    expect(await auth.signInWithPassword({ email, password: planted, captchaToken: undefined })).toEqual({ ok: false, reason: "invalid_credentials" });
   });
 
-  it("the signup confirmation code path discards a planted password too (SEC-5)", async () => {
-    const email = `preplant-signup-${Date.now()}@geraiexpress.test`;
-    expect((await client().auth.signUp({ email, password: "attacker-pass-123" })).error).toBeNull();
-    const owner = client();
-    expect((await owner.auth.verifyOtp({ email, token: await mailCode(email), type: "signup" })).error).toBeNull();
-    expect((await client().auth.signInWithPassword({ email, password: "attacker-pass-123" })).error).not.toBeNull();
+  it("the code path discards a password planted after the code was issued too (SEC-5)", async () => {
+    const auth = authService();
+    const email = `preplant-code-${Date.now()}@geraiexpress.test`;
+    const sent = await auth.requestEmailCode({ email, captchaToken: undefined });
+    if (sent.status !== "sent") throw new Error(`code not sent: ${sent.status}`);
+    // The row appears between the code request and its verification, carrying the attacker's password.
+    await plantUnconfirmed(email, "attacker-pass-123");
+    const verified = await auth.verifyEmailCode({ email, code: sent.code, captchaToken: undefined });
+    expect(verified).toMatchObject({ ok: true, session: { email, hasPassword: false } });
+    expect(await auth.signInWithPassword({ email, password: "attacker-pass-123", captchaToken: undefined })).toEqual({ ok: false, reason: "invalid_credentials" });
   });
 });

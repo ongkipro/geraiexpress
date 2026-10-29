@@ -1,0 +1,1366 @@
+{
+  "capturedAt": "2026-10-28T21:35:36.705Z",
+  "viewports": {
+    "390": {
+      "url": "https://www.apple.com/macbook-air/",
+      "width": 390,
+      "height": 34628,
+      "title": "MacBook Air 13-inch and MacBook Air 15-inch - Apple",
+      "headingMax": 40,
+      "type": {
+        "families": [
+          {
+            "v": "SF Pro Text",
+            "c": 31083
+          },
+          {
+            "v": "SF Pro Display",
+            "c": 8429
+          }
+        ],
+        "sizes": [
+          {
+            "v": "12px",
+            "c": 23892
+          },
+          {
+            "v": "19px",
+            "c": 7205
+          },
+          {
+            "v": "14px",
+            "c": 4900
+          },
+          {
+            "v": "17px",
+            "c": 2291
+          },
+          {
+            "v": "21px",
+            "c": 450
+          },
+          {
+            "v": "32px",
+            "c": 301
+          },
+          {
+            "v": "48px",
+            "c": 239
+          },
+          {
+            "v": "28px",
+            "c": 149
+          },
+          {
+            "v": "24px",
+            "c": 44
+          },
+          {
+            "v": "40px",
+            "c": 41
+          }
+        ],
+        "weights": [
+          {
+            "v": "400",
+            "c": 26619
+          },
+          {
+            "v": "600",
+            "c": 12786
+          },
+          {
+            "v": "800",
+            "c": 74
+          },
+          {
+            "v": "500",
+            "c": 33
+          }
+        ],
+        "roles": {
+          "a": {
+            "size": "19px",
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "0.228px",
+            "family": "SF Pro Display",
+            "transform": "none"
+          },
+          "p": {
+            "size": "14px",
+            "weight": "400",
+            "lineHeight": "20.0003px",
+            "letterSpacing": "-0.224px",
+            "family": "SF Pro Text",
+            "transform": "none"
+          },
+          "h1": {
+            "size": "21px",
+            "weight": "600",
+            "lineHeight": "25px",
+            "letterSpacing": "0.231px",
+            "family": "SF Pro Display",
+            "transform": "none"
+          },
+          "h2": {
+            "size": "28px",
+            "weight": "600",
+            "lineHeight": "32px",
+            "letterSpacing": "0.196px",
+            "family": "SF Pro Display",
+            "transform": "none"
+          },
+          "h3": {
+            "size": "19px",
+            "weight": "600",
+            "lineHeight": "23px",
+            "letterSpacing": "0.228px",
+            "family": "SF Pro Display",
+            "transform": "none"
+          },
+          "button": {
+            "size": "17px",
+            "weight": "400",
+            "lineHeight": "20.0002px",
+            "letterSpacing": "-0.374px",
+            "family": "SF Pro Text",
+            "transform": "none"
+          }
+        }
+      },
+      "color": {
+        "text": [
+          {
+            "v": "rgba(0, 0, 0, 0.56)",
+            "c": 23321
+          },
+          {
+            "v": "rgb(134, 134, 139)",
+            "c": 8737
+          },
+          {
+            "v": "rgb(29, 29, 31)",
+            "c": 3989
+          },
+          {
+            "v": "rgb(110, 110, 115)",
+            "c": 1460
+          },
+          {
+            "v": "rgb(0, 102, 204)",
+            "c": 554
+          },
+          {
+            "v": "rgba(0, 0, 0, 0.88)",
+            "c": 544
+          }
+        ],
+        "background": [
+          {
+            "v": "rgb(245, 245, 247)",
+            "c": 9083230.96875
+          },
+          {
+            "v": "rgb(255, 255, 255)",
+            "c": 4601637.46875
+          },
+          {
+            "v": "rgba(250, 250, 252, 0.8)",
+            "c": 37440
+          },
+          {
+            "v": "rgb(51, 51, 54)",
+            "c": 11346.09375
+          }
+        ]
+      },
+      "radius": [
+        {
+          "v": "28px",
+          "c": 39
+        },
+        {
+          "v": "50%",
+          "c": 27
+        },
+        {
+          "v": "980px",
+          "c": 6
+        },
+        {
+          "v": "8px",
+          "c": 3
+        },
+        {
+          "v": "190px",
+          "c": 1
+        }
+      ],
+      "sections": [
+        {
+          "tag": "div",
+          "y": 0,
+          "h": 48,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 66,
+          "heading": {
+            "tag": "h2",
+            "size": "17px",
+            "text": "Shop"
+          }
+        },
+        {
+          "tag": "nav",
+          "y": 48,
+          "h": 48,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 1,
+          "heading": null
+        },
+        {
+          "tag": "section",
+          "y": 48,
+          "h": 92,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 0,
+          "heading": null
+        },
+        {
+          "tag": "section",
+          "y": 140,
+          "h": 553,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 7,
+          "heading": {
+            "tag": "h1",
+            "size": "21px",
+            "text": "MacBook Air"
+          }
+        },
+        {
+          "tag": "section",
+          "y": 693,
+          "h": 742,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 24,
+          "heading": {
+            "tag": "h2",
+            "size": "28px",
+            "text": "Get the highlights."
+          }
+        },
+        {
+          "tag": "article",
+          "y": 1435,
+          "h": 3126,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 44,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Design"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 4713,
+          "h": 2332,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 6,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Performance"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 7199,
+          "h": 2874,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 13,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "AI"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 10227,
+          "h": 1175,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 17,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "macOS"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 11556,
+          "h": 857,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 15,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Continuity"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 12488,
+          "h": 818,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 12,
+          "heading": {
+            "tag": "h2",
+            "size": "40px",
+            "text": "New to Mac?"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 13391,
+          "h": 1079,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 8,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Display"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 14624,
+          "h": 1056,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 13,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Camera and Audio"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 15833,
+          "h": 1723,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 8,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Ports and+ Connectivity"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 17710,
+          "h": 956,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 4,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Security"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 18738,
+          "h": 1483,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 26,
+          "heading": {
+            "tag": "h2",
+            "size": "32px",
+            "text": "There’s never been a better time to upgrade."
+          }
+        },
+        {
+          "tag": "section",
+          "y": 20221,
+          "h": 4333,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 22,
+          "heading": {
+            "tag": "h2",
+            "size": "40px",
+            "text": "Which laptop is right for you?"
+          }
+        },
+        {
+          "tag": "section",
+          "y": 24554,
+          "h": 660,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 11,
+          "heading": {
+            "tag": "h2",
+            "size": "28px",
+            "text": "MacBook Air and the environment."
+          }
+        },
+        {
+          "tag": "section",
+          "y": 25214,
+          "h": 493,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 8,
+          "heading": {
+            "tag": "h2",
+            "size": "28px",
+            "text": "Our values lead the way."
+          }
+        },
+        {
+          "tag": "footer",
+          "y": 25708,
+          "h": 8921,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 11,
+          "heading": {
+            "tag": "h2",
+            "size": "12px",
+            "text": "Apple Footer"
+          }
+        }
+      ]
+    },
+    "768": {
+      "url": "https://www.apple.com/macbook-air/",
+      "width": 768,
+      "height": 29376,
+      "title": "MacBook Air 13-inch and MacBook Air 15-inch - Apple",
+      "headingMax": 48,
+      "type": {
+        "families": [
+          {
+            "v": "SF Pro Text",
+            "c": 33472
+          },
+          {
+            "v": "SF Pro Display",
+            "c": 6043
+          }
+        ],
+        "sizes": [
+          {
+            "v": "12px",
+            "c": 23869
+          },
+          {
+            "v": "17px",
+            "c": 8250
+          },
+          {
+            "v": "21px",
+            "c": 4264
+          },
+          {
+            "v": "14px",
+            "c": 1353
+          },
+          {
+            "v": "24px",
+            "c": 578
+          },
+          {
+            "v": "19px",
+            "c": 487
+          },
+          {
+            "v": "40px",
+            "c": 234
+          },
+          {
+            "v": "64px",
+            "c": 225
+          },
+          {
+            "v": "48px",
+            "c": 178
+          },
+          {
+            "v": "32px",
+            "c": 44
+          }
+        ],
+        "weights": [
+          {
+            "v": "400",
+            "c": 26379
+          },
+          {
+            "v": "600",
+            "c": 13029
+          },
+          {
+            "v": "800",
+            "c": 74
+          },
+          {
+            "v": "500",
+            "c": 33
+          }
+        ],
+        "roles": {
+          "a": {
+            "size": "19px",
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "0.228px",
+            "family": "SF Pro Display",
+            "transform": "none"
+          },
+          "p": {
+            "size": "14px",
+            "weight": "400",
+            "lineHeight": "20.0003px",
+            "letterSpacing": "-0.224px",
+            "family": "SF Pro Text",
+            "transform": "none"
+          },
+          "h1": {
+            "size": "24px",
+            "weight": "600",
+            "lineHeight": "28px",
+            "letterSpacing": "0.216px",
+            "family": "SF Pro Display",
+            "transform": "none"
+          },
+          "h2": {
+            "size": "48px",
+            "weight": "600",
+            "lineHeight": "52.0077px",
+            "letterSpacing": "-0.144px",
+            "family": "SF Pro Display",
+            "transform": "none"
+          },
+          "h3": {
+            "size": "21px",
+            "weight": "600",
+            "lineHeight": "29.001px",
+            "letterSpacing": "0.231px",
+            "family": "SF Pro Display",
+            "transform": "none"
+          },
+          "button": {
+            "size": "17px",
+            "weight": "400",
+            "lineHeight": "20.0002px",
+            "letterSpacing": "-0.374px",
+            "family": "SF Pro Text",
+            "transform": "none"
+          }
+        }
+      },
+      "color": {
+        "text": [
+          {
+            "v": "rgba(0, 0, 0, 0.56)",
+            "c": 23321
+          },
+          {
+            "v": "rgb(134, 134, 139)",
+            "c": 8737
+          },
+          {
+            "v": "rgb(29, 29, 31)",
+            "c": 3992
+          },
+          {
+            "v": "rgb(110, 110, 115)",
+            "c": 1460
+          },
+          {
+            "v": "rgb(0, 102, 204)",
+            "c": 554
+          },
+          {
+            "v": "rgba(0, 0, 0, 0.88)",
+            "c": 544
+          }
+        ],
+        "background": [
+          {
+            "v": "rgb(245, 245, 247)",
+            "c": 13479952
+          },
+          {
+            "v": "rgb(255, 255, 255)",
+            "c": 9300236
+          },
+          {
+            "v": "rgba(250, 250, 252, 0.8)",
+            "c": 73728
+          },
+          {
+            "v": "rgba(232, 232, 237, 0.5)",
+            "c": 44311
+          }
+        ]
+      },
+      "radius": [
+        {
+          "v": "28px",
+          "c": 43
+        },
+        {
+          "v": "50%",
+          "c": 27
+        },
+        {
+          "v": "980px",
+          "c": 6
+        },
+        {
+          "v": "8px",
+          "c": 3
+        },
+        {
+          "v": "900px",
+          "c": 1
+        },
+        {
+          "v": "210px",
+          "c": 1
+        }
+      ],
+      "sections": [
+        {
+          "tag": "div",
+          "y": 0,
+          "h": 48,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 66,
+          "heading": {
+            "tag": "h2",
+            "size": "17px",
+            "text": "Shop"
+          }
+        },
+        {
+          "tag": "nav",
+          "y": 48,
+          "h": 48,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 1,
+          "heading": null
+        },
+        {
+          "tag": "section",
+          "y": 48,
+          "h": 72,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 0,
+          "heading": null
+        },
+        {
+          "tag": "section",
+          "y": 120,
+          "h": 745,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 7,
+          "heading": {
+            "tag": "h1",
+            "size": "24px",
+            "text": "MacBook Air"
+          }
+        },
+        {
+          "tag": "section",
+          "y": 865,
+          "h": 755,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 24,
+          "heading": {
+            "tag": "h2",
+            "size": "48px",
+            "text": "Get the highlights."
+          }
+        },
+        {
+          "tag": "article",
+          "y": 1620,
+          "h": 2895,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 44,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Design"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 4663,
+          "h": 1951,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 6,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Performance"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 6764,
+          "h": 2240,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 13,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "AI"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 9154,
+          "h": 1492,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 17,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "macOS"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 10796,
+          "h": 1017,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 15,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Continuity"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 11928,
+          "h": 1016,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 12,
+          "heading": {
+            "tag": "h2",
+            "size": "40px",
+            "text": "New to Mac?"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 13033,
+          "h": 970,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 8,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Display"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 14153,
+          "h": 1117,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 13,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Camera and Audio"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 15418,
+          "h": 1535,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 8,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Ports and+ Connectivity"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 17103,
+          "h": 809,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 4,
+          "heading": {
+            "tag": "h2",
+            "size": "21px",
+            "text": "Security"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 18065,
+          "h": 1265,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 26,
+          "heading": {
+            "tag": "h2",
+            "size": "40px",
+            "text": "There’s never been a better time to upgrade."
+          }
+        },
+        {
+          "tag": "section",
+          "y": 19330,
+          "h": 3655,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 22,
+          "heading": {
+            "tag": "h2",
+            "size": "48px",
+            "text": "Which laptop is right for you?"
+          }
+        },
+        {
+          "tag": "section",
+          "y": 22985,
+          "h": 780,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 11,
+          "heading": {
+            "tag": "h2",
+            "size": "48px",
+            "text": "MacBook Air and the environment."
+          }
+        },
+        {
+          "tag": "section",
+          "y": 23765,
+          "h": 613,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 8,
+          "heading": {
+            "tag": "h2",
+            "size": "48px",
+            "text": "Our values lead the way."
+          }
+        },
+        {
+          "tag": "footer",
+          "y": 24378,
+          "h": 4998,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 11,
+          "heading": {
+            "tag": "h2",
+            "size": "12px",
+            "text": "Apple Footer"
+          }
+        }
+      ]
+    },
+    "1440": {
+      "url": "https://www.apple.com/macbook-air/",
+      "width": 1440,
+      "height": 32349,
+      "title": "MacBook Air 13-inch and MacBook Air 15-inch - Apple",
+      "headingMax": 64,
+      "type": {
+        "families": [
+          {
+            "v": "SF Pro Text",
+            "c": 33746
+          },
+          {
+            "v": "SF Pro Display",
+            "c": 6642
+          }
+        ],
+        "sizes": [
+          {
+            "v": "12px",
+            "c": 24839
+          },
+          {
+            "v": "17px",
+            "c": 7573
+          },
+          {
+            "v": "21px",
+            "c": 5279
+          },
+          {
+            "v": "14px",
+            "c": 1334
+          },
+          {
+            "v": "28px",
+            "c": 305
+          },
+          {
+            "v": "48px",
+            "c": 248
+          },
+          {
+            "v": "24px",
+            "c": 234
+          },
+          {
+            "v": "80px",
+            "c": 178
+          },
+          {
+            "v": "56px",
+            "c": 134
+          },
+          {
+            "v": "32px",
+            "c": 132
+          }
+        ],
+        "weights": [
+          {
+            "v": "400",
+            "c": 27197
+          },
+          {
+            "v": "600",
+            "c": 13084
+          },
+          {
+            "v": "800",
+            "c": 74
+          },
+          {
+            "v": "500",
+            "c": 33
+          }
+        ],
+        "roles": {
+          "a": {
+            "size": "21px",
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "0.231px",
+            "family": "SF Pro Display",
+            "transform": "none"
+          },
+          "p": {
+            "size": "14px",
+            "weight": "400",
+            "lineHeight": "20.0003px",
+            "letterSpacing": "-0.224px",
+            "family": "SF Pro Text",
+            "transform": "none"
+          },
+          "h1": {
+            "size": "28px",
+            "weight": "600",
+            "lineHeight": "32px",
+            "letterSpacing": "0.196px",
+            "family": "SF Pro Display",
+            "transform": "none"
+          },
+          "h2": {
+            "size": "56px",
+            "weight": "600",
+            "lineHeight": "60px",
+            "letterSpacing": "normal",
+            "family": "SF Pro Display",
+            "transform": "none"
+          },
+          "h3": {
+            "size": "21px",
+            "weight": "600",
+            "lineHeight": "29.001px",
+            "letterSpacing": "0.231px",
+            "family": "SF Pro Display",
+            "transform": "none"
+          },
+          "button": {
+            "size": "17px",
+            "weight": "400",
+            "lineHeight": "20.0002px",
+            "letterSpacing": "-0.374px",
+            "family": "SF Pro Text",
+            "transform": "none"
+          }
+        }
+      },
+      "color": {
+        "text": [
+          {
+            "v": "rgba(0, 0, 0, 0.56)",
+            "c": 23321
+          },
+          {
+            "v": "rgb(134, 134, 139)",
+            "c": 8737
+          },
+          {
+            "v": "rgb(29, 29, 31)",
+            "c": 3914
+          },
+          {
+            "v": "rgb(110, 110, 115)",
+            "c": 1460
+          },
+          {
+            "v": "rgba(0, 0, 0, 0.72)",
+            "c": 1103
+          },
+          {
+            "v": "rgba(0, 0, 0, 0.88)",
+            "c": 544
+          }
+        ],
+        "background": [
+          {
+            "v": "rgb(245, 245, 247)",
+            "c": 24788457.5
+          },
+          {
+            "v": "rgb(255, 255, 255)",
+            "c": 16031554.625
+          },
+          {
+            "v": "rgba(250, 250, 252, 0.8)",
+            "c": 138240
+          },
+          {
+            "v": "rgba(232, 232, 237, 0.5)",
+            "c": 44311
+          }
+        ]
+      },
+      "radius": [
+        {
+          "v": "28px",
+          "c": 43
+        },
+        {
+          "v": "50%",
+          "c": 23
+        },
+        {
+          "v": "980px",
+          "c": 6
+        },
+        {
+          "v": "8px",
+          "c": 3
+        },
+        {
+          "v": "1440px",
+          "c": 1
+        },
+        {
+          "v": "210px",
+          "c": 1
+        }
+      ],
+      "sections": [
+        {
+          "tag": "div",
+          "y": 0,
+          "h": 44,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 66,
+          "heading": {
+            "tag": "h2",
+            "size": "12px",
+            "text": "Shop"
+          }
+        },
+        {
+          "tag": "nav",
+          "y": 44,
+          "h": 52,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 1,
+          "heading": null
+        },
+        {
+          "tag": "section",
+          "y": 44,
+          "h": 52,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 0,
+          "heading": null
+        },
+        {
+          "tag": "section",
+          "y": 96,
+          "h": 910,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 7,
+          "heading": {
+            "tag": "h1",
+            "size": "28px",
+            "text": "MacBook Air"
+          }
+        },
+        {
+          "tag": "section",
+          "y": 1006,
+          "h": 873,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 24,
+          "heading": {
+            "tag": "h2",
+            "size": "56px",
+            "text": "Get the highlights."
+          }
+        },
+        {
+          "tag": "article",
+          "y": 1879,
+          "h": 3584,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 44,
+          "heading": {
+            "tag": "h2",
+            "size": "24px",
+            "text": "Design"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 5697,
+          "h": 2241,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 6,
+          "heading": {
+            "tag": "h2",
+            "size": "24px",
+            "text": "Performance"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 8174,
+          "h": 2538,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 13,
+          "heading": {
+            "tag": "h2",
+            "size": "24px",
+            "text": "AI"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 10948,
+          "h": 1748,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 17,
+          "heading": {
+            "tag": "h2",
+            "size": "24px",
+            "text": "macOS"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 12932,
+          "h": 1175,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 15,
+          "heading": {
+            "tag": "h2",
+            "size": "24px",
+            "text": "Continuity"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 14227,
+          "h": 1077,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 12,
+          "heading": {
+            "tag": "h2",
+            "size": "48px",
+            "text": "New to Mac?"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 15424,
+          "h": 904,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 8,
+          "heading": {
+            "tag": "h2",
+            "size": "24px",
+            "text": "Display"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 16564,
+          "h": 1289,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 13,
+          "heading": {
+            "tag": "h2",
+            "size": "24px",
+            "text": "Camera and Audio"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 18089,
+          "h": 1768,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 8,
+          "heading": {
+            "tag": "h2",
+            "size": "24px",
+            "text": "Ports and+ Connectivity"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 20093,
+          "h": 995,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 4,
+          "heading": {
+            "tag": "h2",
+            "size": "24px",
+            "text": "Security"
+          }
+        },
+        {
+          "tag": "article",
+          "y": 21208,
+          "h": 1462,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 26,
+          "heading": {
+            "tag": "h2",
+            "size": "48px",
+            "text": "There’s never been a better time to upgrade."
+          }
+        },
+        {
+          "tag": "section",
+          "y": 22670,
+          "h": 4287,
+          "bg": "rgb(255, 255, 255)",
+          "cols": 1,
+          "imgs": 22,
+          "heading": {
+            "tag": "h2",
+            "size": "64px",
+            "text": "Which laptop is right for you?"
+          }
+        },
+        {
+          "tag": "section",
+          "y": 26957,
+          "h": 754,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 11,
+          "heading": {
+            "tag": "h2",
+            "size": "56px",
+            "text": "MacBook Air and the environment."
+          }
+        },
+        {
+          "tag": "section",
+          "y": 27711,
+          "h": 597,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 8,
+          "heading": {
+            "tag": "h2",
+            "size": "56px",
+            "text": "Our values lead the way."
+          }
+        },
+        {
+          "tag": "footer",
+          "y": 28308,
+          "h": 4040,
+          "bg": "rgb(245, 245, 247)",
+          "cols": 1,
+          "imgs": 11,
+          "heading": {
+            "tag": "h2",
+            "size": "12px",
+            "text": "Apple Footer"
+          }
+        }
+      ]
+    }
+  }
+}

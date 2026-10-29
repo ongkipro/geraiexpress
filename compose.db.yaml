@@ -1,0 +1,41 @@
+# Disposable local database stack (project gxdb): PostgreSQL 17, PostgREST and Mailpit, for `next dev`, tests/db and the
+# local container. Never a production shape (compose.yaml is). Ports bind to loopback; the container app joins the
+# network `gxdb_default` instead (compose.local.yaml).
+name: gxdb
+services:
+  postgres:
+    image: postgres:17@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
+    env_file: infra/dev/postgres.env
+    command: [postgres, -c, max_connections=40, -c, log_statement=none, -c, password_encryption=scram-sha-256, -c, app.gx_local=on]
+    ports: ["127.0.0.1:55432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck:
+      # TCP on loopback: the image's temporary init server listens on its socket only, and pg_isready
+      # would also pass before the gxdb database exists. This passes only for the final server with gxdb.
+      test: [CMD-SHELL, "psql -h 127.0.0.1 -U postgres -d gxdb -tAc 'select 1' | grep -qx 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+  postgrest:
+    image: postgrest/postgrest:v14.18@sha256:c7cd7e265a85b05248abf53f4473fcec7e327c282d0bd0cf60f1551996d09fcf
+    # PGRST_DB_URI uses the authenticator role and its random password; the JWT secret matches test minting.
+    env_file: infra/dev/postgrest.env
+    environment:
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_DB_MAX_ROWS: "1000"
+      PGRST_DB_POOL: "5"
+      PGRST_DB_EXTRA_SEARCH_PATH: public, extensions
+      PGRST_JWT_AUD: authenticated
+    ports: ["127.0.0.1:55433:3000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+  mailpit:
+    image: axllent/mailpit:v1.31.3@sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d
+    ports: ["127.0.0.1:55025:1025", "127.0.0.1:58025:8025"]
+    restart: unless-stopped
+volumes:
+  postgres-data:

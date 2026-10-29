@@ -1,8 +1,13 @@
 import type { Metadata } from "next";
+import { CheckCircle2, KeyRound, ShieldAlert, Users } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatWib } from "@/lib/format";
 import { CAPABILITY_LABELS, requirePlatform, type Capability } from "@/lib/platform";
-import { supabaseServer } from "@/lib/supabase/server";
+import { dbServer } from "@/lib/db/server";
+import { cn } from "@/lib/utils";
 import { GrantForm, RevokeForm } from "../forms";
+import { EmptyState, LoadError, PageHeader, RT, SectionHeader } from "../ui";
 
 export const metadata: Metadata = { title: "Akses Super Admin" };
 
@@ -15,44 +20,80 @@ type AdminRow = {
 // verified authenticator; there is no public promotion path.
 export default async function PlatformAccessPage() {
   await requirePlatform("access_governance");
-  const supabase = await supabaseServer();
-  const { data: raw, error } = await supabase.rpc("platform_admins");
+  const db = await dbServer();
+  const { data: raw, error } = await db.rpc("platform_admins");
   const data = (raw ?? []) as AdminRow[];
   const capabilities = Object.entries(CAPABILITY_LABELS).map(([value, label]) => ({ value, label }));
 
   return (
-    <div className="flex max-w-[980px] flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl tracking-tight">Akses Super Admin</h1>
-        <p className="text-muted-foreground">Setiap perubahan butuh alasan dan tercatat di audit. Admin baru wajib memasang autentikator saat pertama masuk.</p>
-      </div>
+    <div className="flex max-w-[1160px] flex-col gap-8">
+      <PageHeader
+        title="Akses Super Admin"
+        description="Setiap perubahan butuh alasan dan tercatat di audit. Admin baru wajib memasang autentikator saat pertama masuk."
+      />
 
-      <section aria-labelledby="admins-heading" className="flex flex-col gap-3">
-        <h2 id="admins-heading" className="text-xl">Admin platform</h2>
+      <section aria-labelledby="admins-heading" className="flex flex-col gap-4">
+        <SectionHeader id="admins-heading" title="Admin platform" />
         {error ? (
-          <p role="alert" className="rounded-md bg-card p-4 ring-1 ring-foreground"><span aria-hidden="true">⚠ </span>Daftar admin belum bisa dimuat.</p>
+          <LoadError href="/admin/akses">Daftar admin belum bisa dimuat.</LoadError>
+        ) : data.length === 0 ? (
+          <EmptyState icon={Users} title="Belum ada admin platform" description="Beri akses lewat formulir di bawah." />
         ) : (
-          <ul className="divide-y divide-border rounded-lg bg-card ring-1 ring-border">
-            {data.map((a) => (
-              <li key={a.user_id} className="flex flex-col gap-3 p-4" data-testid="platform-admin">
-                <span className="min-w-0">
-                  <span className="font-semibold break-all">{a.email}</span>
-                  <span className="block text-sm text-muted-foreground">
-                    {a.revoked_at ? `Dicabut ${formatWib(a.revoked_at)}` : `Aktif sejak ${formatWib(a.granted_at)}`}
-                    {" · "}{a.has_totp ? "Autentikator terpasang" : "Autentikator belum dipasang"}
-                  </span>
-                  <span className="block text-sm">{a.capabilities.map((c) => CAPABILITY_LABELS[c] ?? c).join(", ")}</span>
-                </span>
-                {a.revoked_at ? null : <RevokeForm userId={a.user_id} email={a.email} revision={a.revision} />}
-              </li>
-            ))}
-          </ul>
+          <div className={RT.frame}>
+            <Table className={RT.table}>
+              <TableHeader className={RT.head}>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Admin</TableHead>
+                  <TableHead>Kemampuan</TableHead>
+                  <TableHead>Autentikator</TableHead>
+                  <TableHead className="text-right"><span className="sr-only">Tindakan</span></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className={RT.body}>
+                {data.map((a) => (
+                  <TableRow key={a.user_id} data-testid="platform-admin" className={cn(RT.row, a.revoked_at && "text-muted-foreground")}>
+                    <TableCell className={cn(RT.cell, "min-w-0")}>
+                      <span className="block font-semibold break-words md:whitespace-nowrap">{a.email}</span>
+                      <span className="block text-sm text-muted-foreground">
+                        {a.revoked_at ? `Dicabut ${formatWib(a.revoked_at)}` : `Aktif sejak ${formatWib(a.granted_at)}`}
+                      </span>
+                    </TableCell>
+                    <TableCell className={RT.cell}>
+                      <span className="sr-only">Kemampuan: </span>
+                      <ul className="flex flex-wrap gap-1.5 md:max-w-[340px]">
+                        {a.capabilities.map((c) => (
+                          <li key={c}><Badge variant="neutral" className="whitespace-normal">{CAPABILITY_LABELS[c] ?? c}</Badge></li>
+                        ))}
+                      </ul>
+                    </TableCell>
+                    <TableCell className={RT.cell}>
+                      {a.has_totp ? (
+                        <Badge variant="success"><CheckCircle2 aria-hidden="true" />Autentikator terpasang</Badge>
+                      ) : (
+                        <Badge variant="warning"><ShieldAlert aria-hidden="true" />Autentikator belum dipasang</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className={cn(RT.cell, "max-md:pt-2 md:text-right")}>
+                      {a.revoked_at ? null : <RevokeForm userId={a.user_id} email={a.email} revision={a.revision} />}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </section>
 
-      <section aria-labelledby="grant-heading" className="flex flex-col gap-3 rounded-lg bg-card p-6 ring-1 ring-border">
-        <h2 id="grant-heading" className="text-xl">Beri atau ubah akses</h2>
-        <p className="text-sm text-muted-foreground">Akun harus sudah terdaftar dan emailnya terverifikasi. Mengubah akses akun yang sudah ada menggantikan kemampuannya.</p>
+      <section aria-labelledby="grant-heading" className="flex max-w-[760px] flex-col gap-5 rounded-lg bg-card p-5 ring-1 ring-border md:p-6">
+        <div className="flex items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted" aria-hidden="true">
+            <KeyRound className="size-5 text-muted-foreground" />
+          </span>
+          <div className="flex flex-col gap-1">
+            <h2 id="grant-heading" className="text-xl font-semibold tracking-tight">Beri atau ubah akses</h2>
+            <p className="text-sm text-muted-foreground">Mengubah akses akun yang sudah ada menggantikan seluruh kemampuannya.</p>
+          </div>
+        </div>
         <GrantForm capabilities={capabilities} />
       </section>
     </div>

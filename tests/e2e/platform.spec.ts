@@ -9,6 +9,9 @@ test("an administrator passes the TOTP challenge and sees the tenant directory w
   const tenants = page.getByTestId("platform-tenant");
   await expect(tenants.filter({ hasText: "Gerai Uji A" })).toBeVisible();
   await expect(tenants.filter({ hasText: "Gerai Contoh" })).toHaveCount(0);
+  // PR-37: the immutable slug is shown read-only next to the gerai.
+  await expect(tenants.filter({ hasText: "Gerai Uji A" }).getByTestId("platform-tenant-slug")).toContainText("Slug: gerai-uji-a");
+  await expect(tenants.filter({ hasText: "Gerai Uji A" }).getByRole("textbox")).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
   await expectTouchTargets(page);
 });
@@ -23,7 +26,7 @@ test("a wrong code keeps the session at aal1 and the workspace closed", async ({
 });
 
 test("people without a platform grant get a plain not-found", async ({ page }) => {
-  await signIn(page, "owner-a@geraiexpress.test");
+  await signIn(page, "owner-b@geraiexpress.test");
   for (const path of ["/admin", "/admin/akses", "/admin/audit", "/verifikasi-2fa"]) {
     const res = await page.goto(path);
     expect(res?.status(), path).toBe(404);
@@ -50,12 +53,14 @@ test("suspending a gerai needs a reason, blocks its members and is audited", asy
   await signInAdmin(page);
   const row = page.getByTestId("platform-tenant").filter({ hasText: "Gerai Uji C" });
   await row.getByText("Bekukan Gerai Uji C…").click();
-  await row.getByRole("button", { name: "Bekukan" }).click();
+  // The reason and the confirm button live in a confirmation dialog (UI-4 redesign), not inline in the row.
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Bekukan" }).click();
   // The browser refuses an empty reason before submitting; the database enforces it as well.
-  expect(await row.getByLabel("Alasan (dicatat di audit)").evaluate((el: HTMLTextAreaElement) => el.validity.valueMissing)).toBe(true);
+  expect(await dialog.getByLabel("Alasan (dicatat di audit)").evaluate((el: HTMLTextAreaElement) => el.validity.valueMissing)).toBe(true);
   await expect(row.getByText("Aktif", { exact: true })).toBeVisible();
-  await row.getByLabel("Alasan (dicatat di audit)").fill("Uji e2e pembekuan");
-  await row.getByRole("button", { name: "Bekukan" }).click();
+  await dialog.getByLabel("Alasan (dicatat di audit)").fill("Uji e2e pembekuan");
+  await dialog.getByRole("button", { name: "Bekukan" }).click();
   await expect(row.getByText("Dibekukan", { exact: true })).toBeVisible();
 
   const member = await browser.newContext({ baseURL: test.info().project.use.baseURL });
@@ -70,15 +75,17 @@ test("suspending a gerai needs a reason, blocks its members and is audited", asy
   await expect(event).toContainText("oleh admin@geraiexpress.test");
   await expect(event).toContainText("Target: Gerai Uji C");
   await expect(event).toContainText("active → suspended");
-  await page.getByRole("link", { name: "Akses admin dicabut" }).click();
+  // The decision-type filter is a select in the audit search form (category tabs replaced the long link row).
+  await page.getByLabel("Jenis keputusan").selectOption("platform.revoke");
+  await page.getByRole("button", { name: "Terapkan" }).click();
   await expect(page).toHaveURL(/jenis=platform\.revoke/);
   await expect(page.getByTestId("audit-event").filter({ hasText: "Uji e2e pembekuan" })).toHaveCount(0);
 
   await page.goto("/admin");
   const again = page.getByTestId("platform-tenant").filter({ hasText: "Gerai Uji C" });
   await again.getByText("Aktifkan kembali Gerai Uji C…").click();
-  await again.getByLabel("Alasan (dicatat di audit)").fill("Uji e2e selesai");
-  await again.getByRole("button", { name: "Aktifkan kembali" }).click();
+  await page.getByRole("dialog").getByLabel("Alasan (dicatat di audit)").fill("Uji e2e selesai");
+  await page.getByRole("dialog").getByRole("button", { name: "Aktifkan kembali" }).click();
   await expect(again.getByText("Aktif", { exact: true })).toBeVisible();
 });
 

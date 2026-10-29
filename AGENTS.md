@@ -8,7 +8,7 @@ This file contains repository-specific rules only. Global safety, Git, secret-ha
 
 - Purpose: Multi-tenant shipping-counter application using Mengantar, with reusable contacts and tenant/outlet identity.
 - Category: Multi-tenant logistics product
-- Expected stack: Cloudflare + Supabase; proposed Next.js App Router + TypeScript + shadcn/ui after compatibility proof.
+- Current stack: Next.js App Router + TypeScript + shadcn/ui on Node.js; PostgreSQL 17 + PostgREST with application-owned auth. Hosting direction: Vultr + Coolify (DEC-022); Cloudflare Turnstile only.
 
 ## Sources of truth
 
@@ -44,7 +44,7 @@ Inspect the repository's actual configuration before adding stack-specific rules
   `ARCHITECTURE.md` owns what is implemented and proved.
 - Documentation is English; user discussion and product UI are Bahasa Indonesia.
 - Tenant/contact/staff identities are distinct from Mengantar sellers. Protect
-  current tenant/outlet/account scope at Worker and direct Data API/RPC boundaries.
+  current tenant/outlet/account scope at the application server and direct Data API/RPC boundaries.
 - Customer/resi shipping uses normal Mengantar tariff; private seller net cost
   follows verified activated terms. Apply COD/insurance exactly once; preserve
   unknown versus zero. Never import a historical fee percentage as a default.

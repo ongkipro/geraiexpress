@@ -2,6 +2,7 @@
 
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { StatusAlert } from "@/components/auth/auth-shell";
 
 type TurnstileApi = {
   render: (el: HTMLElement, options: Record<string, unknown>) => string;
@@ -14,7 +15,7 @@ declare global {
 
 // T-016 / SEC-5: Cloudflare Turnstile, rendered explicitly so each form owns its widget. The widget
 // adds a hidden `cf-turnstile-response` field to the enclosing form; the server action passes it to
-// Supabase Auth, which verifies it. Tokens are single-use, so the widget resets whenever
+// the auth service, which verifies it. Tokens are single-use, so the widget resets whenever
 // `resetSignal` changes (each completed attempt). `onToken(null)` while no valid token exists.
 export function Turnstile({ siteKey, resetSignal, onToken }: {
   siteKey: string | undefined;
@@ -58,12 +59,12 @@ export function Turnstile({ siteKey, resetSignal, onToken }: {
   }, [resetSignal, onToken]);
 
   if (!siteKey) {
-    return <p role="alert" className="text-sm"><span aria-hidden="true">⚠ </span>Verifikasi keamanan belum dikonfigurasi. Hubungi tim GeraiExpress.</p>;
+    return <StatusAlert variant="destructive">Verifikasi keamanan belum dikonfigurasi. Hubungi tim GeraiExpress.</StatusAlert>;
   }
   return (
     <>
       <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" strategy="afterInteractive" />
-      <div ref={box} />
+      <div ref={box} className="flex justify-center" />
     </>
   );
 }

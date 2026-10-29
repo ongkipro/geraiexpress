@@ -409,7 +409,7 @@ with exact rows; ETA `-` is null; deterministic tie order; contract test only se
 ## 2026-10-14 — Mengantar sandbox credentials identified (after T-019)
 
 The owner stated the sandbox needs no IP allowlist and identified the 43-character value as the
-Partner Secret with Partner ID `ongkirich`. A signed sandbox `POST /api/partner/v1/sellers/list`
+Partner Secret with the configured Partner ID (value omitted). A signed sandbox `POST /api/partner/v1/sellers/list`
 answered 200 (no sellers). T-019's "sandbox gated on Mengantar's side" reading was wrong: the
 Public API refused a Partner Secret used as a seller key. Corrected in the research notes,
 STATUS and TASKS.
@@ -419,7 +419,7 @@ STATUS and TASKS.
 Added `src/lib/mengantar/partner-api.ts` (signed POSTs; list, register, get key; sandbox origin
 only; seller key returned to the caller for sealing; list strips names/emails/phones; provider
 codes allowlisted, `Retry-After` and the 503 `sellerId` carried). Reuses the Public client's
-bounded reader. Owner approved one sandbox seller (`ongkirich+gerai1@gmail.com`): registered
+bounded reader. The owner approved one sandbox seller (identity omitted): registered
 201, repeat 200 with the same seller and key, get-key identical; key stored only in the secrets
 store. Sandbox write proof with that key: pickup address created; JNE drop-off came back as
 HTTP 200 `success: true` with the item in `status: "error"` (no ORDER_ID) — the order adapter
@@ -719,3 +719,601 @@ security scan gates, release manifests, and E2E test coverage:
   T-026 `batch-payment-review` (`tenant_admin` vs `operator`), T-027 Partner onboarding consent
   validation & operator hiding, and T-028 `Arsipkan kontak` role gating; scrubbed all remaining
   legacy brand references in `docs/**` (0 matches across the entire repo).
+
+## 2026-10-28 — Full review, documentation reconciliation, Next.js 16.4.3, local review gerai
+
+No application source changed. Evidence and decisions are in `docs/review/2026-10-28-full-review.md`,
+`docs/review/2026-10-28-legacy-project-comparison.md`, `docs/research/` (market and regulatory note,
+Mengantar operations contract) and `DECISIONS.md` (DEC-005 raised, DEC-011 to DEC-018).
+
+- **Review**: four read-only lanes (security, data isolation, provider and money, spec and UX) found one
+  Critical (tenant admin can bind another tenant's Partner seller and retrieve its key), several High and
+  Medium items; the work is queued as T-032..T-051 in `TASKS.md`. Findings are static reads unless stated.
+- **Executed checks (2026-10-28)**: `pnpm typecheck` PASS; `pnpm test:unit` 102/102 (14 files);
+  `pnpm test:db` 114/114 (13 files) with the Auth hook served by a running app and the hook relay;
+  `supabase db lint` 1 warning (unused `v_onb`); `pnpm build`, `pnpm cf:build`, `pnpm check:bundle` PASS.
+  Not run: Playwright e2e, live Mengantar contract tests, `delivery-ledger verify`, `production-gate`.
+- **Next.js 16.4.3 and OpenNext 1.20.13** pins applied (advisories 10 to 7, the rest transitive build/dev
+  tooling). `pnpm smoke:worker` exited 7 once while a second `wrangler dev` was already listening, so it is
+  inconclusive, and the Worker e2e was cancelled; both must be re-run before DEC-005 counts the upgrade as landed.
+- **Environment note**: `scripts/auth-hook-relay.mjs` finds the `docker0` address through
+  `os.networkInterfaces()`, which does not list it on this host; `AUTH_HOOK_RELAY_HOST=10.0.0.1` works.
+  DB tests that sign in by OTP fail with "Failed to reach hook" unless the relay and an app serving
+  `/api/auth/send-email` are running (`AUTH_HOOK_TARGET` selects the app port).
+- **Local review gerai**: `supabase/review-fixture.sql` (owner-approved 2026-10-28, DEC-018 item 7) adds the
+  synthetic non-demo gerai "Gerai Demo Review (contoh)" with a tenant admin, an operator, one outlet, four
+  contacts with five addresses and three simulated shipments (draft, issued, unknown). Verified: re-running is
+  a no-op; both accounts sign in against the local Auth and see only their own tenant through the Data API
+  (1 tenant, 4 contacts, 1 outlet, 3 shipments); `pnpm test:db` stays 114/114 with the fixture present. It is
+  local-only, outside `seed.sql`, and refuses to run unless the local seed user exists (stopgap until T-035).
+- **Documentation**: PRD, design pack, `ARCHITECTURE.md`, `CONTEXT-RECORD.md` (CTX-39..CTX-43) and the
+  decision index were reconciled; the traceability check prints PASS (26 tasks, 195 declarations).
+  `STATUS.md` still quotes the older 108 unit and 115 DB test counts and is corrected by T-037.
+
+## 2026-10-28 — Development of T-032..T-051 in waves (uncommitted)
+
+Workers built each task in its own git worktree on a shared local Supabase stack, one wave at a time; the
+lead merged the results into the main working tree and owned `tests/db/privileges.test.ts`, the shared
+allowlists and the decision record (DEC-019). Nothing is committed. Provider-facing behavior for batch payment,
+Partner key regeneration and pickup was never run against the live provider.
+
+**Waves and executed checks (as reported by each worker; counts are the worker's, at task time)**
+
+- **Wave A: T-032, T-035, T-036, T-049.**
+  - T-032: `pnpm typecheck`, `pnpm build`, unit 108/108, `tests/db` 119/119 (a first full run failed 12
+    `issuance.test.ts` tests from shared-database contention and passed alone and on rerun). Fail-before: with the
+    stored-id verification disabled 5 unit tests fail; the DB tests were not run against the old schema.
+  - T-035: `tests/db/privileges.test.ts` 19/19, full `tests/db` 133. Fail-before: no reverted migration; a
+    rolled-back control that grants PUBLIC execute back shows the probe sees exposure, and the catalog before the
+    migration showed five `private` functions executable by anon and authenticated.
+  - T-036: typecheck, build, check:bundle, unit 108, `tests/db` 114, marketing e2e 10/10 on desktop-1280 and
+    mobile-390. Fail-before: the old copy matched the legacy-figure patterns on 20, 13 and 7 lines; the middleware
+    test fails when the `X-Robots-Tag` line is disabled.
+  - T-049: `tests/db` 132 (tenant-slug-reference 18/18), typecheck, build; one unit file failed only because
+    `.open-next/worker.js` was not built in the fresh worktree. Fail-before: replacing the counter upsert by an
+    unlocked read-then-write made both parallel-draft tests fail with `shipments_tenant_id_reference_key`
+    violations; the locked upsert gave none (60 parallel demo drafts, 25 parallel real-tenant drafts).
+- **Wave B: T-033, T-041, T-042, T-044.**
+  - T-033: unit 125, `tests/db` 170/172 (the two failures were the lead-owned allowlist), typecheck, cf:build,
+    build, check:bundle. Fail-before: sending the code instead of the object id fails 6 dispatcher unit tests;
+    reverting "ambiguity stays blocking" in the migration fails 2 DB tests; a 12-round lock-order stress found no
+    40P01. The live sandbox payment test exists but is skipped by default and was not run.
+  - T-041: `gerai-discount.test.ts` 24/24, full `tests/db` 178 (+2 expected allowlist failures), unit 114, e2e
+    6/6 and platform spec 12/12 on 1280 and 390. Fail-before: raising the ceiling by 100000 in the trigger fails 6
+    DB tests.
+  - T-042: unit 215, `tests/db` 156, e2e 53 passed, 1 failed (`auth-demo.spec.ts:74`, caused by T-049 repeating
+    demo references, not by T-042), 1 skipped. Fail-before: disabling the 404 refusal fails 22 of 51 middleware
+    tests; `httpOnly: false` fails 4 cookie tests.
+  - T-044: unit 134, `tests/db` 311 passed with 2 expected allowlist failures, e2e 84 passed on 1280 and 390 (label
+    spec 12/12), Chromium `page.pdf` gives exactly one page at 100x150 mm and 100x100 mm. Fail-before: using the
+    pickup name as sender fails 2 unit tests; corrupting a Code128 pattern fails 2; removing the masking and
+    WhatsApp checks from the migration fails 9 DB tests. The 768 px project was not run.
+- **Reviews of waves A and B (read-only).** Security reviewer, wave A: no Critical or High; T-032, T-035 and
+  T-049 approve with fixes (Medium: bindings written before T-032 are not re-verified; the allowlists matched
+  names, not signatures). General reviewer, wave A: T-035, T-036, T-049 approve with fixes, with one High (T-049
+  repeated demo references and broke the demo-isolation e2e) and Mediums on non-unique prefixes and the blocked
+  keyword reaching a prefix. Security reviewer, wave B: T-033, T-042, T-044 approve with fixes, T-041 approve (all
+  findings Low). General reviewer, wave B: T-033, T-042, T-044 approve with fixes; **T-041 reject** (the observed
+  ceiling depended on a random courier row, old quotes were repriced, the provider percentage was never recorded);
+  T-041 was reworked.
+- **Wave C: T-034, T-038, T-047, T-051.**
+  - T-034: unit 261, `tests/db` 226 passed + 5 allowlist failures (fixed in the lead-owned test), targeted DB 22/22,
+    Playwright Partner onboarding 2/2 on 1280 and 390 plus a one-off check with synthetic document bindings
+    (script and temporary env file deleted). Fail-before: reverting live validation fails the 100/101 draft test.
+  - T-038: unit 292, `tests/db` 218, e2e auth-demo, registration and platform 30 passed on desktop-1280 only,
+    build, cf:build, check:bundle. Fail-before: disabling the hook header gate fails the "body not read" test. Supabase
+    429 handling is covered by fake errors only; no real Auth call was made.
+  - T-047: unit 274, `tests/db` 231/233 (allowlist), invoice-export DB 15/15, e2e 6 on 1280, 5 on 390, 5 on 768.
+    Fail-before: removing the idempotent-return line fails the idempotency and concurrency tests.
+  - T-051: unit 251, `tests/db` 226/226, e2e 85 passed, 1 skipped on 1280 and 390. Fail-before: removing the contact
+    trigger fails the contact-cap test, removing the `start_demo` lock line fails the race test, disabling the click
+    guard shows two POSTs.
+- **Wave D: T-043, T-039.**
+  - T-043: unit 342, pickup DB 20/20, e2e `shipping.spec.ts` 38/38 on 1280 and 390; the fixtures are derived from the
+    provider documentation. Fail-before: disabling the new guard in the pay-unpaid read-back fails its unit test.
+  - T-039: unit 335, `tests/db` 243 passed + 2 expected allowlist failures, rotation DB 13/13, e2e credentials 16/16
+    on 1280 and 390 with no provider call. Fail-before: removing the Worker BYOK check fails 4 unit tests, removing
+    the fence's BYOK check fails the DB BYOK test.
+- **Fix passes.** FixA (privileges, slug, payment locks): signature-based catalog, relkind and
+  `serialization_failure` sweeps, non-demo-only slug lock, unique safe prefixes with an in-migration backfill,
+  membership-before-tenant claim lock, two-minute busy window for `sent`/`unknown`, audited count mismatch;
+  `tests/db` 253/253, unit 307. Fail-before: the old claim fails the deterministic deadlock test, the old
+  `payment_busy` fails the busy-window test; the 25-round stress test did not reproduce the deadlock with the old
+  claim (stress coverage only). FixB (discount, label, hosts): per-courier ceiling with a batch maximum, version in
+  force at `quoted_at`, equality for `provider_observed`, missing Bahasa copy, barcode never clipped, unsaved preview
+  hidden in print, shared host mode gated by `HOST_SHARED_MODE`, Bahasa 404, production build requires origins;
+  `tests/db` 241/241, unit 315, e2e hosts and marketing all pass, discount and label 11 of 12 on both projects (the
+  twelfth needed the lead's wording line, applied). Fail-before: the worst-case barcode e2e fails with the old layout.
+- **Lead integration.** The lead owned `tests/db/privileges.test.ts`, the lead wired the contact-picker notice and
+  `?kontak=` search in `pengiriman/[id]/page.tsx`, applied the label wording, made the isolation e2e compare tenant
+  identity instead of reference text, and recorded DEC-019. Verified on the merged tree: `pnpm typecheck` clean,
+  `pnpm test:unit` 411 tests in 22 files, `pnpm test:db` 318 tests in 23 files. Not re-run on the merged tree:
+  build, cf:build, check:bundle, `smoke:worker`, any Worker e2e, the full Playwright suite.
+
+**Process incidents**
+
+- Relative-path edits that landed in the main tree and were restored: wave A T-036 (`src/middleware.ts`, reversed
+  at once), wave B T-033 (`src/lib/mengantar/public-api.ts`, restored to its HEAD blob), wave D T-043
+  (`public-api.ts`, restored from the worktree copy, byte-identical) and FixB (`tests/db/gerai-discount.test.ts`,
+  restored byte-for-byte). All later edits used absolute worktree paths.
+- `next dev` and `next build` rewrote the `AGENTS.md` heading in several worktrees; each worker reverted it.
+- Early real sandbox calls: the first T-039 unit run did not stub `fetch` and made 3 to 5 real HTTPS calls to
+  `sandbox.mengantar.com` with a FAKE Partner secret from its fixtures (answered UNAUTHORIZED; nothing was stored,
+  no real secret involved); a global fetch stub was added and later runs could not reach the network.
+- The T-044 worker stopped its own dev server with `pkill -f "next-server"`, a pattern broad enough to kill the
+  shared app server on port 3110; it reported this to the lead and ran no further `pkill`.
+- Parallel workers reset the shared database mid-run, which produced transient failures (PostgREST `PGRST002`,
+  wrong credentials, missing grants); affected specs were re-run under a shared lock, and a readiness poll was added
+  to the privileges test.
+- The privileges catalog test is lead-owned, so every wave's DB run showed the same expected allowlist failures
+  until the lead added each task's functions.
+
+**Open after this entry**
+
+- Superseded by the waves E/F entry below: T-050 and T-053 are now merged, including environment scope,
+  key ring, discount recording, masking control and shipment pending/confirmation states.
+- Owner-gated: supervised sandbox payment, key regeneration and pickup with response capture (T-048), Mengantar
+  written answers, the courier test of the masked label, the pilot log, counsel review, the Terms and Privacy
+  document URLs and versions, a real staging Supabase project, the wilayah decision.
+- Code work remains in T-054 (Partner retry-after, owner TOTP recency, unpaid-batch lock order),
+  T-055 (enforced script CSP/final runtime gate), T-056 (unknown-payment and ambiguous-reservation closes),
+  T-057 (rewrap trigger/SQL consent/environment), T-058 (OTP verification state/CAPTCHA) and T-059
+  (DB-suite flake/Worker expect-timeout policy). T-041/T-051 integration gaps are closed; the final-build
+  full Worker e2e covered tablet-768 as well (STATUS.md). T-043 stays open for T-048 item (6)'s supervised capture.
+
+## 2026-10-28 — Waves E and F merged; independent reviews and Worker-runtime findings
+
+Observed on disk: migrations `20261028230000_environment_scope_key_ring.sql`,
+`20261028240000_discount_recording_and_ui.sql`,
+`20261028250000_reconcile_across_key_regeneration.sql` and
+`20261028260000_pickup_known_time_ids.sql`, with their Worker/UI callers and tests. No deployment,
+provider write, build or test was run by this documentation pass. Counts are recorded by the lead
+in STATUS.md after the final run; the figures below are **worker-reported**, not final merged counts.
+
+### Wave E — environment/key ring and shipment UI
+
+- **T-050:** key-ring bindings `CREDENTIAL_KEYS` and `CREDENTIAL_KEY_CURRENT`; opening by stored
+  encryption version; single-key v1 path; rewrap library and machine-only fenced/audited RPC;
+  `provider_env` on credentials/onboarding; environment guard and build-only staging deploy script.
+  Worker-reported checks: typecheck, build, cf:build and check:bundle passed; unit **429**;
+  full DB **330 of 332 before the allowlist update**; removing the machine-key environment predicate
+  failed two environment-scope tests. No e2e was run. The real `wrangler.jsonc` check failed as expected:
+  preview and staging share a Supabase project. Owner must create separate staging; no rewrap trigger
+  exists yet, and production must switch to ring bindings at first rotation.
+- **T-053:** nullable provider-discount basis points recorded without changing `record_live_quotes`'s
+  six-argument signature; tenant-admin-only cost/detail/settings views; reconcile-only payment panel;
+  pending/duplicate-click states and confirmations; capability/aal2-guarded masking admin page.
+  Worker-reported checks: typecheck, build, cf:build and check:bundle passed; unit **416**;
+  discount DB **7/7**; full DB **323 of 325 before the allowlist update**; shipping, credentials,
+  masking-admin and gerai-discount e2e **76/76** on desktop-1280 and mobile-390.
+  Removing provider-first observation coalesce failed four of seven targeted DB tests.
+  The worker reported the zero-count dispatcher change for the lead; the lead implemented it:
+  complete per-order reads decide paid/rejected/unknown, with `payment_not_applied` when none paid.
+
+### Independent waves C/D/E reviews — static, no Critical or High
+
+Security verdicts: T-034, T-038, T-039 and T-050 approved with fixes; T-053, FixA, FixB and
+the lead's zero-count branch approved. Mediums were pre-CAPTCHA account lockout, regeneration
+stranding earlier operations, and a local refresh 429 deleting sessions. Lows covered onboarding
+during unknown rotation, SQL consent/version and caller-environment gaps, rewrap downgrade,
+the missing rewrap trigger and stale-check ordering.
+
+General verdicts: T-043, T-047, T-051, shipment UI and lead edits approved with fixes; FixB
+approved with a Low fix; local scripts approved. Mediums were contradictory pickup refusal copy,
+read-back adopting a sibling/day's slot, missing pickup-intake coverage, stale documentation and
+T-043 marked complete without supervised capture. Lows covered distinct release reasons, oversized
+time-list pre-checks, audit labels, export language/paging, invoice COD wording, invalid-form
+button locks, stale change-email errors, duplicate membership reads, operator payment guidance,
+contact-search behavior and origin/build documentation.
+
+### Wave F — applied fixes and worker checks
+
+- **F1 security:** account-plus-visitor checks precede Auth; password account-wide budget follows
+  Auth's CAPTCHA step, with a successful over-budget result signed out; code requests no longer
+  spend an address-wide pre-CAPTCHA budget. Local refresh refusal is **503 + Retry-After 60**,
+  retains the session and uses shared forwarding configuration; demo entry refuses retryable
+  identity failure. Reconciliation uses an active same-environment Partner key after regeneration
+  but never crosses BYOK/mode/environment; begin/complete block `rotation_unknown`; rewrap cannot
+  downgrade; stale operations expire before key lookup; code errors follow their original email.
+  Worker-reported: typecheck, build, cf:build and bundle passed; unit **458**; regeneration DB
+  **10/10**; full DB **349/349 once**, after two other full runs flaked in cod-and-payment/issuance.
+  The first attempt also found and fixed the worker's own stale-fence/rewrap ordering error.
+  Auth-demo e2e: desktop **20 passed, 1 skipped**, mobile **21 passed**. Registration/members and
+  the new change-email assertion were not run by F1 because the shared relay targeted the main Worker.
+  Fail-before proofs reported: restoring 429 lost the auth-js session; removing the migration
+  failed eight of ten regeneration tests.
+- **F2 pickup/UI:** final shipment state wins over phase copy; read-back excludes sibling time ids
+  and uses one date per row (UTC clock match, otherwise WIB); oversized lists count as reachable
+  only for the pre-check, not reconciliation. Added distinct write-ahead messages, pickup-intake
+  e2e and courier-filter unit coverage; invoice/export audit labels/filters and default snapshot
+  suppression; `(created_at,id)` export keyset paging; Bahasa not-found; corrected invoice COD
+  sentence; validation-aware submit locking; one membership query; operator escalation text;
+  contact punctuation/phone normalization and selected-contact retention; production `appHref`
+  fails without exported `APP_ORIGIN`. Both deploy scripts require that build variable.
+  Worker-reported: unit **456**; full DB **340 of 341 before the allowlist update**; typecheck,
+  build, cf:build and bundle passed, but unit/build checks preceded final small edits and were
+  not repeated; typecheck passed again afterwards. The locked 390/1280 e2e run had **77 passed,
+  1 skipped, 2 failed** (the new pickup test raced its own save); after polling was corrected,
+  pickup intake and existing detail tests passed on both projects. Removing date/id-exclusion
+  fixes failed the new unit cases; invalid-reason masking e2e failed without the button fix.
+
+Lead-reported integration: the privilege allowlists were regenerated from the real database
+catalog, not guessed from migration text; the differences matched workers' reported signature
+changes. Disk now includes the environment-qualified credential writers/read,
+`rewrap_seller_credential`, `platform_tenant_masking` and `dispatch_pickup_known_time_ids`.
+F1's private `operation_credential` remains revoked from every API role. This records the
+catalog update, not a passing final suite; final results belong to STATUS.md.
+
+### Worker runtime — observed on the pre-wave-F production build only
+
+Smoke first returned 404: production-build loopback access requires `HOST_SHARED_MODE=1`.
+`scripts/dev-env.sh` now writes it and four local origins to `.dev.vars` (default Worker `:8787`,
+`LOCAL_WORKER_ORIGIN` override); `scripts/worker-smoke.sh` passes `--var HOST_SHARED_MODE:1`.
+Smoke then passed `/healthz` and `/masuk` with 200. `/anggota` also threw when its `APP_ORIGIN`
+link was built without configuration: the production guard worked, and local origins were added.
+Only `APP_ORIGIN` has current application link callers; the other three origin names are mapped
+by the generic helper but do not have current callers, and marketing uses a fixed apex constant.
+
+Lead-reported full desktop-1280 Playwright against `wrangler dev`, `E2E_PRODUCTION_BUILD=1`:
+**137 passed, 2 skipped, 3 failed** (members). Server Actions took **2.6–6.4 seconds** in local
+workerd, beyond the default five-second expect timeout; the revoke case passed with 20 seconds.
+Separately, the Auth Send Email Hook relay targeted stale Node `:3110`, so the Worker received no
+code mail. Retargeting `AUTH_HOOK_TARGET=http://127.0.0.1:8787` and using the 20-second expect
+timeout produced **29 passed, 1 skipped** for members/registration/auth-demo on desktop.
+Final-build Worker e2e is **recorded by the lead in STATUS.md**; this pre-F run is not final-build
+or all-viewport proof. T-059 owns a config-only local-workerd expect-timeout policy.
+
+### Process incidents and open unknowns
+
+- Four earlier relative-path edits hit the main tree and were restored (details in the preceding
+  entry). T-039's early unstubbed unit run made 3–5 real sandbox HTTPS calls with a fake secret
+  (UNAUTHORIZED, no stored result/real secret); a global fetch stub fixed that test isolation.
+- A worker's broad `pkill` stopped the shared app server once; the lead restarted it.
+  Shared-database resets also disrupted unlocked runs; affected checks used a lock afterwards.
+- T-050 and T-053 needed lead-approved edits outside their original paths; the lead integrated
+  the shared shipment/settings changes. `next dev`/build rewrote `AGENTS.md` in worktrees and
+  workers restored it. No such source/config changes were made by this documentation pass.
+- **Unknown:** the two F1 full-suite cod-and-payment/issuance `account_busy` failures are unexplained.
+  Isolated files and one full run passed; shared-state/order/timing is only a suspicion, not
+  an established cause or proof of harmlessness. Repeat the whole serialized suite in CI (T-059).
+- Still open: `reservation_ambiguous`/unknown-payment closes (T-056), SQL consent versions and
+  reconcile `p_env` plus scheduled rewrap (T-057), unbound verify-email state and CAPTCHA-less
+  OTP budget exhaustion (T-058), T-054/T-055, owner staging/provider/counsel gates.
+
+### Final independent reviews of fix wave F (read-only; no Critical/High)
+
+- **Fixed by the lead after review:** (1) `src/middleware.ts` now answers **503 + Retry-After 60** itself when
+  the refresh was refused locally, instead of letting the request continue with expired cookies (downstream
+  clients would have refreshed unthrottled); (2) the public copy "Label resi dicetak dari GeraiExpress" was
+  reverted to the neutral "Versi ini melayani drop-off: paket diserahkan oleh gerai ke kurir. Resi tercatat di
+  halaman kiriman." in `src/app/page.tsx` and `src/app/fitur/page.tsx` (courier acceptance unproven, DEC-017), and
+  the marketing test asserts no "label resi dicetak" claim.
+- **Open, queued in TASKS.md:** T-060 (a correct password beyond the account budget is still detectable through
+  sign-out cookie headers; one visitor can spend the account-wide sign-in budget with ten CAPTCHA-solved
+  misses per minute; a throwing limiter becomes a retryable fetch error and waits about 25 s; `authClient()`
+  lacks `onRefusal`; whether Auth skips CAPTCHA for `sb_secret_` requests belongs to the forwarding proof);
+  T-057 (`record_partner_seller_onboarding_outcome` can overwrite `rotation_unknown`); T-061 (the environment
+  guard does not validate `APP_ORIGIN` of deployable environments; the top level is `""`); T-056 (pickup copy
+  contradictions for a reserved phase with `PICKUP_TIME_INVALID`, `PICKUP_NOT_FOUND`, `QUOTE_STALE`,
+  `CLOSED_NOT_CREATED`; a fresh reservation can adopt another shipment's slot before its owner stores the id).
+- **Doc corrections:** read-back with no match records `not_created` (not `reservation_ambiguous`); the stale
+  `marketing-data.ts` comment was fixed in source; tablet-768 is covered by the final-build full Worker e2e
+  (STATUS.md: 142 passed / 2 skipped on each of desktop-1280, mobile-390 and tablet-768).
+
+## 2026-10-29 — Hosting change (DEC-020) and Supabase versus plain PostgreSQL recommendation
+
+- **Owner decision:** "gak jadi pakai vultr + coolify + cloudflare". Answers: runtime = self-hosted
+  Docker + Node (`next start`) on a server the owner controls; scope = only the Worker hosting is dropped
+  (Cloudflare Turnstile stays); Supabase question = asked for the assistant's recommendation (below).
+  Recorded as DEC-020; DEC-011 and ADR-0001 are superseded (never built); DEC-005's adapter part is
+  superseded; the former T-052 egress gateway is cancelled (a fixed server address makes it unnecessary);
+  T-062 (runtime) and T-063 (production mail transport; Cloudflare Email Sending needs a Worker binding)
+  are the new tasks. Nothing is provisioned.
+- **Recommendation (Proposal, not a decision): keep Supabase now; do not move to plain PostgreSQL.**
+  - Observed coupling (counted on disk 2026-10-29): 33 migrations; RLS policies and 57 `auth.uid()` uses
+    in the migrations; 99 `.rpc(` calls in `src`; the database suite (351 tests) proves tenant isolation
+    through real Supabase user sessions and PostgREST; Auth owns sessions, OTP, the Send Email Hook,
+    TOTP/aal2 for the Super Admin, and the `pg_cron` demo cleanup runs inside the database.
+    Plain PostgreSQL would mean building an auth service, an API layer in place of PostgREST/RPC,
+    session and MFA handling, and re-proving isolation: a rewrite of the security core for no product gain.
+  - What "big client because of Mengantar data" changes is operations, not the engine: backups with
+    point-in-time recovery, restore drills, region and data-residency review (counsel; Unknown), access
+    logging, and a separate project per environment (T-050). Those are needed under either choice.
+  - Options: (A) Supabase Cloud, a paid plan with PITR, region near Indonesia: least work, fastest to
+    production, but data sits with a foreign processor (counsel to confirm under the Indonesian
+    personal-data law; Unknown); (B) self-hosted Supabase (Docker) on an owner-controlled server: same code
+    and tests, data on the owner's infrastructure, but the owner runs about ten containers, backups,
+    upgrades and Auth key rotation (a real operations load for a small team); (C) plain PostgreSQL with an
+    own auth stack: rejected for now. Chosen path if the owner agrees: start on (A) for the pilot, keep
+    every migration plain SQL (already true) so (B) stays a deployment change, and revisit when volume,
+    residency advice or cost says so. Pricing, plan limits and current self-hosting guidance were NOT
+    re-verified in this entry (Unknown: check the provider's current pages before choosing).
+
+## 2026-10-29 — T-062 self-hosted Node runtime replaces Cloudflare Workers (DEC-020)
+
+Built in a throwaway worktree, uncommitted. What changed: `output: "standalone"`, a multi-stage non-root
+`Dockerfile` (Node 24.21 slim pinned by digest, corepack pnpm, bundle scan inside the build, `/healthz`
+HEALTHCHECK), `.dockerignore` allow-list, `compose.yaml` (app, scheduler, Caddy proxy; only the proxy
+publishes ports) with `compose.local.yaml` (plain-HTTP `proxy-local` on 127.0.0.1:8080, scheduler opt-in
+through `GX_SCHEDULER=1`), `infra/proxy/Caddyfile` and `Caddyfile.local`, `infra/scheduler/scheduler.mjs`,
+`infra/env/*.env.example`. Code: `src/lib/config.ts` (one reader, replaces `worker-secret.ts`),
+`src/lib/client-address.ts` (X-Real-IP only, `TRUSTED_PROXY=1`, last value), `src/lib/limiter.ts`
+(in-process fixed window, 10 000-key cap per limiter, fail closed when full), `src/lib/cron.ts` +
+`src/lib/mengantar/scheduled.ts` + `src/app/api/internal/cron/[task]/route.ts` (ported `scheduled`
+logic and log events), internal host scope in `src/lib/hosts.ts` (`*.workers.dev` no longer served).
+Removed: `@opennextjs/cloudflare`, `wrangler` (lockfile -2066 lines), `open-next.config.ts`,
+`custom-worker.ts`, `wrangler.jsonc`, `worker-smoke.sh`, `deploy-*.sh`, `tests/unit/custom-worker.test.ts`
+(ported to `tests/unit/cron.test.ts`), the `deploy-staging.sh` test in `hosts.test.ts`.
+
+Decisions: missing proxy address stays fail closed (no shared sentinel bucket); the middleware stays an
+Edge-runtime `middleware.ts` (the build lists it as edge chunks), so only `REFRESH_LIMITER` is spent
+there and a second table exists for it when Auth IP forwarding is on; `middleware` to `proxy` migration is
+now possible and not done. Mailpit transport also accepts `host.docker.internal` (container to local stack).
+
+Evidence (commands run from the worktree root): `pnpm install --frozen-lockfile` OK; `pnpm typecheck`
+clean; `pnpm test:unit` 34 files at the time of the run, all tests passing (final count in the lead's
+report); `pnpm build` produces `.next/standalone/server.js`; `pnpm check:bundle` PASS with 4 env secret
+values checked against the build; `pnpm check:environments` PASS on the committed templates (with
+`docker compose config`); `docker build` OK (first build 10 min, install layer cached afterwards); the
+container ran healthy behind `proxy-local`: `/healthz` 200, `/masuk` 200, wrong host 404, `/api/internal`
+404 through the proxy, and the scheduler container's first tick called dispatch with status 200 and the
+app logged the same `dispatch_sweep` event as before. Real Caddy 2.11.2 harness against an echo backend:
+a forged `X-Real-IP`, `X-Forwarded-For`, `Forwarded`, `CF-Connecting-IP`, `True-Client-IP` never reached
+the upstream (it saw the TCP peer), `/api/internal` answered 404 in five spellings including encoded
+and mixed case, the local profile turned a private peer's `X-Forwarded-For` into `X-Real-IP`.
+Full `tests/db` through `/tmp/gx-db-verify.sh`: 347 of 351 passed with the scheduler container ticking
+against the shared database; the 4 failures (3 in cod-and-payment: the known `account_busy`/timing
+family, 1 in isolation: extra tenants visible) passed on an immediate rerun of both files (43/43) with
+the scheduler stopped. Lesson: do not run the scheduler container while DB suites or e2e run.
+
+## 2026-10-29 — T-062 runtime security review corrections
+
+The second pass was built in `/home/ongki/Projects/.gx-wt/RuntimeFix`, uncommitted. Production proxy
+ports now bind IPv4 explicitly; release requires A records only, no AAAA, until native IPv6 is proved
+end to end. Private client addresses remain valid: rejecting them cannot recover an address lost by
+Docker NAT and would deny legitimate LAN clients. The local proxy trusts only its pinned
+`172.30.62.1/32` gateway, not sibling containers; e2e visitor addresses use TEST-NET ranges.
+
+Limiter saturation evicts expired windows first, then the oldest non-exhausted live window; exhausted
+windows are never evicted. All-exhausted tables fail closed. Account tables allow 100 000 keys, visitor
+tables 10 000. `rate_limiter_saturated` is emitted at most once per minute per table, without keys.
+Production Compose requires `GX_ENV_FILE`; local wrappers set their own local file. Config treats
+whitespace-only values as unset, configured secrets must be at least 32 characters, and CRON_SECRET
+is required in real environment files. Templates may contain only blank or placeholder secrets.
+
+Every service has bounded Docker `local` logging (10 MB × 3) and a read-only root. Executable app code
+is root-owned; only its cache is app-owned. Caddy uses tmpfs and persistent data/config volumes, dropping
+all capabilities except NET_BIND_SERVICE. Cron deadlines abort both Supabase and provider fetches and
+expire the in-process lock; an old completion cannot release a newer run's lock. The obsolete
+`public/_headers` was removed and image builds support an empty public directory. Historical release
+records remain, but Worker rollback/deploy recipes are no longer active instructions. The old hosted
+preview still exists remotely: an owner must disable/delete it and rotate its secrets before cutover.
+Accepted gaps are explicit: no inherited Cloudflare DDoS/WAF/bot protection, no rate-limit module in the
+official Caddy image, a 1 MB request-body ceiling, one egress address seen by Supabase Auth while client
+IP forwarding is off, and one-app-instance limiter correctness only.
+
+Verification from that worktree:
+- `pnpm install --frozen-lockfile`, `pnpm typecheck`: PASS.
+- `pnpm test:unit`: 35 files, 575 passed, 0 failed; final runtime-file assertion rerun: 13 passed.
+- `APP_ORIGIN=http://127.0.0.1:8080 pnpm build`, `pnpm check:bundle`: PASS; standalone output exists,
+  38 client files and 4 local secret values scanned. `pnpm check:environments`: PASS.
+- `docker build --build-arg APP_ORIGIN=http://127.0.0.1:8080 -t gx-runtime-fix:local .`: PASS.
+  `GX_IMAGE=gx-runtime-fix:local COMPOSE_PROJECT_NAME=gxruntime KEEP=1 pnpm smoke:container`: 9/9 probes.
+  `GX_ENV_FILE=.env.container docker compose --env-file .env.container config --no-env-resolution -q`:
+  PASS; missing GX_ENV_FILE was separately refused. Offline production Caddy validation: PASS.
+- Real Caddy echo harness: gateway-only TEST-NET override accepted, sibling IP spoof rejected,
+  three internal-path spellings return 404, oversized body returns 413. Non-root image probe proves
+  executable code is root-owned and unwritable while the cache is writable.
+- `/tmp/gx-db-verify.sh`: 26 files, 351 passed, 0 failed, with the scheduler OFF and an owned email relay.
+- Before each browser command, `/tmp/gx-db-verify.sh tests/db/isolation.test.ts`: 24 passed. Full suites
+  used `flock /tmp/gx-db.lock env E2E_BASE_URL=http://127.0.0.1:8080 E2E_PRODUCTION_BUILD=1 pnpm exec
+  playwright test --config=playwright.runtime-check.config.ts --project=<project>` and a temporary copy
+  of the normal config with a 20-second expect timeout: desktop-1280 142 passed / 2 skipped / 0 failed;
+  mobile-390 final run 142 passed / 2 skipped / 0 failed. Existing viewport/live-provider skips remain.
+  The first mobile run was 141 passed / 2 skipped / 1 failed: invoice-export read the print-event count
+  synchronously after observing a snapshot, although the action uses two consecutive RPCs. The test
+  now polls the same exact event-count assertion; no assertion, privilege, or product behavior was removed.
+
+No migrations, privileges-test changes, new dependencies, provider calls or deployment. Temporary
+proxy harnesses and Playwright config were removed; the owned relay and Compose stack were stopped.
+
+## 2026-10-28 — T-064 merged and T-065 owned auth core (DEC-021, uncommitted)
+
+T-064 was developed in the worktree `/home/ongki/Projects/.gx-wt/PgFoundation` from a snapshot of this tree; the
+main tree had not changed the files it touched, so its patch and new files were applied here as is. T-065 was
+built directly in this tree: migration `20261029100000_auth_core.sql`, `src/lib/auth/**`, `tests/db/auth-core.test.ts`
+and the port of the nine GoTrue-era DB tests onto `createAuth` (the `pending-auth` folder is gone). Three separate
+workers wrote the primitives, the SQL-level tests and the service; the lead wrote the migration and verified.
+
+Design points worth keeping: the signup gate runs inside `auth_issue_otp` (no user row or code before it passes);
+codes carry a cumulative 20-guess hourly budget so asking for a new code never resets attempts; refresh tokens are
+stored only as SHA-256 hashes, so a replay inside the 10-second window answers `recent_reuse` without a new token,
+older reuse revokes the session; session lifetime is clamped in SQL (7 days, 12 hours for platform-grant holders);
+`auth_mfa_verify` moves a session to `aal2` and replaces its refresh hash in one statement; banning or soft-deleting
+a user revokes every session by trigger. A corrected defect: the first seed used standard base64 in its scrypt
+fixtures, which the owned password verifier (base64url, matching the SQL regex) rejected; the seed now uses base64url.
+
+Verification (lead, uncommitted tree): `pnpm typecheck` clean; `pnpm test:unit` 41 files / 746 tests;
+`scripts/db-verify.sh` from a dropped database applies 35 migrations and passes `tests/db` 27 files / 410 tests.
+Not run: browser e2e (the application does not use the auth module until T-066), the container image, any review.
+
+## 2026-10-28 — T-066 application cutover to PostgREST and the owned auth (uncommitted)
+
+The lead wrote the contract layer (`src/lib/db/**`, `src/lib/auth/instance.ts`, `src/proxy.ts`, `src/lib/db/refresh.ts`)
+and four workers migrated the call sites, rewrote the auth actions, wrote the proxy/session tests and moved the
+infrastructure; a fifth updated README, ARCHITECTURE, OBSERVABILITY and RELEASE.
+
+Decisions: the middleware became `src/proxy.ts` (Next 16 runs it on Node, so it shares the auth module with the
+Server Actions; Edge would have forbidden `node:crypto`); only the proxy rotates tokens, so a server component never
+sets a cookie; a refused or inconclusive refresh answers 503 + Retry-After and keeps the cookies; the 10-second
+`recent_reuse` answer carries no new refresh token, so the proxy sets only the access cookie; session audience for a
+new session follows the host/route family, and SQL still caps platform-grant sessions at 12 hours. TOTP QR codes use the
+MIT, dependency-free `qrcode-generator` (added deliberately: a QR encoder is not a few lines). `@supabase/postgrest-js`
+moved to `dependencies`. CAPTCHA is enforced whenever `TURNSTILE_SECRET_KEY` is set; without it the stack must set
+`AUTH_CAPTCHA_DISABLED=true`, which `check:environments` refuses outside the local environment.
+
+Defects found by running the container e2e and fixed: the seeded Super Admin TOTP factors held placeholder text the
+application could not open (every admin sign-in failed; `scripts/db-seed-totp.mjs` now seals the fixture secrets under the
+stack's AUTH_SECRET, with a unit test that the application opens them); the e2e admin helper reused a TOTP time step the
+replay guard had already accepted (it now picks a newer step); a discount spec measured touch targets while a dialog was
+still fading (it waits for the dialog to close). `db/review-fixture.sql` was recreated by the Infra worker after the
+untracked original was deleted; it matches the worktree copy apart from the local-database guard and the apply command.
+
+Verification (lead, uncommitted tree): `pnpm typecheck` clean; `pnpm test:unit` 47 files / 817 tests;
+`APP_ORIGIN=http://127.0.0.1:8080 pnpm build`, `pnpm check:bundle`, `pnpm check:environments`; `scripts/db-verify.sh` from a
+dropped database twice (before and after the seed change): 35 migrations, `tests/db` 27 files / 410 tests; Docker build and
+`pnpm smoke:container` 9/9; Playwright against the container, full suite: desktop-1280 142 passed / 1 failed / 2 skipped,
+mobile-390 143 / 0 / 2, tablet-768 141 / 2 / 2. The three failures passed when rerun alone; cause unconfirmed (shared
+in-process sign-in budgets on one fixture account are the suspect, T-059). Not run: a second app instance, a real
+Turnstile widget, production Compose with a database host, any live Mengantar call, any independent review of the owned auth.
+
+## 2026-10-28 — T-067 first review wave and fixes (uncommitted)
+
+Two separate read-only agents reviewed the owned auth and the cutover (`security-reviewer` and `reviewer`); a third
+worker rewrote docs/spec, DECISIONS.md and ADR-0002 to the current stack (spec traceability PASS, 16 files, 212
+declarations, 41 tasks, 0 findings before and after); a fourth wired `auth_purge_expired` into the hourly cleanup and
+found the e2e flake root cause.
+
+Security review: 0 Critical, 0 High, 3 Medium, 4 Low (see TASKS.md T-067 for the list and what was accepted). The one
+finding worth remembering: the database trusts JWT claims only, so a revoked session stayed usable for the token's
+remaining life wherever the app skipped `currentUser()`; `dbServer()` now requires a live session and the cookie-less
+scopes no longer forward `gx_at`. Second finding: the refresh table kept one previous hash, so two quick rotations
+erased a stolen token's trace; migration `20261029110000_auth_hardening.sql` keeps every retired hash (cap 50), also
+requires a live keep-session in `auth_set_password`, clamps an aal2 upgrade to 12 hours and allows one TOTP factor per
+user. Timing: a >256-character password used to skip scrypt for known accounts; it now runs the dummy scrypt first.
+
+E2E flake root cause (evidence in the worker report): `SIGN_IN_ACCOUNT_LIMITER` is account-wide (10 per 60 s, spent on
+every sign-in including successful ones), and the specs signed `owner-a@` in 43 times and `admin@` in 12 times, with
+clusters above 10 within a minute; two specs also lacked the per-test visitor address fixture. Fixed on the test side only
+(distinct fixture accounts, the fixture import, a per-account window guard in `signIn`); production limits unchanged.
+
+Verification (lead, uncommitted tree, after all fixes): `pnpm typecheck` clean; `pnpm test:unit` 49 files / 831 tests;
+build, `check:bundle`, `check:environments`; `scripts/db-verify.sh` from a dropped database, 36 migrations, `tests/db`
+27 files / 412 tests; image rebuilt, `smoke:container` 9/9; full Playwright against the container: desktop-1280,
+mobile-390 and tablet-768 each 144 passed / 2 skipped / 0 failed. Not done: second review of the fixes, RELEASE.md backup
+and restore drill and rotation gates, `scripts/db-backup.sh`.
+
+## 2026-10-28 — T-067 second and third review wave, completion work (uncommitted, session paused)
+
+Second review (`security-reviewer`) of the first fixes: 0 Critical/High, 1 Medium, 2 Low. The Medium was real: the 50-entry
+cap on retired refresh hashes let a long-stolen token leave the history, after which its reuse answered `invalid` instead of
+revoking the session. A count cap cannot work (a legitimate session rotates roughly a thousand times in seven days), so retired
+hashes moved to `auth.retired_refresh_tokens` (migration `20261029120000`, primary-key lookup, cascade with the session).
+The Low items: the GIN index did not serve `= any(array)` (gone with the array) and libpq query parameters could override the
+`authenticator` identity in `PGRST_DB_URI` (`check-environments` now allows only `sslmode`, `sslrootcert`, `connect_timeout`,
+`application_name`). A third review of the delta found one Medium (a concurrent refresh could append to the old column
+between backfill and drop; the migration now locks `auth.sessions`; because that file was edited after its local apply, a
+dropped database is needed once and `db-verify` does it) and one Low (a malformed `DATABASE_URL` could print the password
+through the Node parser error; parser stderr is now discarded). The platform Server Action inventory found no unguarded action.
+
+Completion work done in parallel: `scripts/db-backup.sh`, `scripts/db-restore-check.sh`, `scripts/reseal-totp.mjs`, RELEASE.md
+gates 11 to 17 (drill executed locally: 560835-byte archive in 1 s, restore plus check 3 s, 31 table counts and 36 migration
+checksums matched, scratch database dropped); T-061 origin validation; signed verify-state cookie (T-058); visitor-plus-account
+limiter ceilings of 5 per 60 s, fire-and-forget mail with a transport readiness check, platform host guards (T-060, F-04 part 2,
+F-05, TEN-6). A design note: rotating AUTH_SECRET makes every sealed TOTP secret unreadable unless re-sealed, which is why
+`reseal-totp.mjs` exists and why RELEASE.md describes rotation as a stop-the-writers procedure.
+
+Verification of the final tree (lead, uncommitted): `pnpm typecheck` clean; `pnpm test:unit` 51 files / 884 tests; build,
+`check:bundle`, `check:environments` pass; `scripts/db-verify.sh` from a dropped database: 37 migrations, `tests/db` 27 files /
+412 tests; image rebuilt, `smoke:container` PASS. Playwright against the container (the chain hit its 3600 s limit): desktop-1280
+144 passed / 2 skipped / 0 failed; mobile-390 139 passed / 5 FAILED / 2 skipped (16.2 min, much slower than the 9 minutes of
+earlier runs): `auth-demo.spec.ts` 160 (mobile navigation sheet), 197 (demo reset), 253 (demo entry limited per visitor, one
+minute), `gerai-discount.spec.ts` 77 and `platform.spec.ts` 6 (both an unexpected URL, the Super Admin sign-in/TOTP path);
+tablet-768 was interrupted by the timeout and has NO result; the final backup/restore drill output was never produced. The
+container was stopped by hand afterwards. The failures are NOT investigated. Observations to start from: the earlier full
+runs on this same code path were green on all three viewports before the verify-state cookie, the lower visitor-plus-account
+ceilings (5 per 60 s) and the platform host guards landed, so those three changes are the first suspects (a 5-per-minute
+visitor+account budget can trip specs that sign the same account in repeatedly from one visitor, and the Super Admin failures
+look like sign-in being refused); the demo limiter spec taking a full minute points at a limiter, not at the UI. NEXT SESSION:
+reseed, rerun the five failing specs alone on mobile-390, read the container log for `auth_rate_limited` and
+`auth_unavailable` events, then rerun the three full viewports; T-058 and T-060 stay open until all three are green.
+
+
+## 2026-10-29 — T-068 backend/database hardening and Vultr + Coolify
+
+The owner authorized continuing repairs over the existing uncommitted implementation.
+Retained PostgreSQL 17, PostgREST, RLS/RPCs and application auth; DEC-022 selects Vultr +
+Coolify with an initial single app instance and persistent same-host PostgreSQL. The
+standalone PostgREST query builder and immutable historical SQL remain; runtime Supabase
+services/hooks/SDK are absent. Retired grants are revoked by a forward migration.
+
+Implemented atomic first-password initialization and kept-session locking, migration
+manifest integrity and session-level serialization, serialized local role provisioning,
+SQL-backed readiness, explicit app environment variables, inert dotenv parsing and an
+internal Coolify gateway with exact edge trust. Added regression tests and disposable
+local DB/browser/proxy harnesses. Corrected four concurrency-test database targets.
+Current source/release/security documents agree; historical claim metadata was normalized
+without changing its decision/unknown qualifiers. Details and residual limits:
+[backend audit](docs/review/2026-10-29-backend-audit.md).
+
+Executed verification:
+
+- Unit: 53 files / 898 tests PASS with env-file loading disabled; typecheck PASS.
+- Full isolated DB suite (29 files, 416 cases): PASS via executed delivery-ledger command
+  `node scripts/test-backend-isolated.mjs`, after the final role-provisioning lock fix.
+- Upgrade from the preceding seeded schema: 5 files / 110 tests PASS, including auth,
+  privileges, isolation, first-password concurrency and migration-runner integrity.
+- Production image built: `sha256:5214ee12f37d0e4e2e0ca6721b658cdf2ef5ccd8d03803fa9e5c6aa6ec36bd9a`.
+  Container readiness: 200 → stopped data API 503 → recovered 200.
+- Targeted auth-demo, auth-mail, registration, platform and gerai-discount browser suites:
+  mobile-390 41 PASS; desktop-1280 40 PASS / 1 intentional mobile-navigation skip. The
+  previously failing five mobile flows passed. Full browser matrix/tablet not rerun here.
+- Real Caddy Coolify probes PASS (trusted peer, spoofed headers, HTTPS scheme, forbidden
+  internal/unknown hosts, body ceiling). Base/Coolify environment guards PASS.
+- Production dependency audit: 0 advisories. Spec validator: 16 files / 213 declarations /
+  42 tasks, 0 findings. Changed-file whitespace/shell syntax checks PASS.
+
+Failed intermediate runs are not hidden: initial trust-auth fixture prevented a password
+negative test; fixed with SCRAM credentials. Background DB concurrency tests targeted the
+wrong default database; fixed explicit targets. Full-suite runs then exposed concurrent
+local ALTER ROLE updates; fixed with a maintenance-DB transaction advisory lock. The first
+rerun started before the exact patch landed and retained that failure; the frozen final
+full suite passed. Upgrade110 independently passed the corrected runner. An experimental
+unit CLI alias and missing browser test CAPTCHA site key were test-harness errors, corrected
+before reporting success. Interrupted test-resource cleanup was repaired and only the
+harness-owned leaked resources removed. No shared database or existing secret env was used.
+
+Separate agent `security_review` reviewed the source delta, fix iterations and docs against
+the original snapshot; no unresolved High/Medium remained in the inspected audit changes.
+Final review binds to the ledger boundary digest. General password-change credential-version
+binding remains a prerequisite before exposing recovery/change endpoints. Immutable migration
+artifacts, single-instance rate limits and the named production recovery/mail/provider gates
+remain explicit limits.
+
+Initial run `RUN-20261028T200837Z-d5eb4b27` finished FAIL because concurrent external pickup
+module/detail-page changes occurred outside its boundary (companion handover tests were
+also preserved). They are not attributed to this audit. Verification run
+`RUN-20261028T202348Z-04a72f5c` records fresh checks and final boundary review over the current
+baseline; the independent reviewer also assessed the full original audit delta. The first
+failure remains immutable. Final required checks are refreshed after this evidence update.
+No stage, commit, push, cloud provisioning, remote DB mutation or deployment was performed.
+
+## 2026-10-29 — T-069 dashboard UI v4 (uncommitted)
+
+Owner direction: refine every page as a modern admin dashboard with shadcn/ui and an Apple-latest tone, informed by the earlier geraicuan product. Direction record: `docs/spec/10-DESIGN-SYSTEM-WHITELABEL.md` UI-7. Reference findings: the geraicuan UI (ADR-0001 of that product) rejected glassmorphism, gradients, card-in-card and 10-12px text and kept a single frame level, 40+ operator ergonomics, a stat strip, a five-step create flow with a summary rail, tables that become record cards and a thermal label engine; those were transferred, its cobalt blue and Inter were not (this product keeps its own blue and the system stack).
+
+Method: the lead built the tokens (status tones, red destructive, 14px surface radius), 20 shadcn primitives and the shared `AppShell`, then four parallel slice agents (list/contacts/members, intake/detail, print/settings, Super Admin) and two more (account entry, public site) rebuilt the pages against one written contract, each viewing screenshots at 390/768/1280 and running its own e2e specs; the lead tuned the shared primitives from their reports (switch 48x28, overlays without blur, Alert tones, Select trigger 44px, Bahasa pagination) and the touch-target helper (hidden Radix mirror select, padded switch). A later slice built the T-056 close dialogs against the backend contract written by the backend session. Slices ran their e2e against one shared dev server and one database at the same time, which produced several failures that passed on rerun (shared fixture rows such as the gerai WhatsApp number, `test-results` cleared by a parallel run); the final run was serial.
+
+Verification (lead): `pnpm typecheck` clean; `pnpm test:unit` 53 files / 908 tests. The local gxdb was behind (37 of 43 migrations), which made the registration password step fail ("Kata sandi belum bisa disimpan") in every slice's run until the backend session applied the migrations. Full serial Playwright against `next dev` on 127.0.0.1:3100 after that: 147 passed / 2 skipped / 1 failed on each of desktop-1280, mobile-390 and tablet-768 (12.5 minutes each); the failure was an invitation-card text assertion in `members.spec.ts:5` that the account-entry redesign changed on purpose; the test was updated and `members.spec.ts` then passed 12/12 across the three projects. The five specs that failed on mobile-390 in the earlier container run (menu sheet, demo reset, demo limit, platform sign-in, gerai-discount) all passed in this run; the cause of the earlier failures is still not proven (they ran 16 minutes against a container while other agents were working), so T-058 and T-060 are not closed by this run alone.
+
+Not verified: production build and container image with the new UI, real print hardware, live Mengantar and Turnstile, the Super Admin overview with suspended or provisioning data, approve and reject of an application end to end. The public pages' independent visual review ended REVISE after five rounds on one finding (no owner photo slot; owner decision), so the design gate fails by design until a photo exists. Incident: the lead's edit to `pickup-status.ts` and the detail page during the Codex audit made that audit's first ledger run fail its boundary; the Codex session preserved and excluded those edits.
+
+## 2026-10-29 — T-070 to T-077 follow-up wave (uncommitted)
+
+Breakdown: `docs/review/2026-10-29-next-work-breakdown.md` (non-canonical view), contracts UX-14 and UX-15 in `docs/spec/17`, tasks T-070 to T-077 in TASKS.md. Done: T-070 (post-confirmation handoff: result strip with copyable resi, "Cetak label", "Buat pengiriman lagi", sticky action bar below 640px; nothing printable for unpaid, unknown or failed), T-072 (shared Select through `choice-select.tsx` with an e2e `chooseOption` helper, area picker as a keyboard combobox; handover radio cards and the list status filter stay native with reasons written beside them), T-073 (`tests/e2e/a11y.spec.ts`; six findings fixed: focus return after dialogs opened from plain buttons, sticky bar clipping at 320px, settings button overflow, stat-strip label spill, list reference truncation, unlabeled scroll region), T-074 (`scripts/size-report.mjs`; framework floor 168 KB gzip, detail and intake 249 KB; budgets in ARCHITECTURE.md), T-075 and T-056 (backend migrations `20261029190000` and `200000`, close dialogs hidden until the attempt is 30 minutes old, `/undangan` shows the inviter), T-077 (`platform-decisions.spec.ts`: approve, reject, suspended and provisioning overview, registration switch, audit details; fixtures removed after each run).
+
+Process notes: backend work moved between three sessions (Codex until its usage limit, a short-lived backend task agent that was cancelled to avoid collision, then the Claude session in the sibling tmux pane); UI agents and the backend session ran concurrently against one machine (load average 12 to 21), which produced timing flakes that passed in isolation (for example `registration.spec.ts:122` failed once under load, then passed 3 of 3 alone). The serial final run below ran with all agents finished except the backend session's idle pane.
+
+Verification (lead): `pnpm typecheck` clean; `pnpm test:unit` 53 files / 908 tests; `pnpm build` and `check:bundle` pass; full Playwright serial run against `next dev` on 127.0.0.1:3100, 167 tests per viewport: desktop-1280 164 passed / 3 skipped / 0 failed (15.0 min), mobile-390 163 / 4 / 0 (14.6 min), tablet-768 162 / 5 / 0 (13.9 min). The five mobile-390 specs that failed in the earlier container run passed here; their original cause is still not proven, so T-058 and T-060 stay open. Spec traceability PASS (16 files, 225 declarations, 51 tasks, 0 findings).
+
+Not verified: container image and `smoke:container` with the new UI, real printer output, live Mengantar and Turnstile, LCP/INP. After this entry the owner approved T-071 and chose to leave T-076 UNVERIFIED for now; T-071 (`/pengiriman/cetak`, current-page selection, shared sender city for masked batches, per-shipment snapshot and print events) was built, reviewed by a separate `reviewer` agent across three rounds (1 High and 4 Mediums fixed, final verdict APPROVE), and verified with 917 unit tests, `label.spec.ts` 9/9 on all three viewports, `a11y.spec.ts` on all three viewports, `pnpm build` and `check:bundle`.
+
+## 2026-10-29 — T-078 and T-079: Dashboard at `/` and the app header (uncommitted)
+
+Trigger: owner feedback that the UI still felt too simple and had no dashboard page; then "dashboard default, without /beranda". Contract UX-16 in `docs/spec/17`. The dashboard is the default home `/` for a signed-in gerai user (tenant host and loopback/shared mode); an anonymous visitor on loopback and everyone on the apex still get the marketing home. The gerai shell moved into `src/components/workspace-frame.tsx` so `/` and `(workspace)/layout.tsx` share it. Landings (sign-in, demo start, invitation acceptance, gerai switch, `/akses`, `/pilih-gerai`, "Buka ruang kerja") go to `/`. Dashboard code is in `src/modules/dashboard/` (pure WIB aggregation with 11 unit tests, server-rendered SVG charts with data tables, regions behind Suspense); the header is `src/components/app-header*.tsx` plus `src/modules/shell/attention.ts` (one bounded count query).
+
+Dev environment: `next dev` runs on 127.0.0.1:3100 with `DEV_EXTRA_HOSTS=100.127.67.86` and a raw TCP forwarder (`/tmp/tcp-forward.mjs`, not in the repository) exposes it on the Tailscale address, so tests keep using loopback while the owner browses over the tailnet. `APP_ORIGIN` is unset in that run, so absolute marketing links point at 127.0.0.1.
+
+Verification (lead, uncommitted tree, `next dev` on a machine at load average 8 to 12): `pnpm typecheck` clean; `pnpm test:unit` 56 files / 933 tests. Full serial Playwright (181 tests per viewport): desktop-1280 170 passed / 4 skipped / 2 failed, mobile-390 168 / 6 / 2, tablet-768 163 / 7 / 6. Every failure was rerun alone: tablet 12 of 12 passed; shipping 220, 235, 871, label 436 and masking-admin passed on mobile-390 and tablet-768; on desktop-1280 shipping 220 and 235 failed once more in isolation and then passed in a combined rerun with `E2E_EXPECT_TIMEOUT_MS=10000`. Cause measured, not guessed: after sign-in the Dashboard landing took 2.4 to 4.6 s to commit in dev (4 timed runs), on the 5 s default expect limit. `playwright.config.ts` now reads an opt-in `E2E_EXPECT_TIMEOUT_MS` (default stays 5 s). With it, the affected specs (shipping, workspace-states, masking-admin, label, dashboard) passed 57/57 on mobile-390 and tablet-768; on desktop-1280 56 passed and `label.spec.ts:349` and `:374` failed in the combined run, then passed 9/9 when `label.spec.ts` ran alone. Those two mutate the gerai WhatsApp fixture; shared-fixture interference between specs is the suspect, not proven.
+
+Not verified: a clean single serial run of the whole suite at the 10 s expect limit; `pnpm build`, `check:bundle` and the route size of `/` (the dev server owns `.next`); container image with the new UI; real printers. Known visual nits: in a demo workspace the label "contoh" repeats on every figure; "Buat pengiriman" appears in both the top bar and the page header; the shipment detail page keeps its own breadcrumb beside the header one.

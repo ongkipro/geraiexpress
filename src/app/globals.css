@@ -16,6 +16,19 @@
   --ge-divider: #f0f0f0;
   --ge-hairline: #e0e0e0;
 
+  /* Status tones (T-069 UI v4). Text on its soft surface is >= 5.6:1; a tone is always paired with an icon and
+     a text label, never color alone (UI-2). Danger is also the destructive action color. */
+  --success: #1a6e32;
+  --success-soft: #e9f6ed;
+  --warning: #8a4600;
+  --warning-soft: #fff3e0;
+  --danger: #b3261e;
+  --danger-soft: #fdeceb;
+  --info: #0058b0;
+  --info-soft: #e8f1fc;
+  --pending: #4a3fb5;
+  --pending-soft: #efedfc;
+
   --background: var(--ge-parchment);
   --foreground: var(--ge-ink);
   --card: var(--ge-canvas);
@@ -30,7 +43,7 @@
   --muted-foreground: var(--ge-ink-80);
   --accent: var(--ge-divider);
   --accent-foreground: var(--ge-ink);
-  --destructive: var(--ge-ink);
+  --destructive: var(--danger);
   --destructive-foreground: var(--ge-canvas);
   --border: var(--ge-hairline);
   --input: var(--ge-ink-48);
@@ -63,6 +76,16 @@
   --color-border: var(--border);
   --color-divider: var(--ge-divider);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-pending: var(--pending);
+  --color-pending-soft: var(--pending-soft);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -85,6 +108,9 @@
   --radius-lg: 18px;
   --radius-xl: 18px;
   --radius-2xl: 18px;
+  /* shadcn surfaces (card, badge, field) read 3xl/4xl: one 14px surface radius instead of the 24-32px default */
+  --radius-3xl: 14px;
+  --radius-4xl: 14px;
   /* UI-2 type scale mapped onto Tailwind's standard names so tailwind-merge (cn) can tell a font
      size from a text color: base=body 17, sm=caption 14, xs=fine 12, xl=tagline 21, 3xl=display-md 34 */
   --text-xs: 12px;

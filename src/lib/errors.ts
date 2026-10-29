@@ -34,7 +34,7 @@ const MESSAGES: Record<string, string> = {
   too_many_invitations: "Terlalu banyak undangan yang masih menunggu. Cabut yang tidak dipakai dulu.",
   demo_requires_anonymous_session: "Mode demo hanya untuk sesi demo.",
   invalid_input: "Periksa kembali isian yang ditandai.",
-  // T-023 live Mengantar (raised by the Worker, not the database).
+  // T-023 live Mengantar (raised by the app server, not the database).
   mengantar_not_configured: "Koneksi Mengantar di server belum disiapkan. Hubungi admin GeraiExpress.",
   mengantar_no_key: "Akun Mengantar gerai ini belum terhubung. Admin gerai bisa menyimpan kunci API di Pengaturan.",
   mengantar_key_unreadable: "Kunci API Mengantar tersimpan tidak bisa dipakai. Admin gerai perlu menyimpannya ulang di Pengaturan.",
@@ -65,9 +65,47 @@ const MESSAGES: Record<string, string> = {
   partner_key_pending: "Akun Mengantar berhasil dibuat, tetapi kunci API sedang disiapkan. Klik Ambil Kunci API untuk melanjutkan.",
   partner_rate_limited: "Batas permintaan pendaftaran Mengantar tercapai. Tunggu beberapa saat lalu coba lagi.",
   partner_restricted: "Akun penjual atau akses Partner dibatasi oleh Mengantar. Hubungi dukungan Mengantar.",
+  provider_restricted: "Akun penjual atau akses Partner dibatasi oleh Mengantar. Hubungi dukungan Mengantar.",
+  partner_retry_after: "Mengantar membatasi permintaan untuk sementara. Tunggu beberapa saat lalu coba lagi.",
+  consent_version_mismatch: "Versi Ketentuan Layanan atau Kebijakan Privasi Mengantar baru saja berubah. Muat ulang halaman, baca versi terbaru, lalu setujui kembali.",
   already_partner_connected: "Gerai ini sudah memiliki akun penjual Mengantar yang terdaftar.",
+  configuration_blocked: "Dokumen Ketentuan Layanan dan Kebijakan Privasi Mengantar belum dikonfigurasi. Pendaftaran belum dapat dikirim; hubungi admin GeraiExpress.",
+  not_recoverable: "Tidak ada pendaftaran Mengantar dengan kunci tertunda yang dapat dipulihkan. Periksa status akun di Pengaturan.",
+  live_recipient_name_invalid: "Nama penerima untuk Mengantar maksimal 100 karakter.",
+  live_recipient_address_invalid: "Alamat penerima untuk Mengantar maksimal 300 karakter.",
+  live_recipient_phone_invalid: "Nomor HP penerima untuk Mengantar harus memakai awalan 0, 62, atau +62 dan menjadi 10–15 digit setelah diubah ke awalan 0.",
+  immutable_partner_owner_consent: "Data pemilik dan persetujuan akun Mengantar yang sudah terdaftar tidak dapat diubah.",
   // T-028 Contact archive
   contact_already_archived: "Kontak ini sudah diarsipkan.",
+  // Batch payment and dispatch codes that reach the operator as an error
+  authorization_required: "Pembayaran massal ini belum diotorisasi. Periksa ringkasan pembayaran, lalu otorisasi lagi sebelum melanjutkan.",
+  batch_id_unavailable: "Nomor batch Mengantar untuk pembayaran ini tidak tersedia, jadi pembayaran belum bisa dicek otomatis. Hubungi admin GeraiExpress sebelum mencoba lagi.",
+  account_busy: "Pesanan lain gerai ini sedang dikirim ke Mengantar. Coba lagi beberapa saat lagi.",
+  invalid_order_request: "Data pesanan belum memenuhi syarat Mengantar, jadi tidak ada yang dikirim. Periksa data penerima dan barang, lalu coba lagi.",
+  // T-041 Gerai discount terms
+  discount_above_observed:
+    "Diskon gerai melebihi diskon Mengantar yang teramati. GeraiExpress tidak menanggung selisihnya, sehingga nilai ini tidak dapat disimpan.",
+  observation_required: "Status \"Teramati dari Mengantar\" butuh diskon Mengantar yang sudah teramati dari estimasi sungguhan. Belum ada.",
+  source_reference_required: "Isi referensi sumber (3–500 karakter).",
+  verification_reference_required: "Terverifikasi Mengantar butuh referensi konfirmasi tertulis Mengantar (3–500 karakter).",
+  verification_reference_unexpected: "Referensi konfirmasi hanya diisi untuk status Terverifikasi Mengantar.",
+  invalid_effective_date: "Tanggal berlaku harus hari ini atau setelahnya, maksimal satu tahun ke depan.",
+  effective_before_previous: "Tanggal berlaku tidak boleh lebih awal dari versi sebelumnya.",
+  provider_observed_mismatch: "Status \"Teramati dari Mengantar\" hanya untuk nilai yang sama persis dengan diskon Mengantar tertinggi yang teramati. Samakan nilainya atau pilih status Pernyataan pemilik.",
+  demo_limit: "Batas demo tercapai. Atur ulang demo untuk mulai lagi.",
+  terms_are_append_only: "Versi diskon tidak bisa diubah atau dihapus. Buat versi baru.",
+  // T-039 Partner key regeneration and recovery
+  byok_active: "Kunci API gerai ini milik akun Mengantar Anda sendiri (BYOK), jadi GeraiExpress tidak membuat ulang kuncinya. Buat ulang di dashboard Mengantar, lalu simpan kunci baru di sini.",
+  not_partner_managed: "Gerai ini tidak memakai akun penjual Partner, jadi kunci API tidak bisa dibuat ulang dari sini.",
+  rotation_not_available: "Pembuatan ulang atau pengambilan kunci tidak tersedia untuk status akun saat ini. Muat ulang halaman.",
+  seller_binding_mismatch: "Mengantar tidak mengonfirmasi akun penjual ini sebagai milik gerai Anda, jadi kunci tidak diubah dan pengiriman dijeda. Hubungi admin GeraiExpress atau hubungkan kunci API sendiri (BYOK).",
+  rotation_unknown: "Hasil pembuatan ulang kunci belum pasti. Pengiriman dijeda sampai Anda memilih Ambil kunci terbaru.",
+  rotation_refused: "Mengantar menolak permintaan ini, jadi kunci belum berubah. Pengiriman dijeda; pilih Ambil kunci terbaru setelah konfigurasi Partner diperiksa.",
+  rotation_rate_limited: "Mengantar membatasi permintaan untuk sementara. Pengiriman dijeda; tunggu beberapa saat lalu pilih Ambil kunci terbaru.",
+  rotation_restricted: "Mengantar menonaktifkan akun penjual atau kunci API ini, jadi pembuatan ulang dihentikan dan tidak dicoba lagi. Hubungi dukungan Mengantar; pengiriman tetap dijeda.",
+  rotation_store_failed: "Kunci baru dibuat di Mengantar tetapi belum tersimpan. Pengiriman dijeda; pilih Ambil kunci terbaru untuk melanjutkan.",
+  // T-043 Pickup orders
+  pickup_time_invalid: "Jam jemput harus minimal 90 menit dari sekarang (WIB), antara 09.00 dan 18.00. Pilih slot yang lebih lambat lalu cek ongkir lagi.",
 };
 
 export function friendlyError(error: { message?: string; code?: string } | null | undefined): string {

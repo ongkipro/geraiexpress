@@ -1,21 +1,31 @@
 import type { Metadata } from "next";
+import { CounterPreview } from "@/components/marketing/counter-preview";
 import {
+  HEADLINE,
+  LEAD,
   MarketingClosingCta,
   MarketingPageHero,
+  MarketingSection,
   MarketingShell,
 } from "@/components/marketing/marketing-shell";
-import { BRAND } from "@/lib/marketing-data";
+import { TariffExample } from "@/components/marketing/tariff-example";
+import { BRAND, ORDERABLE_COURIERS } from "@/lib/marketing-data";
+import { cn } from "@/lib/utils";
+
+const COURIER_LIST = ORDERABLE_COURIERS.map((courier) => courier.name).join(", ");
+
+const TITLE = "Fitur Kasir Loket Pengiriman Multi-Kurir";
+const DESCRIPTION =
+  "Fitur loket GeraiExpress yang tersedia sekarang: cek tarif banyak kurir, kiriman drop-off, kontak pelanggan tersimpan, peran admin dan operator, serta demo simulasi.";
 
 export const metadata: Metadata = {
-  title: "Fitur Kasir Loket Pengiriman Multi-Kurir",
-  description:
-    "Fitur loket GeraiExpress: cek ongkir banyak kurir, cetak resi thermal 10 x 15 cm, nota pelanggan, COD presisi, jadwal jemput kurir, dan pantau uang gerai.",
+  title: TITLE,
+  description: DESCRIPTION,
   robots: { index: true, follow: true },
   alternates: { canonical: "/fitur" },
   openGraph: {
-    title: "Fitur Kasir Loket Pengiriman Multi-Kurir · GeraiExpress",
-    description:
-      "Fitur loket GeraiExpress: cek ongkir banyak kurir, cetak resi thermal 10 x 15 cm, nota pelanggan, COD presisi, jadwal jemput kurir, dan pantau uang gerai.",
+    title: `${TITLE} · GeraiExpress`,
+    description: DESCRIPTION,
     url: "https://geraiexpress.com/fitur",
     siteName: "GeraiExpress",
     locale: "id_ID",
@@ -25,114 +35,125 @@ export const metadata: Metadata = {
 
 const FEATURE_GROUPS = [
   {
-    id: "ekspedisi",
-    heading: "Banyak ekspedisi resmi di satu layar",
-    lead: "Pelanggan bebas memilih kurir termurah atau tercepat. Resi resmi dari kurir dan bisa dilacak di aplikasi masing-masing.",
+    id: "kurir",
+    heading: "Banyak kurir di satu layar",
+    lead: "Pelanggan bisa memilih kurir dari hasil cek tarif, dan kasir tidak perlu membuka banyak situs.",
     items: [
       [
-        "Cek ongkir banyak kurir sekaligus",
-        "Bandingkan tarif J&T, JNE, SiCepat, Lion Parcel, ID Express, AnterAja, POS, dan SAP dalam satu layar, sebelum memilih.",
+        "Cek tarif banyak kurir sekaligus",
+        `Bandingkan tarif ${COURIER_LIST} dalam satu layar, sebelum memilih. Kurir yang tidak melayani rute tertentu tidak ditampilkan.`,
       ],
       [
-        "COD presisi, cair setiap hari",
-        "Nilai COD dihitung otomatis dari harga barang, ongkir, dan fee COD Mengantar (3% ditambah PPN), jadi toko tidak nombok. Mengantar mencairkan dana COD setiap hari, dan ongkir pulang paket retur gratis.",
+        "Kiriman COD dan non-COD",
+        "Pilih jenis kiriman saat membuat pesanan. Opsi COD hanya tampil untuk kurir yang mendukungnya pada rute tersebut.",
       ],
       [
-        "Layanan kargo untuk paket besar",
-        "Kirim paket besar lewat layanan kargo JNE, SAP, SiCepat, dan ID Express yang tampil di cek ongkir.",
+        "Tarif nyata untuk gerai terhubung",
+        "Gerai yang akun Mengantar-nya terhubung melihat tarif nyata dari Mengantar. Mode demo memakai harga contoh.",
       ],
     ],
   },
   {
     id: "kasir",
-    heading: "Proses kasir cepat dan bebas denda salah timbang",
-    lead: "Selesai di depan pelanggan, dengan ongkir yang sudah memperhitungkan berat dan ukuran paket.",
+    heading: "Proses kasir yang jelas",
+    lead: "Selesai di depan pelanggan: isi data, cek tarif, konfirmasi, lalu serahkan paket.",
     items: [
-      [
-        "Berat dan ukuran dihitung sebelum resi terbit",
-        "Masukkan berat serta panjang, lebar, dan tinggi kardus. Ongkir dari kurir sudah memperhitungkannya, sehingga toko tidak menanggung selisih.",
-      ],
-      [
-        "Cetak resi thermal 10 × 15 cm",
-        "Label paket ditambah bukti serah terima untuk pengirim, atau 10 × 10 cm saja. Barcode tajam dari printer thermal kasir.",
-      ],
-      [
-        "Nama gerai Anda di label",
-        "Pengirim di label memakai nama, WhatsApp, dan alamat gerai, atau nama pengirim yang Anda ketik bila masking diaktifkan.",
-      ],
-      [
-        "Nota untuk pelanggan",
-        "Pilih Cetak resi + invoice untuk memberi pelanggan nota ongkir, di kertas thermal 80 mm atau A4.",
-      ],
       [
         "Kontak pelanggan tersimpan",
         "Pengirim dan penerima langganan tersimpan, jadi kasir tidak perlu mengetik ulang dari awal.",
       ],
       [
-        "Kirim resi via WhatsApp",
-        "Kirim nomor resi ke WhatsApp penerima langsung dari halaman kiriman.",
+        "Konfirmasi sebelum pesanan dikirim",
+        "Pesanan hanya dikirim ke Mengantar setelah kasir mengonfirmasi ringkasan kiriman.",
+      ],
+      [
+        "Kiriman drop-off",
+        "Versi ini melayani drop-off: paket diserahkan oleh gerai ke kurir. Resi tercatat di halaman kiriman.",
+      ],
+      [
+        "Demo simulasi",
+        "Coba alur lengkap dengan gerai contoh. Harga dan resi di demo adalah simulasi dan tidak dikirim ke kurir.",
       ],
     ],
   },
   {
-    id: "pantau",
-    heading: "Kasir aman, uang gerai terpantau",
-    lead: "Pemilik toko memantau kiriman dan dana COD dari HP, sementara kasir fokus melayani.",
+    id: "tim",
+    heading: "Tim dan data gerai terpisah",
+    lead: "Pemilik mengatur siapa yang bisa bekerja di gerai, dan setiap gerai hanya melihat datanya sendiri.",
     items: [
       [
-        "Peran kasir dibatasi",
-        "Operator bekerja dari antrean cetak resi dan serah terima. Pembatalan kiriman dan laporan uang hanya untuk pemilik gerai.",
+        "Peran admin gerai dan operator",
+        "Undang staf lewat tautan dan atur perannya. Tindakan tertentu, seperti membayar kiriman yang tertunda, hanya untuk admin gerai.",
       ],
       [
-        "Uang gerai dan Pencairan COD",
-        "Lihat biaya kirim, biaya COD, dan estimasi dana yang dicairkan Mengantar per periode. Laporan pengiriman bisa diunduh sebagai CSV.",
+        "Data antar gerai terpisah",
+        "Kontak dan kiriman satu gerai tidak terlihat oleh gerai lain.",
       ],
       [
-        "Kurir resmi jemput ke toko",
-        "Jadwalkan penjemputan saat membuat kiriman, dan kurir datang mengambil paket di toko Anda.",
-      ],
-      [
-        "Status, retur, dan cek resi",
-        "Status kiriman mengikuti Mengantar otomatis. Paket retur punya halaman sendiri, dan resi bisa dicari dari nomor resi atau nomor kiriman.",
+        "Status kesiapan di Pengaturan",
+        "Halaman Pengaturan menunjukkan kemampuan mana yang sudah aktif untuk gerai Anda dan mana yang belum.",
       ],
     ],
   },
 ] as const;
 
+// Three groups, three compositions (C10.5): heading beside the list, heading above a two-column list,
+// and a single reading column; all open typography separated by hairlines, no cards.
 export default function FiturPage() {
+  const [kurir, kasir, tim] = FEATURE_GROUPS;
   return (
     <MarketingShell currentPath="/fitur">
       <MarketingPageHero
-        title="Fitur lengkap kasir loket multi-kurir, gratis"
-        lead={`Semua kebutuhan loket pengiriman dalam satu aplikasi ${BRAND}: banyak ekspedisi resmi, cek ongkir cepat, anti-nombok selisih berat, dan komisi 20%–25% per paket untuk toko Anda.`}
+        title="Fitur kasir loket multi-kurir"
+        lead={`Yang sudah berjalan di ${BRAND} sekarang: cek tarif banyak kurir, kiriman drop-off, kontak pelanggan tersimpan, dan demo simulasi.`}
       />
 
-      {FEATURE_GROUPS.map((group, index) => (
-        <section
-          key={group.id}
-          className={`py-14 sm:py-20 ${index % 2 === 1 ? "border-y border-border bg-background" : ""}`}
-          aria-labelledby={`judul-${group.id}`}
-        >
-          <div className="mx-auto grid max-w-6xl gap-10 px-4 sm:px-6 lg:grid-cols-[1fr_2fr] lg:px-8">
-            <div>
-              <h2 id={`judul-${group.id}`} className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-                {group.heading}
-              </h2>
-              <p className="mt-3 text-base leading-relaxed text-muted-foreground">{group.lead}</p>
-            </div>
-            <ul className="grid gap-x-10 gap-y-8 sm:grid-cols-2">
-              {group.items.map(([heading, text]) => (
-                <li key={heading} className="border-t-2 border-primary pt-4">
-                  <h3 className="text-lg font-semibold text-foreground">{heading}</h3>
-                  <p className="mt-1.5 text-base leading-relaxed text-muted-foreground">{text}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-      ))}
+      <MarketingSection tone="parchment" labelledBy={`judul-${kurir.id}`}>
+        <h2 id={`judul-${kurir.id}`} className={cn(HEADLINE, "max-w-[18ch]")}>
+          {kurir.heading}
+        </h2>
+        <p className={cn(LEAD, "mt-5 max-w-[36rem]")}>{kurir.lead}</p>
+        <div className="mt-12 grid items-start gap-12 sm:mt-16 md:grid-cols-2 md:gap-10 lg:grid-cols-[minmax(0,27rem)_minmax(0,1fr)] lg:gap-16">
+          <TariffExample sample="surabaya" />
+          <FeatureList items={kurir.items} />
+        </div>
+      </MarketingSection>
 
-      <MarketingClosingCta heading="Semua fitur ini gratis untuk toko Anda" />
+      <MarketingSection tone="white" labelledBy={`judul-${kasir.id}`}>
+        <h2 id={`judul-${kasir.id}`} className={cn(HEADLINE, "max-w-[18ch]")}>
+          {kasir.heading}
+        </h2>
+        <p className={cn(LEAD, "mt-5 max-w-[36rem]")}>{kasir.lead}</p>
+        <div className="mt-12 grid gap-12 sm:mt-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,27rem)] lg:gap-16">
+          <FeatureList items={kasir.items} className="md:grid-cols-2 md:gap-x-12 lg:grid-cols-1" />
+          <CounterPreview state="issued" className="lg:sticky lg:top-24 lg:self-start" />
+        </div>
+      </MarketingSection>
+
+      <MarketingSection tone="parchment" labelledBy={`judul-${tim.id}`}>
+        <div className="max-w-[44rem]">
+          <h2 id={`judul-${tim.id}`} className={cn(HEADLINE, "max-w-[16ch]")}>
+            {tim.heading}
+          </h2>
+          <p className={cn(LEAD, "mt-5")}>{tim.lead}</p>
+          <FeatureList items={tim.items} className="mt-10" />
+        </div>
+      </MarketingSection>
+
+      <MarketingClosingCta />
     </MarketingShell>
+  );
+}
+
+function FeatureList({ items, className }: { items: readonly (readonly [string, string])[]; className?: string }) {
+  return (
+    <ul className={cn("grid content-start", className)}>
+      {items.map(([heading, text]) => (
+        <li key={heading} className="border-t border-border py-6">
+          <h3 className="text-xl font-semibold leading-snug">{heading}</h3>
+          <p className="mt-2 text-base leading-relaxed text-muted-foreground">{text}</p>
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -1,0 +1,12 @@
+{
+ "success": true,
+ "data": {
+  "sellers": [
+   { "sellerId": "66ab1234567890abcdef1234", "externalUserId": "geraiexpress:tenant:00000000-0000-4000-b000-0000000000a1", "active": true }
+  ],
+  "page": 1,
+  "size": 2,
+  "total": 1,
+  "totalPages": 1
+ }
+}

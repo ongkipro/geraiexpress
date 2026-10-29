@@ -1,84 +1,151 @@
 import type { Metadata } from "next";
-import { CheckCircle2, CircleSlash, HelpCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, FlaskConical, HelpCircle, Plug, Rocket } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatWib } from "@/lib/format";
 import { requirePlatform } from "@/lib/platform";
-import { supabaseServer } from "@/lib/supabase/server";
-import { workerSecret } from "@/lib/worker-secret";
+import { dbServer } from "@/lib/db/server";
+import { keyMaterialFromReader } from "@/lib/credential-crypto";
+import { config } from "@/lib/config";
+import { cn } from "@/lib/utils";
 import { PartnerIdForm } from "@/modules/credentials/forms";
+import { Notice } from "@/components/notice";
+import { EmptyState, LifecycleBadge, PageHeader, RT, SectionHeader } from "../ui";
 
 export const metadata: Metadata = { title: "Integrasi Mengantar · Super Admin" };
 
 type Row = { tenant_id: string; tenant_name: string; lifecycle: string; configured: boolean; mode: string | null; hint: string | null; version: number | null; stored_at: string | null };
 
-function Badge({ ok, label }: { ok: boolean | null; label: string }) {
-  const Icon = ok === null ? HelpCircle : ok ? CheckCircle2 : CircleSlash;
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full bg-muted px-2.5 py-1 text-sm ring-1 ring-border">
-      <Icon className="size-4" aria-hidden="true" /> {label}
-    </span>
-  );
+// Connection state as tone + icon + text: stored keys are not verified here, so they read as pending,
+// never as a confirmed connection.
+function StateBadge({ ok, label }: { ok: boolean | null; label: string }) {
+  const Icon = ok === null ? HelpCircle : ok ? CheckCircle2 : AlertCircle;
+  return <Badge variant={ok === null ? "pending" : ok ? "success" : "warning"}><Icon aria-hidden="true" />{label}</Badge>;
 }
 
+function EnvironmentBadge({ environment }: { environment: string | undefined }) {
+  if (environment === "production") return <Badge variant="success" data-testid="mengantar-environment"><Rocket aria-hidden="true" />Mengantar: produksi</Badge>;
+  if (environment === "sandbox") return <Badge variant="warning" data-testid="mengantar-environment"><FlaskConical aria-hidden="true" />Mengantar: sandbox</Badge>;
+  return <Badge variant="neutral" data-testid="mengantar-environment"><HelpCircle aria-hidden="true" />Lingkungan belum diatur</Badge>;
+}
+
+const ENVIRONMENT_NOTE: Record<string, string> = {
+  production: "Server ini memakai Mengantar produksi: resi, tagihan, dan pickup nyata.",
+  sandbox: "Server ini memakai Mengantar sandbox: tidak ada resi, tagihan, atau pickup nyata.",
+};
+
 // PR-26 / SEC-3: platform configuration and per-gerai seller connection state, never values.
-// The Partner Secret is a Worker secret binding; this page only reports whether it is present.
+// The Partner Secret is a container environment secret; this page only reports whether it is present.
 export default async function IntegrationsPage() {
   await requirePlatform("integration_operations");
-  const supabase = await supabaseServer();
-  const [{ data: config }, { data: raw }] = await Promise.all([
-    supabase.rpc("platform_partner_config"),
-    supabase.rpc("platform_integrations"),
+  const db = await dbServer();
+  const [{ data: partnerConfig }, { data: raw }] = await Promise.all([
+    db.rpc("platform_partner_config"),
+    db.rpc("platform_integrations"),
   ]);
-  const partnerId = ((config ?? []) as { partner_id: string | null }[])[0]?.partner_id ?? null;
-  const secretPresent = Boolean(workerSecret("MENGANTAR_PARTNER_SECRET"));
-  const sealingPresent = Boolean(workerSecret("CREDENTIAL_KEY"));
+  const partnerId = ((partnerConfig ?? []) as { partner_id: string | null }[])[0]?.partner_id ?? null;
+  const secretPresent = Boolean(config("MENGANTAR_PARTNER_SECRET"));
+  const sealingPresent = Boolean(keyMaterialFromReader(config));
+  const environment = config("MENGANTAR_ENV");
   const rows = (raw ?? []) as Row[];
 
+  const settings = [
+    {
+      testId: "partner-id-status", title: "Partner ID", ok: Boolean(partnerId), label: partnerId ? "Terisi" : "Belum diisi",
+      body: <span className="break-all">{partnerId ?? "Belum diisi."}</span>,
+    },
+    {
+      testId: "partner-secret-status", title: "Partner Secret", ok: secretPresent, label: secretPresent ? "Terpasang" : "Belum dipasang",
+      body: <>Dipasang oleh pemilik sebagai variabel lingkungan server (<code>MENGANTAR_PARTNER_SECRET</code> di berkas env kontainer), tidak lewat halaman ini.</>,
+    },
+    {
+      testId: "sealing-key-status", title: "Kunci enkripsi kredensial", ok: sealingPresent, label: sealingPresent ? "Terpasang" : "Belum dipasang",
+      body: <>Variabel lingkungan server <code>CREDENTIAL_KEY</code> (atau <code>CREDENTIAL_KEYS</code>) untuk menyegel kunci API penjual.</>,
+    },
+  ];
+
   return (
-    <div className="flex max-w-[980px] flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl tracking-tight">Integrasi Mengantar</h1>
-        <p className="text-muted-foreground">Kesiapan konfigurasi platform dan koneksi akun penjual tiap gerai. Nilai rahasia tidak pernah ditampilkan.</p>
-      </div>
+    <div className="flex max-w-[1160px] flex-col gap-8">
+      <PageHeader
+        title="Integrasi Mengantar"
+        description="Kesiapan konfigurasi platform dan koneksi akun penjual tiap gerai. Nilai rahasia tidak pernah ditampilkan."
+        meta={<EnvironmentBadge environment={environment} />}
+      />
+      {environment === "production" || environment === "sandbox" ? (
+        <Notice tone={environment === "production" ? "info" : "warning"}>{ENVIRONMENT_NOTE[environment]}</Notice>
+      ) : (
+        <Notice tone="warning">
+          <code>MENGANTAR_ENV</code> belum diatur di server ini, jadi koneksi ke Mengantar tidak aktif. Isi <code>sandbox</code> atau <code>production</code> di berkas env kontainer.
+        </Notice>
+      )}
 
-      <section aria-labelledby="platform-heading" className="flex flex-col gap-3">
-        <h2 id="platform-heading" className="text-xl">Konfigurasi platform</h2>
+      <section aria-labelledby="platform-heading" className="flex flex-col gap-4">
+        <SectionHeader id="platform-heading" title="Konfigurasi platform" />
         <ul className="divide-y divide-border rounded-lg bg-card ring-1 ring-border">
-          <li className="flex flex-col gap-2 p-4 sm:flex-row sm:justify-between" data-testid="partner-id-status">
-            <span><span className="font-semibold">Partner ID</span><span className="block text-sm text-muted-foreground">{partnerId ?? "Belum diisi."}</span></span>
-            <Badge ok={Boolean(partnerId)} label={partnerId ? "Terisi" : "Belum diisi"} />
-          </li>
-          <li className="flex flex-col gap-2 p-4 sm:flex-row sm:justify-between" data-testid="partner-secret-status">
-            <span><span className="font-semibold">Partner Secret</span><span className="block text-sm text-muted-foreground">Dipasang sebagai Worker secret oleh pemilik (<code>wrangler secret put MENGANTAR_PARTNER_SECRET</code>), tidak lewat halaman ini.</span></span>
-            <Badge ok={secretPresent} label={secretPresent ? "Terpasang" : "Belum dipasang"} />
-          </li>
-          <li className="flex flex-col gap-2 p-4 sm:flex-row sm:justify-between" data-testid="sealing-key-status">
-            <span><span className="font-semibold">Kunci enkripsi kredensial</span><span className="block text-sm text-muted-foreground">Worker secret <code>CREDENTIAL_KEY</code> untuk menyegel kunci API penjual.</span></span>
-            <Badge ok={sealingPresent} label={sealingPresent ? "Terpasang" : "Belum dipasang"} />
-          </li>
-        </ul>
-        <details className="group">
-          <summary className="inline-flex min-h-11 cursor-pointer list-none items-center rounded-sm px-3 text-sm font-semibold ring-1 ring-border hover:bg-accent [&::-webkit-details-marker]:hidden">Ubah Partner ID…</summary>
-          <div className="mt-3 rounded-md bg-muted p-4"><PartnerIdForm current={partnerId} /></div>
-        </details>
-      </section>
-
-      <section aria-labelledby="sellers-heading" className="flex flex-col gap-3">
-        <h2 id="sellers-heading" className="text-xl">Akun penjual per gerai</h2>
-        <ul className="divide-y divide-border rounded-lg bg-card ring-1 ring-border">
-          {rows.map((r) => (
-            <li key={r.tenant_id} className="flex flex-col gap-2 p-4 sm:flex-row sm:justify-between" data-testid="seller-binding">
-              <span>
-                <span className="font-semibold">{r.tenant_name}</span>
-                <span className="block text-sm text-muted-foreground">
-                  {r.configured
-                    ? `${r.mode === "partner_managed" || r.mode === "partner" ? "Akun Partner Mengantar berakhiran …" : "Kunci sendiri (BYOK) berakhiran …"}${r.hint}, versi ${r.version}, disimpan ${formatWib(r.stored_at)}`
-                    : "Belum ada kunci API."}
-                </span>
+          {settings.map((s) => (
+            <li key={s.testId} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 md:p-5" data-testid={s.testId}>
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="font-semibold">{s.title}</span>
+                <span className="text-sm text-muted-foreground">{s.body}</span>
               </span>
-              <Badge ok={r.configured ? null : false} label={r.configured ? "Tersimpan, belum diverifikasi" : "Belum terhubung"} />
+              <StateBadge ok={s.ok} label={s.label} />
             </li>
           ))}
+          <li className="p-4 md:p-5">
+            <details className="group">
+              <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 font-semibold text-primary [&::-webkit-details-marker]:hidden">
+                Ubah Partner ID…
+                <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+              </summary>
+              <div className="mt-3 max-w-[560px]"><PartnerIdForm current={partnerId} /></div>
+            </details>
+          </li>
         </ul>
+      </section>
+
+      <section aria-labelledby="sellers-heading" className="flex flex-col gap-4">
+        <SectionHeader id="sellers-heading" title="Akun penjual per gerai" description="Status di sini hanya menunjukkan apakah kunci API tersimpan; halaman ini tidak memverifikasinya ke Mengantar." />
+        {rows.length === 0 ? (
+          <EmptyState icon={Plug} title="Belum ada gerai terdaftar" description="Gerai muncul di sini setelah pengajuannya disetujui." />
+        ) : (
+          <div className={RT.frame}>
+            <Table className={RT.table}>
+              <TableHeader className={RT.head}>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Gerai</TableHead>
+                  <TableHead>Akun penjual</TableHead>
+                  <TableHead className="max-lg:hidden">Disimpan</TableHead>
+                  <TableHead className="text-right">Koneksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className={RT.body}>
+                {rows.map((r) => (
+                  <TableRow key={r.tenant_id} data-testid="seller-binding" className={RT.row}>
+                    <TableCell className={cn(RT.cell, "min-w-0")}>
+                      <span className="block font-semibold break-words">{r.tenant_name}</span>
+                      {r.lifecycle !== "active" ? <span className="mt-1 block"><LifecycleBadge lifecycle={r.lifecycle} /></span> : null}
+                    </TableCell>
+                    <TableCell className={cn(RT.cell, "text-sm max-md:text-muted-foreground")}>
+                      {r.configured ? (
+                        <>
+                          {r.mode === "partner_managed" || r.mode === "partner" ? "Akun Partner Mengantar" : "Kunci sendiri (BYOK)"} berakhiran{" "}
+                          <span className="font-mono">…{r.hint}</span>, versi <span className="tabular">{r.version}</span>
+                          <span className="block lg:hidden">Disimpan {formatWib(r.stored_at)}</span>
+                        </>
+                      ) : "Belum ada kunci API."}
+                    </TableCell>
+                    <TableCell className="hidden align-top text-sm text-muted-foreground lg:table-cell">
+                      {r.configured ? formatWib(r.stored_at) : "—"}
+                    </TableCell>
+                    <TableCell className={cn(RT.cell, "max-md:pt-1 md:text-right")}>
+                      <StateBadge ok={r.configured ? null : false} label={r.configured ? "Tersimpan, belum diverifikasi" : "Belum terhubung"} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </section>
     </div>
   );

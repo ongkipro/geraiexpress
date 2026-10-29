@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { TestClient } from "./helpers";
 import { IDS, client, demoVisitor, machine, signIn, sql } from "./helpers";
 
-let ownerA: SupabaseClient;
-let operatorA: SupabaseClient;
-let ownerB: SupabaseClient;
-let outsider: SupabaseClient;
+let ownerA: TestClient;
+let operatorA: TestClient;
+let ownerB: TestClient;
+let outsider: TestClient;
 
 beforeAll(async () => {
   [ownerA, operatorA, ownerB, outsider] = await Promise.all([

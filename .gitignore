@@ -1,16 +1,14 @@
 node_modules/
 .next/
-.wrangler/
+# Local container environment file and any env file (only .env.example is tracked).
 .env
 .env.*
 !.env.example
+# Local database stack secrets (also excluded by the patterns above).
+infra/dev/*.env
 coverage/
 *.log
 .DS_Store
-**/supabase/.temp/
-**/supabase/.branches/
-.open-next/
-.dev.vars
 playwright-report/
 test-results/
 *.tsbuildinfo

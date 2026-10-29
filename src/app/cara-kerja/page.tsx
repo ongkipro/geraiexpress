@@ -1,21 +1,30 @@
 import type { Metadata } from "next";
 import {
+  HEADLINE,
+  LEAD,
   MarketingClosingCta,
   MarketingPageHero,
+  MarketingSection,
   MarketingShell,
 } from "@/components/marketing/marketing-shell";
 import { BRAND } from "@/lib/marketing-data";
+import { ContactsPreview } from "@/components/marketing/contacts-preview";
+import { CounterPreview } from "@/components/marketing/counter-preview";
+import { COUNTER_STEPS } from "@/components/marketing/counter-steps";
+import { cn } from "@/lib/utils";
+
+const TITLE = "Alur 4 Langkah Kasir Loket Pengiriman Multi-Kurir";
+const DESCRIPTION =
+  "Alur kasir loket GeraiExpress: isi data pengirim dan penerima, masukkan berat dan cek tarif, konfirmasi kiriman, lalu serahkan paket ke kurir (drop-off).";
 
 export const metadata: Metadata = {
-  title: "Alur 4 Langkah Kasir Loket Pengiriman Multi-Kurir",
-  description:
-    "Alur kasir loket GeraiExpress: isi data pengirim, timbang paket dan cek ongkir, terima pembayaran, lalu cetak resi thermal 100 x 150 mm untuk kurir.",
+  title: TITLE,
+  description: DESCRIPTION,
   robots: { index: true, follow: true },
   alternates: { canonical: "/cara-kerja" },
   openGraph: {
-    title: "Alur 4 Langkah Kasir Loket Pengiriman Multi-Kurir · GeraiExpress",
-    description:
-      "Alur kasir loket GeraiExpress: isi data pengirim, timbang paket dan cek ongkir, terima pembayaran, lalu cetak resi thermal 100 x 150 mm untuk kurir.",
+    title: `${TITLE} · GeraiExpress`,
+    description: DESCRIPTION,
     url: "https://geraiexpress.com/cara-kerja",
     siteName: "GeraiExpress",
     locale: "id_ID",
@@ -23,41 +32,18 @@ export const metadata: Metadata = {
   },
 };
 
-const STEPS = [
+const DEMO_POINTS = [
   [
-    "Isi data pengirim dan penerima",
-    "Pilih dari kontak tersimpan atau ketik baru. Pelanggan langganan tidak perlu mengetik ulang dari awal.",
-    "Contoh: penerima Ibu Contoh, Coblong, Kota Bandung.",
+    "Masuk sebagai demo",
+    "Tombol Coba demo membuka gerai contoh tanpa mendaftar dan tanpa akun Mengantar.",
   ],
   [
-    "Timbang paket dan cek ongkir",
-    "Masukkan berat dan, bila perlu, ukuran kardus. Tarif ekspedisi tampil berdampingan untuk dipilih pelanggan.",
-    "Contoh: 1 kg, J&T Rp 15.000 dipilih dari daftar tarif.",
+    "Harga contoh",
+    "Tarif di demo adalah harga contoh yang ditandai simulasi, bukan tarif kurir.",
   ],
   [
-    "Terima pembayaran",
-    "Pelanggan membayar ongkir di kasir, tunai atau lewat QRIS milik toko. Komisi 20%–25% menjadi laba toko.",
-    "Contoh: pelanggan bayar ongkir tunai di kasir.",
-  ],
-  [
-    "Cetak resi thermal",
-    "Tekan Cetak resi, atau Cetak resi + invoice untuk sekalian memberi nota. Label 100 × 150 mm siap ditempel di kardus.",
-    "Contoh: resi JP0000000000001 tercetak 10 × 15 cm.",
-  ],
-] as const;
-
-const PICKUP_FLOW = [
-  [
-    "Jadwalkan jemput",
-    "Saat membuat kiriman, pilih penjemputan dan jamnya. Jadwal diteruskan ke kurir lewat Mengantar.",
-  ],
-  [
-    "Kurir datang ke toko",
-    "Kurir resmi datang mengambil paket di toko Anda tanpa biaya jemput.",
-  ],
-  [
-    "Tandai serah terima",
-    "Kasir menandai paket yang sudah diserahkan, jadi antrean selalu jelas: belum dicetak, siap diserahkan, atau sudah diserahkan.",
+    "Resi simulasi",
+    "Resi yang terbit di demo ditandai simulasi dan tidak dikirim ke kurir mana pun.",
   ],
 ] as const;
 
@@ -67,12 +53,8 @@ const EQUIPMENT = [
     `Buka ${BRAND} lewat browser di perangkat kasir yang sudah ada.`,
   ],
   [
-    "Timbangan meja digital",
-    "Timbangan digital biasa yang sudah dipakai toko sudah cukup.",
-  ],
-  [
-    "Printer thermal",
-    "Printer label 100 × 150 mm untuk resi; printer struk 80 mm bisa dipakai untuk nota.",
+    "Timbangan",
+    "Timbangan yang sudah dipakai toko cukup untuk mengisi berat paket.",
   ],
   [
     "Koneksi internet",
@@ -80,124 +62,84 @@ const EQUIPMENT = [
   ],
 ] as const;
 
+// The four steps are a real sequence, so they keep numerals and read as rows (numeral, step, detail)
+// instead of the home page's three columns; the demo and equipment sections use open typography.
 export default function CaraKerjaPage() {
   return (
     <MarketingShell currentPath="/cara-kerja">
       <MarketingPageHero
-        title="Alur 4 langkah kasir: cepat, praktis, gratis"
-        lead="Staf kasir baru langsung bisa melayani. Isi data pengirim, timbang paket, terima pembayaran, lalu cetak resi thermal."
+        title="Alur 4 langkah kasir"
+        lead="Isi data pengirim dan penerima, masukkan berat dan cek tarif, konfirmasi kiriman, lalu serahkan paket ke kurir."
       />
 
-      <section className="py-14 sm:py-20" aria-labelledby="judul-langkah">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <h2 id="judul-langkah" className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-            4 langkah melayani kiriman di meja kasir
-          </h2>
-          <p className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground">
-            Semua tahap dilakukan di depan pelanggan dari satu layar.
-          </p>
-          <ol className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            {STEPS.map(([heading, text, example], index) => (
-              <li key={heading} className="rounded-2xl border border-border bg-card p-5">
-                <span
-                  className="flex size-10 items-center justify-center rounded-full bg-primary text-base font-semibold text-primary-foreground"
-                  aria-hidden="true"
-                >
+      <MarketingSection tone="parchment" labelledBy="judul-langkah">
+        <h2 id="judul-langkah" className={cn(HEADLINE, "max-w-[24ch]")}>
+          Semua di depan pelanggan, dari satu layar.
+        </h2>
+        {/* Steps 1 and 3 carry the product panel they describe (saved contacts, the summary before
+            confirming); hidden below 768 so the sequence stays short on phones. */}
+        <ol className="mt-12 sm:mt-16">
+          {COUNTER_STEPS.map(({ title: heading, text, example }, index) => {
+            const panel = index === 0 ? <ContactsPreview /> : index === 2 ? <CounterPreview /> : null;
+            return (
+              <li
+                key={heading}
+                className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-4 border-t border-border py-8 md:grid-cols-[4rem_minmax(0,1fr)] lg:grid-cols-[5rem_minmax(0,1fr)_minmax(0,26rem)] lg:gap-x-12"
+              >
+                <span className="tabular text-3xl font-semibold leading-none text-primary lg:text-[2.75rem]" aria-hidden="true">
                   {index + 1}
                 </span>
-                <h3 className="mt-4 text-lg font-semibold text-foreground">{heading}</h3>
-                <p className="mt-1.5 text-base leading-relaxed text-muted-foreground">{text}</p>
-                <p className="mt-3 border-l-2 border-primary pl-3 text-sm font-semibold text-foreground">{example}</p>
+                <div>
+                  <h3 className="text-xl font-semibold leading-snug lg:text-[1.5rem]">{heading}</h3>
+                  <p className="mt-2 max-w-[36rem] text-base leading-relaxed text-muted-foreground">{text}</p>
+                  <p className="mt-3 text-[15px] text-muted-foreground">{example}</p>
+                </div>
+                {panel && (
+                  <div className="col-start-2 mt-6 hidden max-w-[26rem] md:block lg:col-start-3 lg:mt-0">{panel}</div>
+                )}
               </li>
-            ))}
-          </ol>
-        </div>
-      </section>
+            );
+          })}
+        </ol>
+      </MarketingSection>
 
-      <section className="border-y border-border bg-[#1d1d1f] py-14 text-white sm:py-20" aria-labelledby="judul-jemput">
-        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+      <MarketingSection tone="white" labelledBy="judul-demo">
+        <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:gap-20">
           <div>
-            <h2 id="judul-jemput" className="text-2xl font-semibold tracking-tight sm:text-3xl">
-              Kurir resmi menjemput paket ke toko
+            <h2 id="judul-demo" className={cn(HEADLINE, "max-w-[14ch]")}>
+              Coba dulu lewat demo simulasi
             </h2>
-            <p className="mt-3 text-base leading-relaxed text-[#cccccc]">
-              Tidak perlu mengantar paket ke kantor cabang. Kurir yang datang ke toko Anda.
-            </p>
-            <ol className="mt-8 space-y-6">
-              {PICKUP_FLOW.map(([heading, text]) => (
-                <li key={heading} className="border-l-2 border-[#2997ff] pl-5">
-                  <h3 className="text-lg font-semibold">{heading}</h3>
-                  <p className="mt-1 text-base leading-relaxed text-[#cccccc]">{text}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <div
-            className="rounded-2xl border border-white/15 bg-[#272729] p-6 text-sm text-white"
-            aria-label="Ilustrasi antrean penjemputan kurir di loket"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#cccccc]">
-              Contoh Antrean Serah Terima Loket
-            </p>
-            <ul className="mt-4 space-y-3">
-              <li className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-[#1d1d1f] p-3.5">
-                <div>
-                  <p className="font-semibold">J&amp;T Express · JP0000000000001</p>
-                  <p className="text-xs text-[#cccccc]">Tujuan: Coblong, Kota Bandung · 1 kg</p>
-                </div>
-                <span className="rounded-sm bg-primary px-2.5 py-1 text-xs font-semibold text-white">
-                  Siap diserahkan
-                </span>
-              </li>
-              <li className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-[#1d1d1f] p-3.5">
-                <div>
-                  <p className="font-semibold">SiCepat · 004190000002</p>
-                  <p className="text-xs text-[#cccccc]">Tujuan: Tebet, Jakarta Selatan · 2 kg</p>
-                </div>
-                <span className="rounded-sm border border-white/20 px-2.5 py-1 text-xs font-semibold text-[#cccccc]">
-                  Sudah diserahkan
-                </span>
-              </li>
-              <li className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-[#1d1d1f] p-3.5">
-                <div>
-                  <p className="font-semibold">JNE · 8800000000003</p>
-                  <p className="text-xs text-[#cccccc]">Tujuan: Gubeng, Surabaya · 1 kg</p>
-                </div>
-                <span className="rounded-sm border border-white/20 px-2.5 py-1 text-xs font-semibold text-[#cccccc]">
-                  Belum dicetak
-                </span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-14 sm:py-20" aria-labelledby="judul-perangkat">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 sm:px-6 lg:grid-cols-[1fr_2fr] lg:px-8">
-          <div>
-            <h2 id="judul-perangkat" className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              Pakai perangkat toko yang sudah ada
-            </h2>
-            <p className="mt-3 text-base leading-relaxed text-muted-foreground">
-              Tidak perlu membeli paket alat khusus. Ini yang dibutuhkan di meja kasir.
+            <p className={cn(LEAD, "mt-5 max-w-[32rem]")}>
+              Demo memakai gerai contoh yang terpisah dari data gerai sungguhan. Tidak ada pesanan yang dikirim ke
+              kurir.
             </p>
           </div>
-          <ul className="grid gap-x-10 gap-y-8 sm:grid-cols-2">
-            {EQUIPMENT.map(([heading, text]) => (
-              <li key={heading} className="border-t-2 border-primary pt-4">
-                <h3 className="text-lg font-semibold text-foreground">{heading}</h3>
-                <p className="mt-1.5 text-base leading-relaxed text-muted-foreground">{text}</p>
+          <ul className="flex flex-col gap-7 lg:pt-3">
+            {DEMO_POINTS.map(([heading, text]) => (
+              <li key={heading} className="text-[19px] leading-[1.45] text-muted-foreground sm:text-xl sm:leading-[1.42]">
+                <strong className="font-semibold text-foreground">{heading}.</strong> {text}
               </li>
             ))}
           </ul>
         </div>
-      </section>
+      </MarketingSection>
 
-      <MarketingClosingCta
-        heading="Siap melayani kiriman pertama?"
-        text="Siapkan printer thermal dan akun Mengantar gerai, lalu ikuti tiga tahap ini:"
-      />
+      <MarketingSection tone="parchment" labelledBy="judul-perangkat">
+        <h2 id="judul-perangkat" className={cn(HEADLINE, "max-w-[18ch]")}>
+          Pakai perangkat toko yang sudah ada
+        </h2>
+        <p className={cn(LEAD, "mt-5 max-w-[36rem]")}>Ini yang dibutuhkan di meja kasir.</p>
+        <ul className="mt-12 grid gap-x-12 sm:mt-16 md:grid-cols-3">
+          {EQUIPMENT.map(([heading, text]) => (
+            <li key={heading} className="border-t border-border py-6">
+              <h3 className="text-xl font-semibold leading-snug">{heading}</h3>
+              <p className="mt-2 text-base leading-relaxed text-muted-foreground">{text}</p>
+            </li>
+          ))}
+        </ul>
+      </MarketingSection>
+
+      <MarketingClosingCta heading="Siap melayani kiriman pertama?" />
     </MarketingShell>
   );
 }

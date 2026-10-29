@@ -1,0 +1,26 @@
+# Allow-list build context: nothing enters the image unless named below (no secrets, no tests, no VCS).
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!next.config.ts
+!tsconfig.json
+!postcss.config.mjs
+!components.json
+!src/**
+!public/**
+!scripts/check-client-bundle.mjs
+!infra/scheduler/scheduler.mjs
+
+# Belt and braces, applied after the allow-list: never any env file, Workers-style variable file,
+# dependency folder, test output or build cache, even if one is ever allow-listed by mistake.
+**/.env
+**/.env.*
+**/.dev.vars
+**/node_modules
+**/test-results
+**/playwright-report
+**/.next
+**/.git
+**/*.pem
+**/*.key

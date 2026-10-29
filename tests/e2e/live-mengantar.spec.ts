@@ -3,7 +3,7 @@
 // app like an admin would; it is never printed):
 //   E2E_MENGANTAR_KEY_VAR=GERAIEXPRESS_MENGANTAR_SANDBOX_SELLER_KEY secrets-env run -- \
 //     pnpm exec playwright test tests/e2e/live-mengantar.spec.ts
-// The dev server must run with MENGANTAR_ENV=sandbox and SUPABASE_SECRET_KEY (pnpm dev:env).
+// The dev server must run with MENGANTAR_ENV=sandbox (pnpm dev:env).
 import { expect, test } from "./fixtures";
 import { expectNoHorizontalOverflow, expectTouchTargets, localSql, signIn } from "./helpers";
 
@@ -54,10 +54,12 @@ test("a connected gerai picks its Mengantar pickup, searches the recipient area 
     await page.getByLabel("No. HP penerima").fill("081200002222");
     await page.getByLabel("Alamat lengkap").fill("Jl. Kapitan 1 RT 01/04");
     await page.getByLabel("Wilayah penerima").fill("sukatani");
-    await page.getByRole("button", { name: "Cari" }).click();
-    const option = page.getByRole("radio", { name: /SUKATANI, TAPOS, DEPOK/ });
+    // exact: the mobile top bar also has "Cari pengiriman" (T-079).
+    await page.getByRole("button", { name: "Cari", exact: true }).click();
+    // T-072: the area picker is a combobox; results are listbox options.
+    const option = page.getByRole("option", { name: /SUKATANI, TAPOS, DEPOK/ });
     await expect(option).toBeVisible();
-    await option.check();
+    await option.click();
     await expect(page.getByTestId("area-chosen")).toContainText("SUKATANI, TAPOS, DEPOK");
     await expect(page.getByLabel("Kode pos")).toHaveValue("16454");
     await shot(page, "area-picked");

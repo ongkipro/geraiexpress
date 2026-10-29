@@ -1,9 +1,9 @@
 # GeraiExpress — Operator Flows and Screen Contracts
 
-- Status: Proposed behavior handoff; permissions and release scope are unresolved where marked.
+- Status: Proposed behavior handoff with Observed local surfaces. Runtime and data/auth evidence amended 2026-10-29 for Decisions DEC-020 and DEC-021 (ADR-0002, owner): the application runs on the self-hosted Node container with plain PostgreSQL 17 behind PostgREST and the application-owned auth module (T-062, T-064..T-066 built locally; T-067 security review open); screen, permission and recovery contracts are unchanged.
 - Owner: Paduka Ongki
-- Updated: 2026-10-13
-- Sources: CTX-2, CTX-3, CTX-11; existing LegacyReference source routes and their actions.
+- Updated: 2026-10-29
+- Sources: CTX-2, CTX-3, CTX-11, CTX-39, CTX-41, CTX-42; existing LegacyReference source routes and their actions.
 
 ## UX-1 — Scoped operational journeys and recovery
 - Status: Proposed
@@ -12,7 +12,7 @@
 - Statement: Each accepted workflow shall expose its permitted primary action, required context, resulting state, and recoverable error path without bypassing server authorization or concealing uncertain provider outcomes.
 - Acceptance: A permitted user completes contact reuse → draft → quote → explicit submission → ready label, resumes unknown/unpaid states safely, and receives understandable validation/permission/stale-data feedback; unauthorized direct actions remain denied.
 - Constraints: IAM-1, IAM-2, TEN-1, TEN-2, TD-3, UI-1, NFR-4.
-- Evidence: Reference flow source observed; GeraiExpress browser journeys pending.
+- Evidence: Observed local scoped shipping/recovery journeys, with container Playwright e2e recorded by the lead in `STATUS.md` (desktop-1280, mobile-390, tablet-768; 3 single-run flakes passed on solo rerun, T-059). T-053 adds reconcile-only batch attempts, pending/duplicate-click states and confirmations; F2 covers pickup intake/read-back/refusal copy and contact selection. Provider capture and admin closes remain open. The former Worker e2e run is historical; T-067 independent security review of the owned auth remains open.
 
 ## Daily shipping flow
 
@@ -41,9 +41,11 @@
 6. Track submission honestly. Unknown means reconciliation; unpaid means
    review the verified original batch for payment; issued means provider AWB available. None means
    that delivery or physical printing has occurred.
-7. Request the supported provider label, show its generation state, then allow
-   authorized download/print/reprint. Expired download and missing label
-   permission have scoped recovery paths rather than an empty successful page.
+7. Print the local masked label for an issued shipment (UX-9) and, if needed,
+   reprint it from its stored snapshot. The provider PDF label is not a dependency
+   (DEC-017); its request, poll and expiry states apply only to the deferred
+   provider-PDF path. A missing AWB, unpaid or unknown order has a scoped recovery
+   state rather than an empty successful page.
 
 ## Screen inventory derived from the reference
 
@@ -52,14 +54,14 @@ URLs. Only accepted features become visible navigation.
 
 | Workspace | Actor/job and required data | Primary / sensitive actions | States and completion |
 |---|---|---|---|
-| Scope and entry | Authenticated user; memberships, tenant/outlet readiness | Choose authorized context; sign out | Loading/no membership/suspended/denied; completion is a valid workspace |
+| Scope and entry | Authenticated user; memberships, tenant/outlet readiness; host entry points and gerai switcher (UX-11) | Choose authorized context; switch gerai; sign out | Loading/no membership/suspended/denied; completion is a valid workspace |
 | Daily overview | Permitted tenant user; current action counts and selected period | Open a filtered action queue; refresh | True empty versus stale/error; timestamp and metric basis visible; PR-14 scope conditional |
 | Shipment list | Operator/admin; scoped paginated rows, status/filter/query context | Create/resume/open shipment | Empty/no match/loading/error; view filters preserved in navigation |
 | New/edit draft | Operator/admin; outlet, parties, saved addresses, area and package | Save draft; explicit optional save to contacts; obtain quotes/review in the same workspace | Validation/dirty form/pending/stale contact or account; success shows saved draft with no implied provider order |
 | Contact directory/detail | Permitted staff; role flags, minimal list DTO, selected detail/addresses | Create/edit/select; administrator archive if accepted | Empty/search no match/archived/conflicting address/stale revision; saving master leaves shipment history unchanged |
 | Quote/review | Operator/admin; current draft/quote/account/sender mapping | Select service; explicitly confirm submission | Unsupported/COD unavailable/changed quote/account/permission; completion is durable submission receipt |
 | Shipment detail/recovery | Permitted staff; submitted snapshot, order result and events | State-valid reconcile/payment/print actions | Queued/in flight/unknown/unpaid/issued/failed; no automatic unsafe resend |
-| Labels/print history | Permitted staff; scoped AWB, generation/format and attempt history | Request/download/print/reprint | No AWB/unpaid/permission missing/pending/failed/expired; print request wording does not claim paper output |
+| Labels/print history | Permitted staff; scoped AWB, masking switch, label size and print history (UX-9) | Preview, print and reprint the local masked label | No AWB/unpaid/unknown/permission missing; print request wording does not claim paper output |
 | Outlet/account settings | Tenant administrator; safe binding projection, pickup-area pair, capabilities | Save/replace connection and brand; verify readiness | Incomplete/changed authority/invalid config/unavailable provider; no key echo or silent funding fallback |
 | Members | Tenant administrator; current membership and revision | Invite/role/deactivate with safeguards | Pending/conflict/last-admin/denied; success updates effective membership and audit |
 | CSV intake | Conditional operator/admin; template, bounded preview and row errors | Preview; select valid rows; create drafts | Ambiguous destination/tampered/expired/partial row failure; no issuance as import side effect |
@@ -77,10 +79,10 @@ URLs. Only accepted features become visible navigation.
 | Queued or in flight | View progress, resume status | No create-order retry or replacement merely because navigation timed out |
 | Unknown provider outcome | Reconcile through permitted recovery | No blind re-creation, arbitrary failed-status edit, or account switch to bypass uncertainty |
 | Existing unpaid order | Authorized payer reviews every payable order in the verified original batch and its total before explicit payment recovery | No single-row charge implication, unknown/foreign batch member, replacement order or blind payment retry; TD-3 governs reconciliation |
-| Issued AWB | Generate supported label and view verified tracking | Contact edits cannot rewrite the submitted sender |
-| Label pending/processing | Poll existing job within account limits | No repeated generation just to check status |
-| Completed label URL expired | Reauthorize and GET the existing generation for a fresh URL | No POST regeneration merely to renew a download link |
-| Label generation failed | Show safe cause, correct it and explicitly request a new generation if eligible | No unbounded POST loop; account Print quota still applies |
+| Issued AWB | Print the local masked label (UX-9) and view verified tracking | Contact edits cannot rewrite the submitted sender or a stored label snapshot |
+| Label pending/processing (deferred provider PDF path only) | Poll existing job within account limits | No repeated generation just to check status |
+| Completed label URL expired (deferred provider PDF path only) | Reauthorize and GET the existing generation for a fresh URL | No POST regeneration merely to renew a download link |
+| Label generation failed (deferred provider PDF path only) | Show safe cause, correct it and explicitly request a new generation if eligible | No unbounded POST loop; account Print quota still applies |
 | Revoked member/suspended tenant | Denied new work; explicit access/recovery guidance | New privileged work blocked; bounded machine result recording still follows TD-3 |
 
 ## Interaction and browser evidence requirements
@@ -186,8 +188,8 @@ behavior or inherited LegacyReference constants.
 - Source: CTX-24 through CTX-28.
 - Statement: Counter review and customer/resi output shall show the normal undiscounted Mengantar tariff and applicable verified customer COD/insurance charges, while administrator pricing surfaces separately show assigned discounts and verified net provider costs.
 - Acceptance: Different verified seller discounts preserve the same normal customer tariff; applicable fees/premiums are counted once with an explicit payer; all enabled modes including COD Ongkir retain the retail basis, and operator/customer payloads/output omit private net cost/discount. Changed/unknown amounts preserve the draft or reconcile the original submitted order.
-- Constraints: PR-22, PR-23, IAM-5, IAM-6, DATA-5, UI-2, NFR-4. Provider PDF normal-price output must be verified; customer goods and settlement responsibilities remain separate.
-- Evidence: Selected product policy and source/static-render study; no GeraiExpress browser/provider price proof exists.
+- Constraints: PR-22, PR-23, IAM-5, IAM-6, DATA-5, UI-2, NFR-4. The label is local (DEC-017) and the provider PDF is not a dependency; customer goods and settlement responsibilities remain separate.
+- Evidence: Observed T-041/T-053 local discount terms, quote-time cost derivation and nullable provider-percentage storage; cost/detail and assigned-terms settings views are tenant-admin-only, unknown stays "belum diketahui", and operator/print/export projections omit private cost/discount. Worker-reported pricing-display/public-api unit, discount-recording DB and gerai-discount/shipping e2e cover the built surfaces. Insurance and written provider terms remain unproved.
 
 | Surface / mode | Required behavior |
 |---|---|
@@ -195,8 +197,8 @@ behavior or inherited LegacyReference constants.
 | Full COD operator/customer | Goods collected plus normal retail shipping and the applicable customer components assigned to courier collection; fee inclusion/rounding follows the verified rule |
 | COD Ongkir operator/customer | Normal retail shipping and applicable collection components, goods not collected by courier; never substitute discounted shipping cost as its customer basis |
 | Insurance selection | Show supported coverage/premium and its payer/collection channel; required/unsupported/unknown states are explicit; no double collection |
-| Tenant administrator | Own assigned terms, activation status, account-specific net quote and actual cost basis where available; estimate and actual reconciliation stay distinct |
-| Platform pricing administrator | Scoped audited discount assignment/effective version and provider activation/mismatch states; no universal discount claim or local-only false activation |
+| Tenant administrator | Own assigned gerai discount with its status (owner-stated, provider-observed or provider-verified) and the gerai cost estimate derived from it; the account-specific net quote and actual cost basis where available; estimate and actual reconciliation stay distinct. Never the platform remainder or the observed provider percentage (TEN-4, DATA-9) |
+| Platform pricing administrator | Scoped audited gerai-discount terms with effective date, source reference and status; the derived platform remainder labelled as an estimate; the observed provider percentage per quote; blocked states (UX-12); no universal discount claim or local-only false activation |
 | Changed/unavailable prices | Preserve input and show revalidation/refresh; no fake quote, hardcoded legacy fee, zero-cost assumption or silent account/service switch |
 | Confirmed shipment / label | Retail price snapshot and original approved collection; later discounts do not change reprints; actual provider adjustments remain separate history |
 
@@ -207,12 +209,14 @@ that presentation to substitute net cost or conceal who collects an insurance
 premium. Retail values are permitted operator data; internal settlement values
 remain private even when a customer fee numerically matches a provider fee.
 
-Inspect actual provider PDF fields/templates for normal customer tariff and
-private-net disclosure. If the provider output cannot satisfy this requirement,
-label readiness must explain the capability gap for resolution; do not silently
-print net cost, invent a custom-price API parameter or modify authoritative AWB
-routing. Customer receipts and financial reporting retain their own accepted
-scope; they are not automatic replacements for the requested resi behavior.
+The label is a local masked label (DEC-017, UX-9), so there is no provider-PDF
+template to inspect for price disclosure. The label shows no private net cost or
+discount (PR-34, PR-22). Whether it prints the normal customer tariff or the COD
+collection amount is Unknown beyond PR-34's COD collection instruction; select it
+with the pilot scan, and never print net cost, invent a custom-price API
+parameter or modify authoritative AWB routing. Customer receipts and financial
+reporting retain their own accepted scope; they are not automatic replacements
+for the requested resi behavior.
 
 ## UX-6 — Super Admin workspaces and sensitive-action states
 - Status: Proposed
@@ -220,8 +224,8 @@ scope; they are not automatic replacements for the requested resi behavior.
 - Source: CTX-14, CTX-17, CTX-28, CTX-29, CTX-30.
 - Statement: A separately guarded Super Admin workspace shall organize tenant governance, negotiated discounts, integration readiness, operational triage and audit around their decisions, with explicit scope and safe recovery.
 - Acceptance: A permitted Super Admin completes tenant lookup/configured review, scoped discount verification and eligible exception reconciliation with truthful pending/audit results; anonymous/tenant/demo/revoked/incomplete-factor cases are denied at direct boundaries, and partial/stale/empty/failed data remains distinguishable at NFR-4 viewports.
-- Constraints: PR-15, PR-23 through PR-28, IAM-7, TEN-4, UI-4, NFR-4. Routes below are proposals, not implemented pages or separate hostnames.
-- Evidence: Reference screens/source and current contracts; no GeraiExpress browser proof.
+- Constraints: PR-15, PR-23 through PR-28, IAM-7, TEN-4, UI-4, NFR-4. Decision (DEC-015): the workspace is served only from the owner host (ARCH-6); proposed `/platform/...` paths below are not implementation requirements.
+- Evidence: Observed local routes use `/admin`, including discount screens and T-053's `/admin/tenant/[id]` masking control, guarded by capability plus `aal2`; F2 adds invoice/export audit labels/filters and hides label/invoice snapshots from the default audit list. Worker-reported platform/gerai-discount/masking-admin e2e cover built governance; platform health and cross-tenant recovery remain unbuilt.
 
 | Workspace / proposed entry | Required data and main action | States / completion |
 |---|---|---|
@@ -230,7 +234,7 @@ scope; they are not automatic replacements for the requested resi behavior.
 | Gerai / `/platform/tenant` | Business name/status, minimal owner contact, outlet/member counts, connection readiness | Search/status/pagination and explicit scope; open one tenant's platform detail without entering its customer workspace |
 | Detail gerai / `/platform/tenant/[tenantId]` | Lifecycle/history, outlet/readiness summary, seller mode, assigned discount and scoped issues | Missing/denied/conflict/pending; permitted lifecycle confirms reason and effect then displays recorded result |
 | Pendaftaran / `/platform/pendaftaran` | Registration/setup/verification and versioned review history under UX-7 | Conditional manual-review policy; approve/request corrections/reject reason, replay/conflict and clear app-versus-provider state |
-| Diskon / `/platform/diskon` | Tenant/seller/service terms, effective version and provider activation/net quote evidence | Pending/verified-active/mismatch/expired; save does not claim upstream activation and normal customer tariff stays fixed |
+| Diskon / `/platform/diskon` | Tenant gerai-discount terms, effective version, source and status, observed provider percentage and the derived remainder estimate (UX-12) | Pending/blocked above the observed provider discount/unknown observed value; saving does not claim upstream activation and the normal customer tariff stays fixed |
 | Integrasi / `/platform/integrasi` | Environment/origin readiness, safe secret-version status, account capabilities, egress/quotas and BYOK distinctions | Configuration blocked/provider restricted/partial registration/webhook desync; route only to permitted existing recovery/setup |
 | Operasi / `/platform/operasi` | Scoped original-operation references, status/attempt history, safe error code and next permitted action | Queued/in-flight/unknown/unpaid/failed/label pending; reconciliation resumes one original operation, never blind re-create/pay |
 | Audit / `/platform/audit` | Actor/action/target tenant or global scope/time/reason/outcome/version/correlation | Filtered empty versus denied/load failure; append-only records and safe minimal metadata |
@@ -323,14 +327,15 @@ Active members enter only the capabilities their role and outlet permit.
 
 ### Screen and state contract
 
-Routes are proposed same-origin destinations, not installed pages. Combine steps
+Routes are proposed same-origin destinations, not installed pages. Observed
+(2026-10-28): the implemented paths are `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/akses`, `/pilih-gerai` and `/undangan`; the paths below remain proposals. Combine steps
 within `/onboarding` when simpler; permission/state checks do not depend on paths.
 
 | Surface / proposed destination | Main job and action | Pending, failure and next screen |
 |---|---|---|
 | Register / `/daftar` | Explain Register gerai versus staff/demo/sign-in; collect email, actual app notices/required Terms acceptance; request code | Validate inline; generic accepted response; public quota/unavailable state; next email verification, no tenant/provider effect |
-| Email code / `/verifikasi-email` | Show entered email, code input, change-email and rate-limited resend; verify natively | Wrong/expired/consumed code and delivery uncertainty preserve email; never claim tenant approval; success resolves current identity |
-| New account completion / `/onboarding` | Initial/partial app identity explicitly sets/replaces its password after inbox proof; previously completed app identity keeps its credentials | Password policy/confirmation error preserves safe fields only; failed update can resume; explicit recovery for returning users |
+| Email code / `/daftar` (step 2) | Show entered email, code input, change-email and rate-limited resend; verify through the application-owned auth module (`verifyEmailCode` / `public.auth_verify_otp`) | Wrong/expired/consumed code and delivery uncertainty preserve email; never claim tenant approval; success resolves current identity |
+| New account completion / `/daftar/kata-sandi` | Initial/partial app identity explicitly sets/replaces its password (`setPassword` / `public.auth_set_password`) after inbox proof; previously completed app identity keeps its credentials | Password policy/confirmation error preserves safe fields only; failed update can resume; explicit recovery for returning users |
 | Gerai setup / `/onboarding/gerai` | Owner/business/contact/first-outlet fields and applicant-authority declaration; save/submit current revision | Invalid/conflict/network/duplicate submission; after response loss load own application rather than create anew; success opens status/setup |
 | Application status / `/onboarding/status` | Current submitted revision, selected policy, safe reason/history and who acts next | Submitted/changes requested/approved/rejected/withdrawn; correct and resubmit only permitted states; no promised review SLA |
 | Super Admin review / `/platform/pendaftaran` | UX-6 purpose-bound verified owner/business projection and current revision | Approve/request corrections/reject with reason; stale/concurrent decision reloads; success is local tenant decision, not seller creation |
@@ -340,11 +345,12 @@ within `/onboarding` when simpler; permission/state checks do not depend on path
 
 ### Review and exception paths
 
-Recommend manual review for the first pilot, with one visible worklist and safe
-reasons; this is not an accepted requirement that every future gerai needs manual
-approval. If automatic activation is selected, omit the waiting screen and record
-the current policy outcome. In either mode, owner email verification and valid
-data are prerequisites, and provider connection remains an explicit later action.
+Decision (DEC-007, 2026-10-14): manual Super Admin approval during the pilot, with one
+visible worklist and safe reasons; this is not an accepted requirement that every
+future gerai needs manual approval. If automatic activation is selected later, omit
+the waiting screen and record the current policy outcome. In either mode, owner email
+verification and valid data are prerequisites, and provider connection remains an
+explicit later action.
 
 Corrections keep the same application/tenant ID and create a new submitted
 revision. Rejection explains the permitted next step under selected resubmission
@@ -363,11 +369,11 @@ approved tenant and connected seller each have a different completion message.
 |---|---|
 | Identity and scope | Current active tenant/member/outlet; administrator authority for setup; demo transport isolated |
 | Account binding | Correct actual seller/account/environment and private current key; no shared default funding fallback |
-| Pickup and customer sender | Verified pickup-area mapping; supported dropshipper mapping and required permission for custom sender |
+| Pickup and sender | Verified pickup-area mapping and a drop-off or pickup choice (UX-10); the printed sender comes from the masking switch (UX-9); no provider dropshipper mapping (DEC-017) |
 | Customer/seller prices | Verified normal tariff and private net cost; activated applicable discount; no unverified local discount advertised as upstream |
 | Collection and insurance | Current supported mode and authoritative fee/inclusion/payer rules; unselected customer-goods settlement remains blocked |
 | Order and funds | Current quote/draft/account revision, allowed service and authoritative funding/payment conditions; checks do not themselves debit funds |
-| Label | Authoritative AWB and permitted provider PDF; actual customer-price/branding/scan output verified before claiming required custom resi support |
+| Label | Authoritative AWB; the local masked label renders a barcode that decodes to the AWB (UX-9); no provider PDF is required (DEC-017) |
 | Tracking | Verified scoped polling baseline; webhook remains optional until its independent secret/capture proof succeeds |
 
 Readiness is per capability and action. Local setup/drafts need no live order;
@@ -380,26 +386,174 @@ show a global ready badge. The reviewer sees which check is synthetic versus rea
 - Source: CTX-31, CTX-33, CTX-34; PR-31, PR-32.
 - Statement: Staff invitation, returning-user login and recovery shall resolve current identity and permitted scope without accidental gerai/seller creation, credential overwrite or cross-tenant disclosure.
 - Acceptance: Invited new/existing users accept only valid current intended scope, account switches/recovery return to a permitted destination, and no-membership/multi-membership/pending/suspended states have a clear usable next action at NFR-4 sizes.
-- Constraints: IAM-2, IAM-8, TEN-5, DATA-7, SEC-5, UI-5, PR-20; native Auth and current membership remain authoritative.
-- Evidence: Screen/recovery proposal only; no account, invitation or browser session created.
-- Change history: 2026-10-13 — Added in the registration and documentation-completeness review.
+- Constraints: IAM-2, IAM-8, TEN-5, DATA-7, SEC-5, UI-5, PR-20, DEC-021; the application-owned auth module (`src/lib/auth/**`) and current membership remain authoritative.
+- Evidence: Observed in `src/lib/auth-actions.ts`, `src/lib/registration-actions.ts`, `src/modules/members/actions.ts`, `tests/db/invitations.test.ts` and `tests/e2e/{registration,members,auth-demo}.spec.ts` (T-065, T-066; T-067 review open).
+- Change history: 2026-10-13 — Added in the registration and documentation-completeness review. 2026-10-29 — Updated for DEC-021 (ADR-0002): application-owned auth replaces Supabase Auth.
 
 | Entry/state | Main action and result | Recovery / authority limit |
 |---|---|---|
-| Staff invitation / `/undangan/[inviteId]` | Verify intended email or sign in; after proof show business, role and outlet scope; explicitly accept | Wrong signed-in identity offers safe account switch; invalid/expired/revoked invitation offers request-new-invite guidance without foreign details |
-| New staff identity | Native email verification/account completion, then same invitation acceptance | No gerai application or Mengantar creation; role comes from current allowed invitation, not signup input |
+| Staff invitation / `/undangan` | Verify intended email or sign in; after proof show business, role and outlet scope; explicitly accept | Wrong signed-in identity offers safe account switch; invalid/expired/revoked invitation offers request-new-invite guidance without foreign details |
+| New staff identity | 6-digit email-code verification and password setup (`src/lib/auth/**`), then same invitation acceptance | No gerai application or Mengantar creation; role comes from current allowed invitation, not signup input |
 | Existing staff identity | Keep credentials/memberships, accept explicit new scope | Already member resolves existing role or controlled conflict; no silent promotion or duplicate membership |
-| Sign-in / `/login` | Native password login; resolve verified current identity/membership/application | Invalid credentials are generic; no membership opens own onboarding/invitation guidance; multi-membership opens chooser; no assumed first tenant |
-| Forgot password / `/lupa-password` | Request native recovery with generic accepted feedback | Show resend/expiry guidance without confirming email existence; this recovers GeraiExpress only |
-| Set/reset password / `/atur-ulang-password` | Require valid native recovery/authentication and explicit new password | Expired/used/missing session returns to fresh recovery; no app-role change, seller ownership change or password readback |
-| Auth callback / `/auth/callback`, if used | Complete supported native exchange and safe same-origin return | Invalid/missing verifier, reused code or unsafe destination fails safely; GET never accepts invitation or provisions a tenant |
+| Sign-in / `/masuk` | Application-owned password login (`signInWithPassword`); resolve verified current identity/membership/application | Invalid credentials are generic; no membership opens own onboarding/invitation guidance; multi-membership opens chooser; no assumed first tenant |
+| Forgot password / `/lupa-password` (scheduled, PR-32) | Request recovery code with generic accepted feedback | Show resend/expiry guidance without confirming email existence; this recovers GeraiExpress only |
+| Set/reset password / `/atur-ulang-password` (scheduled, PR-32) | Require valid recovery session and explicit new password | Expired/used/missing session returns to fresh recovery; no app-role change, seller ownership change or password readback |
+| Auth callback (not used) | Code-only OTP flow (`src/lib/auth-mail.ts`) uses no redirect link or PKCE callback route (ADR-0002 obligation 9) | GET never accepts an invitation or provisions a tenant |
 | Session expiry during setup | Authenticate again and reload own saved application/current invitation | Preserve bounded non-secret edits where safe; no replay of provider/money commands; current server state wins |
 | Suspended/revoked access | Explain restriction, permitted support path or switch to another current membership | No tenant operation/provider effect; do not erase existing in-flight result/history |
-| App email change | Native secure-email-change flow; refresh verified identity | Pending new email cannot accept matching invites until verified; existing seller email remains unchanged; owner transfer separate |
+| App email change (not built) | Future verified email-change flow; refresh verified identity | Pending new email cannot accept matching invites until verified; existing seller email remains unchanged; owner transfer separate |
 | Mengantar dashboard access | Explain native Mengantar Lupa Password to confirmed provider email | No GeraiExpress form accepts or resets Mengantar password; provider verification/bank/COD restrictions remain independent |
 
 Emails and status views identify the actual application/business and purpose,
-without full customer data. Show TTL/resend availability from selected native
-configuration. No signup-generated account or notification is presented as a
+without full customer data. Show TTL/resend availability from the configured
+auth limits (10-minute code validity, 30-second resend cooldown). No signup-generated account or notification is presented as a
 working demo credential. The first preview still supplies PR-21's actual demo
-access separately from these proposed real-user journeys.
+access separately from these real-user journeys.
+Added 2026-10-28: DEC-013 schedules own password recovery (PR-32) with the production
+mail gate, so the forgot-password and reset rows above are scheduled, not built.
+Observed: no recovery screens exist; sign-in is `/masuk`, not `/login`; the closed
+registration state and invitation sign-in links work without app-sent mail.
+
+## UX-9 — Masking switch and local masked label
+- Status: Decision (DEC-017, PR-34; misuse DEC-018); local label and Super Admin masking control built (T-044, T-053); activation responsibility statement and courier acceptance remain open
+- Owner: Paduka Ongki
+- Source: CTX-39, DEC-017; PR-34, PR-6; TASKS T-044.
+- Statement: At print time the operator shall choose whether to mask the sender with the switch "Gunakan masking pengirim", see exactly what the label will show before printing, and print a local label of 10x15 cm (default) or 10x10 cm that carries the AWB as a Code128 barcode.
+- Acceptance: At 390, 768 and 1280 px a permitted user opens the print view of a real issued shipment, toggles the switch and sees the preview change, prints, and finds the print in the history; with the switch on, printing is blocked with field errors until the sender name, phone and city are entered (Decision, DEC-018; PR-34); for a tenant with masking disabled the switch is shown disabled with the Bahasa reason below and the preview shows the gerai identity; a barcode decode returns the AWB; an unavailable shipment shows its cause; a demo shipment shows the sample watermark.
+- Constraints: PR-34, PR-6, DATA-10, UI-6, NFR-4, PRIV-1, DEC-017.
+- Evidence: Observed local stored-snapshot label, per-print off-default masking switch, required sender fields, sizes, print history, disabled-state reason and tenant WhatsApp setting/prompt (T-044). T-053 supplies `/admin/tenant/[id]` with capability/aal2 read/change, reason, confirmation and audit; F2 fixes invalid-form locking. Lead-executed container Playwright e2e across desktop-1280, mobile-390 and tablet-768 is recorded in `STATUS.md` (earlier Worker runs are historical). Only Chromium print-to-PDF is recorded; activation statement and courier acceptance remain T-048.
+
+| Surface / state | Contract |
+|---|---|
+| Entry | From the shipment detail of an issued shipment with an authoritative AWB. Unpaid, unknown, failed or no-AWB shipments show the recovery state, not a label (PR-6). |
+| Switch | A real switch labelled "Gunakan masking pengirim" with a visible on/off text. Off: the preview shows the gerai name, WhatsApp number and pickup address as sender. On: the preview shows the operator-entered sender name, phone and city. Decision (owner design direction C6, 2026-10-29): the on/off choice and the label size are remembered for the browser tab session per gerai and user (sessionStorage, UI preference only; the sender fields are never stored) and apply to a shipment that has no stored label yet. The thermal label and the A4 invoice never share one print job: the "Resi + invoice" view prints "Keduanya" as two consecutive print dialogs, label first. |
+| Off state data | The gerai name comes from the tenant and the pickup address from the outlet. Decision (PR-34, owner-selected "like the legacy project", 2026-10-28): the gerai WhatsApp number is the tenant-level `contact_whatsapp`, edited only by a tenant administrator in settings; if it is empty the print is blocked with the prompt "Nomor WhatsApp gerai belum diisi. Minta administrator gerai mengisinya di Pengaturan." and is never printed blank; an operator sees the prompt without an edit control. |
+| Settings field | In `/pengaturan` a tenant administrator sees the field "Nomor WhatsApp gerai" with helper text showing the expected form (for example 081234567890); an operator sees it read-only. A leading `+62` or `62` is accepted and shown back as `0` plus the national number (Proposal, PR-34). An invalid value is refused near the input with "Nomor WhatsApp gerai tidak valid. Gunakan nomor Indonesia berawalan 0, misalnya 081234567890." (the rule is `^0[2-9][0-9]{7,11}$`); a successful save confirms with "Nomor WhatsApp gerai disimpan." and the change is audited; the value is saved by an audited command, never by the browser writing the column. |
+| On state fields | Three labelled required fields (sender name, phone, city) with Bahasa field errors near the input; non-secret values preserved on error; maximum lengths Unknown and chosen to fit the label. |
+| Size | 10x15 cm default; 10x10 cm option; the preview matches the chosen size. |
+| Preview | The preview is the print output; an on-screen "Masking aktif" indicator is not printed. Recipient, courier and service, weight and COD collection instruction are printed (Proposal, PR-34). |
+| What stays visible | The shipment detail always shows the real sender and the real pickup address for returns (DEC-017). The Mengantar pickup name is never printed as the default sender. |
+| Print and reprint | Print appends a history row; reprint uses the stored snapshot, not current settings; changing the switch creates a new snapshot (DATA-10). The wording says the print request was issued, never that paper was produced. |
+| Masking disabled for the tenant | Proposal mechanics for the DEC-018 policy (PR-34, DATA-10): when the Super Admin has set the tenant's `masking_allowed` flag to false, the switch is rendered disabled and off, never hidden, with the visible reason "Masking pengirim dinonaktifkan untuk gerai ini oleh administrator platform. Label dicetak dengan identitas gerai. Hubungi administrator gerai untuk informasi lebih lanjut." The disabled state is announced to assistive technology with the reason as the control's description; the size choice and printing with the gerai identity stay available. The database refuses a masked snapshot for such a tenant independently of this screen (DATA-10). |
+| Responsibility statement at activation | Decision for the requirement (DEC-018); wording Unknown until counsel (T-048): when a tenant is activated its administrator accepts a statement that the tenant is responsible for the accuracy of the sender data and of the goods shipped; the acceptance (actor, time, statement version) is stored and shown to that administrator in settings. Proposal for the draft text, pending counsel: "Gerai bertanggung jawab atas kebenaran data pengirim dan barang yang dikirim, termasuk saat masking pengirim digunakan." |
+| True-identity retention note | Decision (DEC-018); shown to tenant administrators only, beside the masking explanation in settings and in the print view help text (not on the printout): "Identitas asli gerai dan alamat pickup tetap tersimpan pada setiap label, juga saat masking aktif, dan disimpan selama masa retensi audit." No period is stated because the retention period is Unknown and stays for counsel (T-048). The shipment detail always shows the real pickup address (row "What stays visible"). |
+| Super Admin control | Proposal mechanics: on the gerai detail in the platform workspace (UX-6) a Super Admin can disable or re-allow masking for one tenant and can suspend the tenant; both actions need a reason, a confirmation dialog naming the tenant and the effect, and write an audit event. A Mengantar or courier notice about a masked parcel is the trigger for the platform review that may lead to either action (Decision, DEC-018). |
+| Misuse | Decision (owner-delegated default, DEC-018): the policy is per-shipment choice, off by default, all three sender fields required, true identity retained, tenant responsibility accepted at activation, Super Admin tenant-level disable and suspension (PR-34). Unknown: whether couriers accept a locally printed label (pilot scan, PR-34, PR-6); the screen does not claim courier acceptance. |
+
+## UX-10 — Pickup choice and slot selection
+- Status: Decision (pickup is a launch requirement: CTX-39, PR-5); Proposal (screen details); built in part (T-043): the provider slot list is not built
+- Owner: Paduka Ongki
+- Source: CTX-39, DEC-014; PR-5; TASKS T-043, T-034.
+- Statement: For each shipment the gerai shall choose drop-off or pickup; a pickup choice shall show the available provider time slots, reserve the chosen slot before the order is created, and keep reservation, order and recovery states distinct and truthful.
+- Acceptance: At 390, 768 and 1280 px an operator chooses pickup, selects a slot, confirms, and sees reservation then order progress; a lost reservation or create response leads to reconciliation with no second reservation or order; changing the pickup address or outlet after quoting asks for a new quote and slot; drop-off behaves as today.
+- Constraints: PR-5, TD-3, DEC-010, UX-1, UX-13, NFR-4. The provider time endpoints' request and response shapes are Unknown until a sandbox capture is recorded (PR-5); the reservation validity window is Unknown.
+- Evidence: Observed pickup intake/date/hour/vehicle/note and confirmation handover, frozen origin and separate reservation/order states. F2 adds pickup-intake e2e and courier-filter unit tests, makes final-state refusal copy win over phases and excludes sibling time ids with one date per read-back row. Worker-reported corrected intake/detail cases pass on 390/1280. `GET /time` is reachability/read-back, not a provider-listed availability screen; that Proposal remains unmet. T-043 is reopened only for the supervised capture in T-048 item (6); release, time-zone/slot representation and reservation ownership remain Unknown; ambiguous-reservation admin exit is T-056.
+
+| Surface / state | Contract |
+|---|---|
+| Choice | A labelled two-option control in the review section: drop-off (default, existing behavior) or pickup. The choice is part of the draft and of the confirmed snapshot; the pickup identity frozen at confirmation is the one dispatched (T-034). |
+| Slot list | Pickup shows the provider's available slots with date and time range, grouped by day. Empty list: an explicit "no slot available" message with the choices to pick drop-off or try later; never an empty selector. Loading and provider-error states preserve the draft. |
+| Selection | A slot is selected, not yet reserved. A reservation is not an order; the confirmation dialog states that the slot will be reserved and the order created. |
+| Progress | Distinct states: slot selected, reserving, reserved, creating order, issued, and failed. A reservation without an order is shown as such. |
+| Unknown outcome | A lost reservation or create response shows the unknown state with a reconcile action that reuses the original operation; no button re-sends a reservation or order (DEC-010). |
+| Invalidation | A change to outlet, pickup address or quote after slot selection clears the slot and asks for a new quote. Expiry of an unused reservation is Unknown until the sandbox capture. |
+| Visibility | The shipment detail shows the chosen type, slot and the real pickup address; with masking on the label does not print the pickup address (UX-9). |
+
+## UX-11 — Entry points, host chooser, gerai switcher and Bahasa error pages
+- Status: Decision (hosts, 404 behavior, entry points, chooser, identities and per-host error pages: CTX-41 items 1, 4, 8, 13, 14 and 16, accepted; items 11 to 17 accepted by the owner on 2026-10-28, DEC-015); Proposal (switcher and review P2 findings); built in part (T-042, T-051): the per-host variants and the unsaved-input confirmation are not built
+- Owner: Paduka Ongki
+- Source: DEC-015; CTX-41; PR-36; review P2 UX findings (switcher, English error pages); TASKS T-042.
+- Statement: Each host shall have its own entry point, its own Bahasa Indonesia not-found and error pages, and the app host shall let a user who belongs to several gerai see and switch the current gerai at any time.
+- Acceptance: An anonymous visitor to `/` on each host reaches that host's sign-in (owner and app) or the public page (apex); another host's path answers a Bahasa 404 with no redirect and no hint of the other host; a multi-membership user switches gerai from the shell, old results and pending form assumptions are cleared, and a single-membership user sees no switch control; every error page is in Bahasa Indonesia with no stack or secret.
+- Constraints: PR-36, TEN-6, ARCH-6, UX-1, UX-8, UI-5, NFR-4. CTX-41 items 11 to 17 are accepted (2026-10-28), so the entry behavior below is a Decision; the switcher design stays a Proposal.
+- Evidence: Observed (2026-10-29, local): `/` redirects by session state and host (`src/app/page.tsx`: the app host to `/masuk` or the queue, chooser or `/akses`; the owner host to platform sign-in or `/admin`; the apex serves marketing); the wrong-host and unknown-host answer is a plain Bahasa 404 body from `src/proxy.ts` (renamed from `src/middleware.ts` in T-066) without a home link; `not-found.tsx`, `(workspace)/not-found.tsx`, `error.tsx` and `global-error.tsx` are Bahasa and dialog and sheet close labels read "Tutup"; the shell has "Ganti gerai" for a multi-membership user and `/pilih-gerai` marks the current gerai (`src/lib/workspace-switch.ts`; `tests/e2e/workspace-states.spec.ts` and `hosts.spec.ts`). Not built: a persistent host context label, per-host error page variants and a confirmation when a form has unsaved input before switching.
+
+| Surface / state | Contract |
+|---|---|
+| Apex `/` | Public marketing; the sign-in call to action points to the app host. The owner host is not linked from public pages (Proposal). |
+| App host `/` | Anonymous: redirect to sign-in. Signed in: shipment queue, or the chooser when several memberships need a selection, or the no-membership state. |
+| Owner host `/` | Anonymous: redirect to platform sign-in with the second-factor step. Signed in with a grant: platform overview (Decision, CTX-41 item 13). |
+| Wrong-host path | 404 in Bahasa Indonesia (Decision, CTX-41 item 4). The page offers only that host's own home link and does not name the other host. Observed: built as a plain-text Bahasa body ("Halaman tidak ditemukan") with no link and no name of another host; the home link is not built. |
+| Identity on both hosts | A person who is both a platform administrator and a tenant member signs in separately on each host; the app shell shows no platform link and platform pages show no tenant context (Decision, CTX-41 item 14). |
+| Gerai chooser | Lives on the app host only; lists only the user's active memberships by display name; selection sets the validated selector, never authority. |
+| Gerai switcher | A persistent shell control showing the current gerai name and, for a multi-membership user, the other own memberships; switching confirms when a form has unsaved input, clears old data and returns to the shipment queue. Observed (T-051): "Ganti gerai" in the shell opens `/pilih-gerai` for a multi-membership user and a single-membership user sees no control; the unsaved-input confirmation is not built. |
+| Not-found and error pages | Per host, in Bahasa Indonesia: a clear title, one sentence of cause, a primary action (home, retry), a persistent host context label, no technical detail, no cross-origin call. Dialog close controls read "Tutup". Health route per host (Decision, CTX-41 item 16). Observed (T-051, T-042): Bahasa pages with a link back and no technical detail, "Tutup" labels, `/healthz` on every host; no host context label. |
+
+## UX-12 — Super Admin gerai-discount assignment screen
+- Status: Decision (DEC-016, PR-23; variance/rounding DEC-018); terms/ceiling/admin and tenant views built (T-041, T-053); stated-provider-value/drift/template-activation proposals not built
+- Owner: Paduka Ongki
+- Source: DEC-012, DEC-016; CTX-42; PR-23; DATA-9; TASKS T-041.
+- Statement: A Super Admin shall assign, review and supersede a gerai's discount terms per tenant on one screen that shows the stated provider discount, the gerai discount, the status of each, the effective date, the source reference, the observed provider percentage, the variance between the assigned and the observed discount, and the derived remainder estimate, and shall be unable to type the remainder or to save a gerai discount above the observed provider discount.
+- Acceptance: At NFR-4 viewports a permitted Super Admin creates a version for one tenant with effective date, source reference and status; the remainder is read-only and labelled as an estimate while the provider value is not provider-verified; the variance panel shows the assigned and observed percentages and their difference with the statement that the difference is neither collected nor subsidized; a value above the observed provider discount is refused with the Bahasa explanation below; an unknown observed value shows "tidak diketahui", never 0%; the version history lists earlier versions unchanged; saving writes an audit event and changes no past quote.
+- Constraints: PR-23, DATA-9, TEN-4, IAM-7, UX-6, UX-13, UI-4. Observed: the screen is guarded by the existing capability `integration_operations` with `aal2`; a dedicated pricing capability would need its own migration and stays an owner decision (IAM-7 owns capability policy).
+- Evidence: Observed `/admin/diskon` template/overview and per-tenant history/form/confirmation/stale handling with per-courier observations and read-only estimated variance. T-053 records observed provider bps per quote, preserving NULL/zero, and supplies assigned discount/status/effective date in settings plus cost estimates on real shipment detail for tenant admins only. This observed-quote column is not the separate proposed stated-provider-value field; stated-value drift and template-copy-at-activation are not built (template only prefills). Worker-reported gerai-discount e2e and discount-recording DB cover built paths on 390/1280; no provider-verified commercial claim follows.
+
+| Surface / state | Contract |
+|---|---|
+| Placement | Under the platform workspace on the owner host, reached from the gerai detail and from a "Diskon" navigation item (Proposal; path naming is not a requirement, see UX-6). |
+| Current terms card | Tenant name and slug for identification only; stated provider discount, gerai discount (percent with two decimals, stored as basis points), a status badge per value, effective date, source reference and last actor. While a value is owner-stated the card says it is the owner's value and not yet verified by Mengantar (DEC-012). |
+| Derived remainder | Read-only "Perkiraan sisa platform" with the word estimate; shown as unknown when the provider value is unknown; negative or invalid results block saving. |
+| Observed provider discount | Latest observed percentage per tenant with its quote date and a drift marker when it differs from the stated provider value; unknown is shown as unknown. |
+| Variance panel | Read-only "Selisih diskon" for the tenant: assigned gerai discount, latest provider-observed discount, and their difference in percentage points, with the note "Selisih ini tidak ditagihkan dan tidak ditanggung GeraiExpress; debit Mengantar mengikuti tarif akun seller gerai." Shown as "tidak diketahui" when the observed value is unknown. Decision (DEC-018, BILL-3). |
+| Form | Per-tenant assignment (DEC-018): tenant (fixed by the gerai detail the screen was opened from), "Diskon gerai" as a percent with up to two decimals stored as integer basis points, optional stated provider discount, status (`owner_stated`, `provider_observed`, `provider_verified`), effective date, "Referensi sumber" (source reference, required), and a reason for the change. Proposal: effective date is today or later, so no past quote is retroactively affected; `provider_verified` is selectable only with a source reference naming the written Mengantar confirmation. Inputs keep their values on error. |
+| Blocked above observed | Bahasa message, with the numbers filled in: "Diskon gerai {x}% melebihi diskon Mengantar yang teramati ({y}%). GeraiExpress tidak menanggung selisihnya, sehingga nilai ini tidak dapat disimpan. Turunkan diskon gerai menjadi {y}% atau lebih rendah." No override. When no observed value exists the discount is held as pending (PR-23 proposal) and the screen says "Diskon Mengantar belum teramati; diskon gerai ditahan sebagai menunggu." |
+| Confirmation | A dialog names the tenant, old and new values and the effect: applies to quotes after the effective date, changes neither the Mengantar bill nor the sender's price. A reason is required. |
+| Pending and result | UX-13 pending state; success returns focus to the new version row and shows the audit reference; a stale-version conflict reloads the current version and keeps the entered reason. |
+| History | Append-only version list with actor, time, values, status and source; nothing is editable in place. |
+| Template | A platform default template is a separate section. Unknown: how it applies; Proposal: it is copied as the first version of a tenant at activation, so later template edits never change existing tenants. |
+| Tenant view | The tenant administrator sees only its own gerai discount, status and the derived gerai cost estimate in settings and review (UX-5); never the remainder, the variance or the provider percentage. No percentage appears on public pages (PR-35). |
+
+## UX-13 — Pending, duplicate-click and unknown-outcome states for money actions
+- Status: Proposed contract; pending/duplicate-click states, batch/key confirmations and reconcile-only attempts built locally (T-051, T-039, T-041, T-053, wave F); full viewport/final-build evidence remains separate
+- Owner: Paduka Ongki
+- Source: review section 3 P2 (no pending or duplicate-click state or confirmation on "Bayar batch", "Kirim sekarang", "Hapus kunci"); DEC-010; UX-1; TASKS T-033.
+- Statement: Every money or provider-effect action shall confirm its effect, disable itself while pending without changing its label or width, announce progress, and, after a timeout or reload, show the original operation's current state instead of offering the same action again.
+- Acceptance: A double click or a double submit on each action below produces one request and one operation (end-to-end test at 390, 768 and 1280 px); an unknown outcome shows a reconcile-only state; focus returns to the result; the confirmation names the amount or scope where one exists.
+- Constraints: UX-1, UI-3, TD-3, DEC-010, NFR-2, NFR-4; backend idempotency stays authoritative and the UI only supplements it.
+- Evidence: Observed `SubmitButton` covers shipment-detail dispatch, payment check, reconciliation, label and recovery forms with pending labels/fixed-width layout; T-053 adds batch scope/amount and key-removal confirmations, hides payment for sent/unknown attempts and retains read-only payment checking. Lead-executed container Playwright e2e across desktop-1280, mobile-390 and tablet-768 is recorded in `STATUS.md` (earlier Worker runs are historical). F2 permits invalid forms to be corrected/resubmitted without a premature lock. Backend idempotency remains authoritative; unknown-payment/ambiguous-pickup closes remain T-056.
+
+| Action | Confirmation content | Pending and unknown behavior |
+|---|---|---|
+| Konfirmasi shipment | Courier, service, normal tariff, COD amount if any, drop-off or pickup (UX-10) | Disabled while pending; a lost response shows the unknown state with reconcile, never a second confirm |
+| Kirim sekarang (dispatch a queued order) | That the order will be sent to Mengantar now | Disabled while pending; unknown goes to reconciliation by the original reference |
+| Bayar batch | Every payable order of the verified original batch and the total (UX-1 state table) | Disabled while pending; an ambiguous result blocks a second payment until reconciled (review P0-3, T-033) |
+| Hapus kunci | That shipping for the gerai stops until a new key is stored and that the key cannot be read back | Disabled while pending; shows the resulting connection state |
+| Register or recover Partner seller | The owner and agreement context (UX-2) | Resume the same operation; no repeat creation |
+| Reserve pickup slot | Slot and that the order follows (UX-10) | Reservation and order states stay distinct |
+| Save discount terms | Tenant, old and new values, effect and reason (UX-12) | Disabled while pending; stale-version conflict keeps the reason |
+
+## UX-14 — Counter day: from a confirmed shipment to a printed resi
+- Status: Proposed (owner direction 2026-10-29: perfect the gerai flow for creating a shipment and printing the resi); not built; tasks T-070, T-071.
+- Owner: Paduka Ongki
+- Source: owner direction; geraicuan counter ergonomics (inspected reference: shipment creation then immediate label print, queue with pinned selection bar); UX-4, UX-9, UX-13; UI-7.
+- Statement: After a shipment is confirmed the operator shall always see where it stands and the one next action, never a bare detail page: issued → print the label; awaiting payment or uncertain → the truthful state with its recovery; failed → why and how to retry. An operator who prints many labels in one sitting shall be able to select issued shipments in the list and print their labels in one queue without repeating the masking and size choices.
+- Acceptance: (1) The confirmation lands on the detail page with a result banner and a primary "Cetak label" for an issued shipment, a secondary "Buat pengiriman lagi" that starts a draft in one click, and the AWB copyable; an uncertain or unpaid outcome never offers print or a second create-from-same-draft action. (2) Keyboard path: from the last intake field to the printed label is reachable without a pointer at 1280 px; at 390 px the primary action is within thumb reach (sticky action area) and nothing overlaps focus (WCAG 2.4.11). (3) Batch print (T-071): selecting issued, non-simulated shipments on one list page opens one print queue of one label per page at the chosen size, with the masking choice applied to all and shown before printing; shipments without a stored label are excluded with a named reason, never silently skipped; each printed label records its own print history; the thermal queue never contains an A4 sheet (UX-9). (4) Nothing here changes what a label contains or when a resi exists; the provider outcome stays authoritative (DEC-010).
+- Constraints: UX-1, UX-9, UX-13, UI-6, UI-7, DEC-010, DEC-017; no private cost or discount on any printed output (UX-5).
+- Evidence: Observed (T-069): detail page has "Langkah berikutnya" with "Cetak label" and "Cetak resi + invoice"; list rows have a single "Cetak resi" link; the print surface has Label and Resi + invoice tabs; label masking and size are remembered per tab session. Not observed: any batch print, any post-confirm banner that names the next action beyond the existing `?terbit` flash.
+
+| Moment | Operator sees | Primary action | Never offered |
+|---|---|---|---|
+| Issued (real) | "Resi terbit" banner, AWB with copy | Cetak label | Confirm again |
+| Issued (demo/simulated) | Same, labelled "contoh" | Lihat contoh label | A real print claim |
+| Awaiting payment | Unpaid state, who can pay | Periksa pembayaran | Print, new shipment from this draft |
+| Unknown | Uncertain state, reconcile | Periksa status | Print, retry, new order |
+| Failed, nothing created | Reason | Ubah & coba lagi | Print |
+
+## UX-15 — Interaction quality bar for the redesigned surfaces
+- Status: Proposed; tasks T-072, T-073, T-074.
+- Owner: Engineering owner
+- Source: UI-7 review findings (native selects kept in the intake form and list filters, switch and select sizes, keyboard order checked at 1280 only); WCAG 2.2 SC 2.4.11, 2.5.7, 2.5.8, 1.4.10.
+- Statement: Controls shall behave consistently across surfaces: one select component, one combobox pattern for area search, one confirmation grammar for destructive and money actions, and every changed route shall meet the keyboard, focus, reflow and target-size checks below.
+- Acceptance: (1) The intake form, list filters and pickup fields use the shared select (or a documented native exception with its reason), and e2e uses a shared helper instead of `selectOption` on native elements; (2) the area picker is a keyboard-operable combobox (arrow keys, Enter, Escape, `aria-activedescendant`, announced result count, loading, empty and error states); (3) at 320 px reflow no route needs two-dimensional scrolling except data tables inside a labelled scroll region; (4) at 200% text zoom no label, status or action is clipped on the intake form, detail, label and invoice screens; (5) Tab order follows reading order on every changed route at 390, 768 and 1280 px, focus is never fully covered by a sticky bar, and Escape closes every dialog and sheet and returns focus to its invoker; (6) client JavaScript added by the redesign is measured (route first-load JS before and after for `/pengiriman`, `/pengiriman/[id]` and `/`) and recorded, with any route that grew more than 20% explained.
+- Constraints: UI-2, UI-3, UI-7, NFR-3, NFR-4, native-first (no new dependency without a recorded reason).
+- Evidence: Observed (T-069): native `<select>` in `intake-form`, `pickup-fields`, list filters and the platform audit filter; radio-list area picker with arrow-down from the search box; focus-order check run at 1280 only; no JavaScript size comparison recorded.
+
+## UX-16 — Dashboard: the gerai dashboard and the app header
+- Status: Proposed (owner feedback 2026-10-29: the product felt too simple and had no dashboard page); tasks T-078, T-079; PR-14 (daily overview) moves from Deferred into scope.
+- Owner: Paduka Ongki
+- Source: owner feedback; geraicuan dashboard (inspected reference: header with one primary action, filter row, stat strip, daily trend, recent shipments); admin-dashboard rules (overview first, then detail; exception tier first; honest charts); UX-4, UX-5, UX-14, UI-7.
+- Statement: A signed-in gerai user shall land on a Dashboard that answers, in order: what needs me now, how is today going, how have the last days gone, and where do I start the next task. Every number shall come from the gerai's own shipments in its own timezone (WIB), and every chart shall have a text alternative and no invented figure.
+- Acceptance: (1) the Dashboard at `/` is the landing page after sign-in, invitation acceptance and gerai switching, the first navigation item ("Dashboard", active only on `/`), and keeps the current scope (gerai and outlet) visible. (2) Order of regions: header with the date in WIB and the one primary action "Buat pengiriman"; "Perlu tindakan" (unknown, failed, awaiting payment, queued, in flight) as a list that links to each shipment, with an empty state that says nothing needs action; a stat strip (today created, today issued, awaiting payment, open drafts) where each count links to the matching filtered list and each "today" count shows the change against yesterday as a signed number; a daily trend chart for the last 7, 14 or 30 days (chosen by a link control that keeps the choice in the URL), drawn as stacked bars of issued versus other shipments, with a data table behind a disclosure and an `aria-label` summary; a status composition bar and a courier ranking for the same period with counts and shares that sum to the shown total; a "Terbaru" list of the last five shipments; quick actions (Buat pengiriman, Cetak label massal, Tambah kontak) and, for tenant administrators only, an incomplete-setup callout (provider connection, WhatsApp, pickup address) that links to the setting. (3) Money: only "ongkir pelanggan" (the customer charge) is summed, labelled as such and never as income or profit; no provider net cost, discount, or COD collection amount appears (UX-5, PR-22); COD is a count. (4) Honesty: a demo workspace labels every figure "contoh"; a period with no shipments shows zero bars and an empty-state sentence, never a placeholder trend; counts are computed from rows the user may read, bounded (at most 5,000 rows per period) with a visible "terbatas" note when the bound is reached. (5) Charts are server-rendered SVG/CSS (no chart library, no client JavaScript added for them); contrast and non-colour cues follow admin-dashboard §6 (pattern or label as well as colour). (6) At 390 px the order is the same single column with the stat strip as two columns; at 768 px two columns; at 1280 px the attention list and today's strip sit beside each other above the trend.
+- App header (T-079): from 768 px a persistent top bar with the page title or breadcrumb, a global search that opens the shipment list filtered by reference, name or resi (`/pengiriman?q=`), the "Buat pengiriman" action, the count of items needing action as a badge on its link, and an account menu (gerai switcher when the user has several gerai, "Atur ulang demo" in a demo, sign out). The sidebar keeps grouped navigation with a count badge on Pengiriman. The platform workspace gets the same header with its own scope chip and no gerai actions.
+- Constraints: UX-1, UX-5, UX-13, UI-7, NFR-3 (route budget in ARCHITECTURE.md), PR-22; light theme only; no new dependency without a recorded reason.
+- Evidence: Observed (2026-10-29): the landing page after sign-in is the shipment list; the list has a three-count stat strip and an attention list; there is no route that shows a time series, a status or courier breakdown, or recent activity; the desktop layout has no top bar.

@@ -6,12 +6,11 @@ const secrets: Record<string, string | undefined> = {};
 let machineRpc: ((fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>) | null = null;
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/credential-crypto", () => ({ credentialAad, openCredential }));
-vi.mock("@/lib/worker-secret", () => ({
-  workerSecret: (name: string) => secrets[name],
+vi.mock("@/lib/config", () => ({
+  config: (name: string) => secrets[name],
 }));
-vi.mock("@/lib/supabase/machine", () => ({
-  machineClient: () => (machineRpc ? { rpc: machineRpc } : null),
+vi.mock("@/lib/db/server", () => ({
+  machineClient: async () => (machineRpc ? { rpc: machineRpc } : null),
 }));
 
 const { mengantarFailure, tenantMengantar } = await import("../../src/lib/mengantar/tenant");
@@ -58,7 +57,7 @@ describe("tenantMengantar (T-023 / T-028)", () => {
   it("returns no_key when machine_seller_key RPC returns null or an error", async () => {
     machineRpc = vi.fn(async () => ({ data: null, error: null }));
     expect(await tenantMengantar(TENANT_ID)).toEqual({ ok: false, reason: "no_key" });
-    expect(machineRpc).toHaveBeenCalledWith("machine_seller_key", { p_tenant: TENANT_ID });
+    expect(machineRpc).toHaveBeenCalledWith("machine_seller_key", { p_tenant: TENANT_ID, p_env: "sandbox" });
 
     machineRpc = vi.fn(async () => ({ data: { ciphertext: "x", iv: "y", version: 1 }, error: { message: "db_down" } }));
     expect(await tenantMengantar(TENANT_ID)).toEqual({ ok: false, reason: "no_key" });
@@ -79,6 +78,29 @@ describe("tenantMengantar (T-023 / T-028)", () => {
 
     machineRpc = vi.fn(async () => ({ data: { ...sealed, version: 2 }, error: null }));
     expect(await tenantMengantar(TENANT_ID)).toEqual({ ok: false, reason: "key_unreadable" });
+  });
+
+  it("asks for the key of the Worker's own Mengantar environment", async () => {
+    secrets.MENGANTAR_ENV = "production";
+    await tenantMengantar(TENANT_ID);
+    expect(machineRpc).toHaveBeenCalledWith("machine_seller_key", { p_tenant: TENANT_ID, p_env: "production" });
+  });
+
+  it("opens a row sealed under v1 after the ring switched to v2, and refuses a version the ring lacks (SEC-7)", async () => {
+    const v1 = await sealCredential(API_KEY, credentialAad(TENANT_ID, 4), CREDENTIAL_KEY);
+    expect(v1.keyVersion).toBe("v1");
+    machineRpc = vi.fn(async () => ({ data: { ...v1, key_version: v1.keyVersion, version: 4 }, error: null }));
+    delete secrets.CREDENTIAL_KEY;
+    secrets.CREDENTIAL_KEYS = JSON.stringify({ "1": CREDENTIAL_KEY, "2": WRONG_KEY });
+    secrets.CREDENTIAL_KEY_CURRENT = "2";
+    expect((await tenantMengantar(TENANT_ID)).ok).toBe(true);
+
+    secrets.CREDENTIAL_KEYS = JSON.stringify({ "2": WRONG_KEY });
+    expect(await tenantMengantar(TENANT_ID)).toEqual({ ok: false, reason: "key_unreadable" });
+
+    // A malformed ring is not configured at all.
+    secrets.CREDENTIAL_KEYS = JSON.stringify({ "2": "short" });
+    expect(await tenantMengantar(TENANT_ID)).toEqual({ ok: false, reason: "not_configured" });
   });
 
   it("opens a valid sealed credential and returns a bound Mengantar client", async () => {

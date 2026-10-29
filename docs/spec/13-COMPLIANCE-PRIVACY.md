@@ -2,7 +2,7 @@
 
 - Status: Proposed engineering inventory; legal applicability and retention unresolved.
 - Owner: Paduka Ongki
-- Updated: 2026-10-13
+- Updated: 2026-10-29
 
 ## PRIV-1 — Purpose-bound operational data
 - Status: Proposed
@@ -88,11 +88,11 @@ operation; no such endpoint is established by the four-route Partner contract.
 
 | Information | Purpose / allowed audience | Policy gate |
 |---|---|---|
-| Auth email and account credential | Native identity/recovery; password/session material stays in Auth and native session mechanism | Actual Auth/mail processing locations and lifecycle |
+| Auth email and account credential | Application-owned identity/recovery (`auth.users`, `auth.sessions`, `auth.otp_codes`, `auth.mfa_factors`, ADR-0002); password hashes (`scrypt`), HMAC code digests, SHA-256 refresh hashes and sealed TOTP secrets stay in schema `auth` and HttpOnly session cookies (`gx_at`, `gx_rt`) | Actual database/mail processing locations and lifecycle |
 | Applicant owner/business/contact and pickup | Own setup and purpose-bound Super Admin business review; not a global customer directory | Minimal required fields, notice, correction/resubmission and review retention |
 | Application policy acknowledgment/Terms acceptance | Evidence of the specific application terms/policy presented; version/time/actor/application | Actual legal entity, URLs/versions and retention; not implied consent to all processing |
 | Intended staff email and invitation history | Deliver scoped invitation and prevent unauthorized acceptance | Invite lifetime, issuer access and unaccepted/revoked retention |
-| Authentication email content/metadata | Deliver code/recovery/account-security messages | Cloudflare/Supabase access, suppression/log retention and diagnostic minimization |
+| Authentication email content/metadata | Deliver code/recovery/account-security messages | Application and mail-provider access (DEC-020, DEC-021; formerly Cloudflare/Supabase), suppression/log retention and diagnostic minimization |
 
 Application Terms acceptance, privacy notice presentation, Mengantar agreement
 and optional marketing permission are separate records/purposes. No marketing

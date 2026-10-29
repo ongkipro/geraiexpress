@@ -1,10 +1,10 @@
 // PR-4 / PR-5 / PR-7 / PR-22 / NFR-2 / DATA-2: simulated quote → explicit confirmation → one
 // operation, stale revision/quote rejection, frozen snapshots, label reuse and unknown recovery.
 import { beforeAll, describe, expect, it } from "vitest";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { TestClient } from "./helpers";
 import { demoVisitor, sql } from "./helpers";
 
-let c: SupabaseClient;
+let c: TestClient;
 let tenant: string;
 let outlet: string;
 

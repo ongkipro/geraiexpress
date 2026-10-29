@@ -1,10 +1,12 @@
 // DEL-1 stage 3 / TD-3: read-only Mengantar Public API client (area search, shipping estimate).
 // The seller API key is part of the URL path (`/api/public/{API_KEY}/...`), so a request URL is a
 // secret: it is never logged, thrown or returned. Only fixed origins are allowed, redirects are
-// not followed (workerd rejects `redirect: "error"`, so `manual` + 3xx refusal), responses are
+// not followed (`redirect: "manual"` + 3xx refusal; workerd, the former runtime, rejected `"error"`), responses are
 // time- and size-bounded, and every number is checked before it is used.
 // Contract evidence: docs/research/geraiexpress-mengantar-public-api.md and
 // tests/unit/fixtures/mengantar (sanitized production responses, 2026-10-14).
+
+import { isPickupVolume, PICKUP_SLOT_HOURS, providerTimeFields, wibDate, type PickupVolume } from "./pickup";
 
 export const MENGANTAR_ORIGINS = {
   production: "https://api-public.mengantar.com",
@@ -30,9 +32,9 @@ const COURIERS: Record<string, string> = {
 };
 export const OFFERED_COURIERS = new Set(Object.values(COURIERS));
 
-// Couriers seen refusing drop-off orders (sandbox, T-020: anteraja). GeraiExpress dispatches
-// drop-off only, so these are not offered.
-// lazy: one sandbox observation; replace with a per-outlet pickup mode once scheduled pickup exists.
+// Couriers seen refusing drop-off orders (sandbox, T-020: anteraja). They are not offered for a
+// drop-off shipment; a pickup shipment (T-043, scheduledPickup) keeps them.
+// lazy: one sandbox observation, not a documented rule.
 export const DROP_OFF_UNSUPPORTED = new Set(["anteraja"]);
 
 export type MengantarErrorCode =
@@ -52,6 +54,14 @@ export class MengantarError extends Error {
   ) {
     super(`Mengantar request failed: ${code}`);
     this.name = "MengantarError";
+  }
+}
+
+// A response body over the size cap. Still a "malformed" answer for every caller; the pickup
+// pre-check alone tells it apart (the account did answer, the list is merely long).
+export class ResponseTooLarge extends MengantarError {
+  constructor() {
+    super("malformed");
   }
 }
 
@@ -92,6 +102,9 @@ export type CourierEstimate = {
   codFee: number;
   // Provider cost after the account's volume discount, without the COD fee (administrator only).
   netShipping: number;
+  // The provider's own discount for this account in integer basis points (22.5% -> 2250), from the
+  // documented `discountPercent`. null = unknown (absent, unreadable or out of range); a present 0 is a real 0%.
+  discountBps: number | null;
   etaText: string | null;
 };
 
@@ -171,6 +184,51 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
       });
     },
 
+    // T-043 / TD-12: the seller's own pickup time records (GET /time, no parameters). Read-only.
+    // Documentation shape (Observed, example only): `data` is an array of `{ _id, date, time }`
+    // with `date` in epoch milliseconds and `time` like "12:00". Unverified: whether a row carries
+    // its address (read here only when present), what the list holds beyond the seller's own
+    // records, and its size or paging. Rows that do not parse are dropped, never guessed.
+    async listPickupTimes(): Promise<ProviderPickupTime[]> {
+      const data = await getData("/time", {});
+      if (!Array.isArray(data)) throw new MengantarError("malformed");
+      return data.flatMap((row) => {
+        const parsed = parseTimeRecord(row);
+        return parsed ? [parsed] : [];
+      });
+    },
+
+    // T-043 / TD-12: reserves one pickup time record (POST /time). A state-changing call that is
+    // never retried here: a refusal that created nothing (a plain 400 "invalid pickup time", or a
+    // 403) is a MengantarError "rejected" / "not_allowed"; every other failure, or an answer
+    // that cannot be tied to the requested slot and address, is "unknown_outcome" because the
+    // record may exist. The caller reconciles by listPickupTimes, it never POSTs again.
+    // Unverified (no sandbox capture): the success status (200 or 201 accepted), the error body
+    // shape, whether the same input returns the same record, and whether a record expires.
+    async reservePickupTime(input: { addressId: string; date: string; hour: number }): Promise<{ timeId: string }> {
+      const fields = providerTimeFields(input.date, input.hour);
+      if (!AREA_ID.test(input.addressId) || !fields) throw new InvalidOrderRequest("pickup_slot_invalid");
+      let answer: { status: number; payload: Record<string, unknown> };
+      try {
+        answer = await send("/time", {}, { address_id: input.addressId, ...fields });
+      } catch (error) {
+        if (error instanceof MengantarError && error.code === "not_allowed") throw error;
+        throw new MengantarError("unknown_outcome");
+      }
+      const { status, payload } = answer;
+      if (status === 400 && payload.success === false && !Array.isArray(payload.data)) {
+        throw new MengantarError("rejected", text(payload.message).slice(0, 200) || null);
+      }
+      if ((status !== 200 && status !== 201) || payload.success !== true) throw new MengantarError("unknown_outcome");
+      const record = parseTimeRecord(payload.data);
+      // The answer must be the slot that was asked for, at the address that was asked for.
+      if (!record || record.hour !== input.hour || record.date !== input.date
+        || (record.addressId !== null && record.addressId !== input.addressId)) {
+        throw new MengantarError("unknown_outcome");
+      }
+      return { timeId: record.id };
+    },
+
     // The provider's area index (origin/destination ids for estimate and create-order).
     async searchAreas(keyword: string): Promise<AreaOption[]> {
       const term = keyword.trim();
@@ -233,51 +291,44 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
       if (typeof courier === "string" && courier.trim().toLowerCase() === "ninja") {
         throw new InvalidOrderRequest("courier_discontinued");
       }
-      if (!BATCH_ID.test(batch) || !OFFERED_COURIERS.has(courier)) {
+      if (!BATCH_CODE.test(batch) || !OFFERED_COURIERS.has(courier)) {
         throw new InvalidOrderRequest();
       }
       const rows = await listOrders({ batch, courier, page: "1", size: "100" });
       return rows.filter((o) => o.batch === batch && o.status !== "error");
     },
 
-    // Pays an unpaid Mengantar batch from the seller's wallet balance (TD-3, T-026).
-    // Array order in `awbs` does not prove shipment-to-AWB mapping; callers reconcile each order via findOrder.
-    async payUnpaidBatch(batchId: string, courier: string): Promise<PayUnpaidResult> {
+    // Pays an unpaid Mengantar batch from the seller's wallet balance (TD-3, T-033). The request
+    // takes the provider batch OBJECT id (`batch_id` of the create response, 24 lowercase hex), not
+    // the batch code that GET /order filters on. Documented answer: `data` is the number of orders
+    // paid and the top-level `cnote_no` lists their tracking numbers. Array order in `awbs` does not
+    // prove shipment-to-AWB mapping; callers check the count against the batch and reconcile each
+    // order via findOrder.
+    async payUnpaidBatch(batchObjectId: string, courier: string): Promise<PayUnpaidResult> {
       if (typeof courier === "string" && courier.trim().toLowerCase() === "ninja") {
         throw new InvalidOrderRequest("courier_discontinued");
       }
-      if (!BATCH_ID.test(batchId) || !OFFERED_COURIERS.has(courier)) {
+      if (!BATCH_OBJECT_ID.test(batchObjectId) || !OFFERED_COURIERS.has(courier)) {
         throw new InvalidOrderRequest();
       }
-      const { status, payload } = await send("/order/pay-unpaid", {}, { batch_id: batchId, courier });
+      const { status, payload } = await send("/order/pay-unpaid", {}, { batch_id: batchObjectId, courier });
       if (status === 400 && payload.success === false && !Array.isArray(payload.data)) {
         throw new MengantarError("rejected", text(payload.message).slice(0, 200) || null);
       }
       if (status !== 200 || payload.success !== true) {
         throw new MengantarError("unknown_outcome");
       }
-      const d = isRecord(payload.data) ? payload.data : payload;
-      let rawAwbs: string[] | null = null;
-      if (Array.isArray(d.awbs) && d.awbs.every((x) => typeof x === "string")) {
-        rawAwbs = d.awbs;
-      } else if (Array.isArray(d.awb) && d.awb.every((x) => typeof x === "string")) {
-        rawAwbs = d.awb;
-      } else if (Array.isArray(d.cnote_no) && d.cnote_no.every((x) => typeof x === "string")) {
-        rawAwbs = d.cnote_no;
-      } else if (Array.isArray(payload.data)) {
-        if (payload.data.every((x) => typeof x === "string")) {
-          rawAwbs = payload.data as string[];
-        } else if (payload.data.every((x) => isRecord(x))) {
-          rawAwbs = (payload.data as Record<string, unknown>[])
-            .map((x) => (typeof x.cnote_no === "string" ? x.cnote_no : typeof x.awb === "string" ? x.awb : ""))
-            .filter(Boolean);
+      // An unreadable count or tracking list leaves the payment effect unknown (never "paid").
+      const count = payload.data;
+      if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) throw new MengantarError("unknown_outcome");
+      let awbs: string[] = [];
+      if (payload.cnote_no !== undefined) {
+        if (!Array.isArray(payload.cnote_no) || !payload.cnote_no.every((x) => typeof x === "string")) {
+          throw new MengantarError("unknown_outcome");
         }
+        awbs = payload.cnote_no.map((x: string) => x.trim()).filter(Boolean);
       }
-      const rawCount = money(d.count ?? d.paidCount ?? d.paid_count ?? (rawAwbs ? rawAwbs.length : null));
-      if (rawCount === null || !rawAwbs) {
-        throw new MengantarError("unknown_outcome");
-      }
-      return { paidCount: rawCount, awbs: rawAwbs.map((x) => x.trim()).filter(Boolean) };
+      return { paidCount: count, awbs };
     },
 
     // Reconciliation after an unknown outcome: our reference travels as destinationMark. The
@@ -310,10 +361,12 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
     },
   };
 }
+export type MengantarPublicClient = ReturnType<typeof createMengantarPublicClient>;
+
 
 export async function readBounded(response: Response): Promise<string> {
   const declared = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_BYTES) throw new MengantarError("malformed");
+  if (Number.isFinite(declared) && declared > MAX_BYTES) throw new ResponseTooLarge();
   if (!response.body) return "";
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -324,7 +377,7 @@ export async function readBounded(response: Response): Promise<string> {
     total += value.byteLength;
     if (total > MAX_BYTES) {
       await reader.cancel();
-      throw new MengantarError("malformed");
+      throw new ResponseTooLarge();
     }
     chunks.push(value);
   }
@@ -360,6 +413,19 @@ export function parseAreas(data: unknown): AreaOption[] {
   });
 }
 
+// The estimate's documented `discountPercent` (a JSON number such as 22.5) as integer basis points
+// (2250). Exact: the shortest decimal text of the number is converted with integer arithmetic, so no
+// floating-point product is ever rounded. Only a finite number from 0 to 100 that is a whole
+// multiple of 0.01 percent is kept; everything else (absent, text, NaN, negative, above 100,
+// 22.555) is unknown = null. A present 0 is a real 0%, never confused with unknown.
+// `discountExtraPercent` is deliberately not read: its meaning is undocumented.
+export function discountPercentToBps(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) return null;
+  const match = /^(\d{1,3})(?:\.(\d{1,2}))?$/.exec(String(value));
+  if (!match) return null;
+  return Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
+}
+
 // One row per documented courier the route supports. A row is dropped (not guessed) when the
 // courier is unsupported (route, origin or pickup), COD is requested but not covered, or its numbers do not add up:
 // estimatedPrice must equal price + codFee, and the discounted cost must stay within the tariff.
@@ -380,7 +446,11 @@ export function parseEstimates(data: unknown, cod: boolean): CourierEstimate[] {
     const netShipping = special - codFee;
     if (netShipping <= 0 || netShipping > tariff) continue;
     const eta = text(row.estimate_delivery);
-    estimates.push({ courier, tariff, codFee, netShipping, etaText: eta && eta !== "undefined" && eta !== "-" ? eta : null });
+    estimates.push({
+      courier, tariff, codFee, netShipping,
+      discountBps: discountPercentToBps(row.discountPercent),
+      etaText: eta && eta !== "undefined" && eta !== "-" ? eta : null,
+    });
   }
   return estimates.sort((a, b) => a.tariff - b.tariff || (a.courier < b.courier ? -1 : a.courier > b.courier ? 1 : 0));
 }
@@ -388,7 +458,12 @@ export function parseEstimates(data: unknown, cod: boolean): CourierEstimate[] {
 // --- Orders (T-021 / T-025 / T-026) -----------------------------------------------------------
 
 const ORDER_ID = /^[A-Z0-9]{6,20}$/;
-const BATCH_ID = /^[A-Z0-9]{6,24}$/;
+// A provider batch code (the human reference, GET /order filter) and a provider batch object id
+// (`batch_id`, the pay-unpaid request field) are different identifiers: never interchange them.
+const BATCH_CODE = /^[A-Z0-9]{6,24}$/;
+const BATCH_OBJECT_ID = /^[a-f0-9]{24}$/;
+const batchCode = (value: unknown) => (typeof value === "string" && BATCH_CODE.test(value) ? value : null);
+const batchObjectId = (value: unknown) => (typeof value === "string" && BATCH_OBJECT_ID.test(value) ? value : null);
 const SKEW_MS = 10 * 60_000;
 // GeraiExpress shipment reference (e.g. GX261014-ABC123) sent as destinationMark and used to
 // reconcile unknown outcomes.
@@ -454,16 +529,31 @@ export async function estimateTwoPassCod(
       tariff: row.tariff,
       codFee: pass2Row.codFee,
       netShipping: pass2Row.netShipping,
+      // The net cost and the discount percent come from the same (second) answer.
+      discountBps: pass2Row.discountBps ?? null,
       etaText: pass2Row.etaText ?? row.etaText,
     });
   }
   return resolved.sort((a, b) => (a.tariff + a.codFee) - (b.tariff + b.codFee) || (a.courier < b.courier ? -1 : a.courier > b.courier ? 1 : 0));
 }
 
+// Indonesian mobile numbers as Mengantar expects them: digits only, local 0 prefix.
+export function providerPhone(phone: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/^\+/, "");
+  const local = digits.startsWith("62") ? `0${digits.slice(2)}` : digits;
+  return /^0\d{9,14}$/.test(local) ? local : null;
+}
+export const LIVE_RECIPIENT_NAME_MAX = 100;
+export const LIVE_RECIPIENT_ADDRESS_MAX = 300;
+
 export type CreateOrderRequest = {
   courier: string;
-  // Only drop-off is offered for now; scheduled pickup needs time slots (GET /time returned none).
   pickupAddressId: string;
+  // Handover: absent = drop-off (`pickup.type: "dropOff"`). With `pickup`, the order is sent as
+  // `scheduledPickup` carrying the reserved time record and the volume class (both documented as
+  // required for scheduledPickup; unverified in the sandbox).
+  pickup?: { timeId: string; volume: PickupVolume };
   reference: string;
   recipient: { areaId: string; address: string; name: string; phone: string };
   weightGrams: number;
@@ -478,19 +568,22 @@ export type CreateOrderRequest = {
 
 export type CreateOrderResult =
   // Paid and handed a resi: the shipment exists.
-  | { outcome: "issued"; orderId: string; trackingNumber: string; batch: string; tariffWithFees: number | null }
+  | { outcome: "issued"; orderId: string; trackingNumber: string; batch: string; batchId: string | null; tariffWithFees: number | null }
   // Created but not paid (insufficient balance): no resi yet; payment is a batch command (TD-3).
-  | { outcome: "unpaid"; orderId: string; batch: string; tariffWithFees: number | null }
+  | { outcome: "unpaid"; orderId: string; batch: string; batchId: string | null; tariffWithFees: number | null }
   // Mengantar recorded the attempt as an error item without ORDER_ID or resi. The provider keeps
   // that record (with a batch), so before creating again the dispatcher must confirm the batch
   // still holds only an error item.
   // lazy: evidence is one sandbox JNE sample; whether an error item can later be completed at
   // Mengantar is not established.
-  | { outcome: "failed"; batch: string | null; providerRecordId: string | null };
+  | { outcome: "failed"; batch: string | null; batchId: string | null; providerRecordId: string | null };
 
 export type ProviderOrder = {
   orderId: string | null;
+  // The provider batch CODE (GET /order filter, shown to people) and the batch OBJECT id
+  // (`batch_id`, what POST /order/pay-unpaid takes) are separate fields; null when unreadable.
   batch: string | null;
+  batchId: string | null;
   // The price Mengantar charges (estimatedPrice), when readable.
   price: number | null;
   reference: string | null;
@@ -510,18 +603,21 @@ function createOrderBody(r: CreateOrderRequest) {
   const valid = courierOk
     && AREA_ID.test(r.pickupAddressId) && AREA_ID.test(areaId ?? "")
     && REFERENCE.test(r.reference)
-    && typeof name === "string" && name.trim().length >= 1 && name.length <= 100
-    && typeof address === "string" && address.trim().length >= 5 && address.length <= 300
-    && typeof phone === "string" && /^\d{10,15}$/.test(phone)
+    && typeof name === "string" && name.trim().length >= 1 && name.length <= LIVE_RECIPIENT_NAME_MAX
+    && typeof address === "string" && address.trim().length >= 5 && address.length <= LIVE_RECIPIENT_ADDRESS_MAX
+    && typeof phone === "string" && providerPhone(phone) === phone
     && Number.isInteger(r.weightGrams) && r.weightGrams >= 1 && r.weightGrams <= 1_000_000
     && Number.isInteger(r.quantity) && r.quantity >= 1 && r.quantity <= 1000
     && typeof r.parcelContent === "string" && r.parcelContent.trim().length >= 1 && r.parcelContent.length <= 100
     && (r.goodsValue === undefined) !== (r.codAmount === undefined)
+    && (r.pickup === undefined || (PROVIDER_TIME_ID.test(r.pickup.timeId) && isPickupVolume(r.pickup.volume)))
     && (r.goodsValue === undefined || money(r.goodsValue)) && (r.codAmount === undefined || money(r.codAmount));
   if (!valid) throw new InvalidOrderRequest();
   return {
     courier: r.courier,
-    pickup: { address_id: r.pickupAddressId, type: "dropOff" },
+    pickup: r.pickup === undefined
+      ? { address_id: r.pickupAddressId, type: "dropOff" }
+      : { address_id: r.pickupAddressId, type: "scheduledPickup", time_id: r.pickup.timeId, volume: r.pickup.volume },
     orders: [{
       ...(r.goodsValue !== undefined ? { goodsValue: r.goodsValue } : { COD: r.codAmount }),
       customerAddressDataId: areaId,
@@ -543,17 +639,19 @@ function judgeCreatedItem(item: unknown, reference: string): CreateOrderResult {
     if (item.ORDER_ID || item.cnote_no) throw new MengantarError("unknown_outcome");
     return {
       outcome: "failed",
-      batch: typeof item.batch === "string" && /^[A-Z0-9]{6,24}$/.test(item.batch) ? item.batch : null,
+      batch: batchCode(item.batch),
+      batchId: batchObjectId(item.batch_id),
       providerRecordId: typeof item._id === "string" && AREA_ID.test(item._id) ? item._id : null,
     };
   }
   const orderId = typeof item.ORDER_ID === "string" && ORDER_ID.test(item.ORDER_ID) ? item.ORDER_ID : null;
-  const batch = typeof item.batch === "string" && /^[A-Z0-9]{6,24}$/.test(item.batch) ? item.batch : null;
+  const batch = batchCode(item.batch);
+  const batchId = batchObjectId(item.batch_id);
   if (!orderId || !batch || item.status !== "active" || item.destinationMark !== reference) throw new MengantarError("unknown_outcome");
   const tracking = typeof item.cnote_no === "string" && /^[A-Za-z0-9-]{6,40}$/.test(item.cnote_no) ? item.cnote_no : null;
   const price = typeof item.estimatedPrice === "number" && Number.isSafeInteger(item.estimatedPrice) && item.estimatedPrice > 0 ? item.estimatedPrice : null;
-  if (item.isPaid === true && tracking) return { outcome: "issued", orderId, trackingNumber: tracking, batch, tariffWithFees: price };
-  if (item.isPaid === false && (item.cnote_no === null || item.cnote_no === undefined)) return { outcome: "unpaid", orderId, batch, tariffWithFees: price };
+  if (item.isPaid === true && tracking) return { outcome: "issued", orderId, trackingNumber: tracking, batch, batchId, tariffWithFees: price };
+  if (item.isPaid === false && (item.cnote_no === null || item.cnote_no === undefined)) return { outcome: "unpaid", orderId, batch, batchId, tariffWithFees: price };
   throw new MengantarError("unknown_outcome");
 }
 
@@ -564,7 +662,39 @@ function parseOrder(row: unknown): ProviderOrder {
   const orderId = typeof row.ORDER_ID === "string" && ORDER_ID.test(row.ORDER_ID) ? row.ORDER_ID : null;
   const reference = typeof row.destinationMark === "string" && REFERENCE.test(row.destinationMark) ? row.destinationMark : null;
   const trackingNumber = typeof row.cnote_no === "string" && row.cnote_no ? row.cnote_no.slice(0, 40) : null;
-  const batch = typeof row.batch === "string" && /^[A-Z0-9]{6,24}$/.test(row.batch) ? row.batch : null;
+  const batch = batchCode(row.batch);
+  const batchId = batchObjectId(row.batch_id);
   const price = typeof row.estimatedPrice === "number" && Number.isSafeInteger(row.estimatedPrice) && row.estimatedPrice > 0 ? row.estimatedPrice : null;
-  return { orderId, batch, price, reference, trackingNumber, status: row.status.slice(0, 40), paid: row.isPaid === true, createdAt: row.createdAt };
+  return { orderId, batch, batchId, price, reference, trackingNumber, status: row.status.slice(0, 40), paid: row.isPaid === true, createdAt: row.createdAt };
+}
+
+// A pickup time record (`POST /time` answer or a `GET /time` row). The id shape is unverified (the
+// documentation calls it "_id", like the other 24-hex ids); a bounded token is accepted.
+const PROVIDER_TIME_ID = /^[A-Za-z0-9_-]{6,64}$/;
+
+export type ProviderPickupTime = {
+  id: string;
+  hour: number;
+  // The ONE calendar date (YYYY-MM-DD) the record means. A row has two documented shapes: an instant
+  // whose UTC clock reading equals `time` (the GET example) or a real instant of the slot (then its
+  // WIB clock reading equals `time`). `time` tells which: UTC clock match -> the UTC date; anything
+  // else (a WIB match, or a date-only midnight such as the POST example) -> the WIB date, the
+  // interpretation of pickup.ts. Never both: a 17:00/18:00 row must not also match the next day.
+  // The representation is Unknown (operations contract section 2.2).
+  date: string;
+  addressId: string | null;
+};
+
+function parseTimeRecord(row: unknown): ProviderPickupTime | null {
+  if (!isRecord(row) || typeof row._id !== "string" || !PROVIDER_TIME_ID.test(row._id) || typeof row.time !== "string") return null;
+  const match = /^(\d{1,2}):(\d{2})$/.exec(row.time.trim());
+  if (!match || Number(match[2]) !== 0) return null;
+  const hour = Number(match[1]);
+  if (!PICKUP_SLOT_HOURS.includes(hour)) return null;
+  const instant = typeof row.date === "number" || typeof row.date === "string" ? new Date(row.date) : null;
+  if (!instant || Number.isNaN(instant.getTime())) return null;
+  const utcClock = instant.getUTCHours() === hour && instant.getUTCMinutes() === 0;
+  const date = utcClock ? instant.toISOString().slice(0, 10) : wibDate(instant);
+  const address = isRecord(row.address) && typeof row.address._id === "string" && AREA_ID.test(row.address._id) ? row.address._id : null;
+  return { id: row._id, hour, date, addressId: address };
 }

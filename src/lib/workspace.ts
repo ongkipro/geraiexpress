@@ -2,7 +2,8 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase/server";
+import { requestScope } from "@/lib/hosts";
+import { currentUser, dbServer } from "@/lib/db/server";
 
 export const TENANT_COOKIE = "ge_tenant";
 
@@ -11,6 +12,9 @@ export type Workspace = {
   email: string | null;
   isDemo: boolean;
   role: "tenant_admin" | "operator";
+  // How many active gerai the user belongs to (already read for the selector): the shell shows
+  // "Ganti gerai" from it without a second memberships query.
+  activeMembershipCount: number;
   tenant: { id: string; name: string };
   outlet: {
     id: string; name: string; pickupAddress: string | null; pickupArea: string | null;
@@ -26,26 +30,30 @@ type MembershipRow = {
 };
 
 // Resolves the current user and the tenant they may act in. The ge_tenant cookie is only a
-// selector; it must match one of the user's active memberships (RLS returns only those).
+// selector; it must match one of the user's active memberships (RLS returns only those). The
+// owner, hooks and public hosts have no tenant context (TEN-6): a Server Action id posted there
+// finds no workspace, whatever session or cookie arrives.
 export const loadWorkspace = cache(async (): Promise<
   | { kind: "anonymous" }
   | { kind: "no-access"; email: string | null; isAnonymous: boolean }
   | { kind: "choose"; tenants: { id: string; name: string }[] }
   | { kind: "ready"; workspace: Workspace }
 > => {
-  const supabase = await supabaseServer();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return { kind: "anonymous" };
+  const scope = await requestScope();
+  if (scope !== "tenant" && scope !== "shared") return { kind: "anonymous" };
+  const user = await currentUser();
+  if (!user) return { kind: "anonymous" };
+  const db = await dbServer();
 
-  const { data: rows } = await supabase
+  const { data: rows } = await db
     .from("memberships")
     .select("tenant_id, role, tenants(id, name, is_demo)")
-    .eq("user_id", auth.user.id)
+    .eq("user_id", user.id)
     .eq("status", "active")
     .returns<MembershipRow[]>();
   const memberships = (rows ?? []).filter((m) => m.tenants);
   if (memberships.length === 0) {
-    return { kind: "no-access", email: auth.user.email ?? null, isAnonymous: auth.user.is_anonymous ?? false };
+    return { kind: "no-access", email: user.email, isAnonymous: user.isAnonymous };
   }
 
   const selector = (await cookies()).get(TENANT_COOKIE)?.value;
@@ -55,22 +63,23 @@ export const loadWorkspace = cache(async (): Promise<
     return { kind: "choose", tenants: memberships.map((m) => ({ id: m.tenant_id, name: m.tenants!.name })) };
   }
 
-  const { data: outlets } = await supabase
+  const { data: outlets } = await db
     .from("outlets")
     .select("id, name, pickup_address, pickup_area, mengantar_pickup_address_id, mengantar_area_id")
     .eq("tenant_id", chosen.tenant_id)
     .order("created_at")
     .limit(1);
   const outlet = outlets?.[0];
-  if (!outlet) return { kind: "no-access", email: auth.user.email ?? null, isAnonymous: false };
+  if (!outlet) return { kind: "no-access", email: user.email, isAnonymous: false };
 
   return {
     kind: "ready",
     workspace: {
-      userId: auth.user.id,
-      email: auth.user.email ?? null,
+      userId: user.id,
+      email: user.email,
       isDemo: chosen.tenants!.is_demo,
       role: chosen.role,
+      activeMembershipCount: memberships.length,
       tenant: { id: chosen.tenant_id, name: chosen.tenants!.name },
       outlet: {
         id: outlet.id,

@@ -1,0 +1,39 @@
+# T-062: the LOCAL proxy profile (compose.local.yaml, `pnpm docker:up`): plain HTTP on 127.0.0.1 for e2e and
+# development against the production container. NEVER used in production.
+#
+# Same contract as the production Caddyfile (X-Real-IP is what the app reads; /api/internal/* is never
+# routed), with ONE deliberate difference so the Playwright suite can act as many visitors: only the pinned
+# gateway 172.30.62.1 (compose.local.yaml) may supply X-Forwarded-For, which becomes `{client_ip}`.
+# Other containers on the network are NOT trusted. The fixtures use TEST-NET addresses, never real visitors.
+# The production Caddyfile trusts no forwarded header from a client.
+{
+	auto_https off
+	admin off
+	servers {
+		trusted_proxies static 172.30.62.1/32
+		client_ip_headers X-Forwarded-For
+	}
+}
+
+:8080 {
+	request_body {
+		max_size 1MB
+	}
+	# Case-insensitive and tolerant of repeated slashes; an encoded spelling is decoded before matching.
+	@internal path_regexp (?i)^/+api/+internal(/|$)
+	handle @internal {
+		respond "Not Found" 404
+	}
+
+	# The scheduler's name is never served through the proxy, whatever the path.
+	@internalhost host internal.geraiexpress.local
+	handle @internalhost {
+		respond "Not Found" 404
+	}
+
+	handle {
+		reverse_proxy app:3000 {
+			header_up X-Real-IP {client_ip}
+		}
+	}
+}

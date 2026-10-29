@@ -9,7 +9,7 @@ const PLAIN = "mk_test_PLAINTEXTSECRETVALUE9876";
 
 async function sealedFor(tenant: string, version: number) {
   const s = await sealCredential(PLAIN, credentialAad(tenant, version), SEAL_KEY);
-  return { p_ciphertext: s.ciphertext, p_iv: s.iv, p_key_version: s.keyVersion, p_hint: "9876" };
+  return { p_ciphertext: s.ciphertext, p_iv: s.iv, p_key_version: s.keyVersion, p_hint: "9876", p_env: "sandbox" };
 }
 
 function latest(tenant: string) {

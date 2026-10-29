@@ -1,0 +1,9 @@
+{
+  "_fixture": "T-043: built from the Get Time documentation example (operations contract section 2.2): rows carry _id, a date in epoch milliseconds and a time. NOT a sandbox capture.",
+  "success": true,
+  "data": [
+    { "_id": "6b0c2a1e9d3f4a5b6c7d8e90", "date": 1770123600000, "time": "13:00" },
+    { "_id": "6b0c2a1e9d3f4a5b6c7d8e91", "date": 1677240000000, "time": "12:00" },
+    { "_id": "6b0c2a1e9d3f4a5b6c7d8e92", "date": 1703239200000, "time": "10:00" }
+  ]
+}
