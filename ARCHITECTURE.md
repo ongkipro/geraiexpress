@@ -1,6 +1,6 @@
 # GeraiExpress — Current Architecture Record
 
-Updated: 2026-10-29
+Updated: 2026-11-03
 State: local foundation, synthetic demo preview, public marketing surfaces, Mengantar Partner
 sandbox seller onboarding, live quotes/issuance, two-pass COD pricing and batch `pay-unpaid`
 recovery are implemented and were verified locally (DEL-1 stages 1–3; T-001 through T-031).
@@ -52,6 +52,35 @@ Local dotenv values are parsed as data and explicit process values win; operator
 Executed evidence and remaining release gates are recorded in STATUS.md and RELEASE.md.
 Older sections below preserve implementation history; this amendment governs the current
 hosting, readiness, environment delivery and migration behavior.
+
+## Staged cargo transport (T-080, 2026-11-03)
+
+The Public API adapter supports explicit non-COD cargo transport preparation without
+activating cargo in the shipment workflow. `estimate(..., includeCargo: true)` is a local
+parse opt-in, never a provider query flag; the default remains regular-only. Known cargo
+response keys map to base couriers plus service class. Cargo tariff/net/discount/ETA come
+only from cargo-specific fields, with a positive integer-gram route minimum. Missing or
+inconsistent fields are dropped. Cargo COD is excluded during parsing and refused locally
+at creation pending verified seller fee semantics; the observed Rp1 discrepancy is not
+normalized away.
+
+Weight groups and supplied-estimator two-pass COD use courier plus service class as identity.
+A cargo response minimum must match the supplied verified rule before a grouped quote is
+returned. This is not route-minimum discovery, billing-floor policy or a new DB snapshot.
+Explicit cargo creation sends the base courier and `orders[].cargo: true`, requires a true
+Boolean echo and a readable/non-contradictory selected-service price, and retains UNKNOWN
+on uncertainty without retry. Read-back preserves a Boolean mode when supplied; absent or
+malformed mode stays unknown rather than becoming false. The original transport allowlist,
+redirect refusal, time/size bounds and secret-safe failures remain unchanged.
+
+The real shipment actions still supply regular services only. No schema, historical SQL,
+UI, authorization, credential mapping or dispatcher activation is changed here. Full T-080
+still needs verified GeraiExpress seller/route/order evidence, a new sourced cargo-limit
+configuration correction, authoritative confirmation snapshots and end-to-end cargo UI,
+dispatch/reconciliation proof. Tests with public/synthetic responses are not seller terms,
+provider entitlement, live-order agreement or release readiness. Existing Partner signing,
+onboarding, BYOK and API-key rotation are reused rather than reimplemented; callback-secret
+persistence/webhook readiness remain outside this slice (T-045/PR-19).
 
 ## Canonical design
 
@@ -270,6 +299,29 @@ serves `machine_seller_key` (the sealed key, opened only on the server) and
 real gerai quote live and pick recipient areas from Mengantar; demo gerai keep the SQL
 simulation. Without `MENGANTAR_ENV` and the auth/PostgREST values (`POSTGREST_URL`, `AUTH_JWT_SECRET`, `AUTH_SECRET`) live features fail
 closed with an explanatory message.
+
+T-080's owner-approved regular-service slice adds sourced, append-only
+`private.billable_weight_rules`, read through the member-checked
+`billable_weight_rules(tenant)` RPC and changed only through the audited aal2
+`platform_set_billable_weight_rule` RPC (`integration_operations`). New quotes keep actual,
+volumetric and billable grams plus the rule version; legacy rows remain NULL. The pure
+`src/lib/billable-weight.ts` calculation is mirrored in SQL for simulation and machine quote
+validation. Live quoting groups regular couriers by distinct billable grams and filters each
+response before the two-pass COD calculation. Confirmation freezes the selected quote's
+weights and measured dimensions in `shipments.weight_snapshot`; dispatch uses the frozen
+billable weight, with actual-weight fallback only for legacy NULL computed weights.
+
+DATA-14's explicit fallback retains exact actual grams and NULL volume when dimensions or
+formula are missing. Complete dimensions apply the sourced tolerance to the heavier raw
+weight; below 1 kg, positive raw grams are retained at integer-gram precision without a
+provider-wide minimum or half-fare. Only fictional demo tariff pricing retains its existing
+whole-kg pricing minimum. Published cargo ranges are dated evidence, not executable route
+constraints. The live adapter remains regular-only even if a cargo rule is appended; cargo
+route minima and order support remain open under T-080. Intake shows all three weights,
+admin source/date and the reweigh/seller-balance warning. Nullable provider reweigh storage
+and presentation do not implement T-045 ingestion. Current verification and independent
+review are recorded in STATUS.md and the T-080 review report; full task/release acceptance
+is not implied.
 
 T-024 wires issuance: `confirm_shipment` creates a real queued operation for a connected gerai
 and the confirming server action runs `dispatchOperation` at once (pickup re-checked at
@@ -791,7 +843,7 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
 | Production database and server deployment | Explicit release approval and the owner's server (provider, region, fixed IPv4, DNS); where the database runs (same server or managed PostgreSQL), backups and point-in-time recovery are owner decisions and gates (T-067); nothing is provisioned |
 | Host split in production (owner., app., apex, hooks) | Built in code (T-042) and in `infra/proxy/Caddyfile` (T-062); live only after the owner provisions the server and DNS and sets the `*_ORIGIN` values (TD-14); the hooks host serves no route until a provider webhook exists |
 | Order cancel and signed webhook | TASKS T-045; pickup (T-043) and the masked label (T-044) are built, the label announcement waits for the courier test (T-048) |
-| Hybrid hosting (Vultr gateway under Coolify) | Superseded by DEC-020 (2026-10-29): no gateway, no Coolify, no Vultr; T-052 is cancelled |
+| Hybrid hosting (Vultr gateway under Coolify) | The separate egress gateway was withdrawn by DEC-020 (T-052 cancelled); DEC-022 later re-selected Vultr + Coolify to run the application itself (`compose.coolify.yaml`), not a gateway |
 
 ## Open production gates found during implementation
 

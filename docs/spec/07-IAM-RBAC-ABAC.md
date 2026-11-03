@@ -2,7 +2,7 @@
 
 - Status: Role policy accepted by owner (DEC-007, DEC-008); identity and TOTP assurance implemented in the application-owned auth module on PostgreSQL 17 + PostgREST (DEC-021, ADR-0002, T-064..T-066; T-067 security review open).
 - Owner: Paduka Ongki
-- Updated: 2026-10-29
+- Updated: 2026-11-02
 
 **Terminology:** Super Admin is the product/UI name for the platform
 administrator below. Platform pricing, integration, monitoring and recovery
@@ -31,7 +31,15 @@ remain tenant-owned roles; no UI label creates a database permission.
 | Financial/reporting/export actions | No default grant | Conditional on accepted feature/policy | Explicit pricing/monitoring scope; no automatic tenant payout/customer export | No general permission |
 | Platform overview, seller readiness, safe exception/audit projections | Denied | Denied | Current platform capability and restricted projection only | Bounded machine read/transition only |
 | Assign/verify tenant seller discounts | Denied | Own terms/net inspection as permitted | Explicit pricing capability; IAM-6 | Only authorized verification operation |
+| Record counter payment; print or share receipt; share resi link (PR-38, PR-40) | Proposed: permitted within tenant | Proposed: own tenant | No automatic tenant operation | None |
+| Close a cash period, seeing that period's cash-count variance (PR-39) | Proposed: any outlet of the tenant (memberships are tenant-wide, DEC-008) | Proposed: own tenant | No automatic access | None |
+| Void a payment record; reopen a cash period; view per-record charge differences and pilot earnings (PR-38, PR-39, PR-45) | Proposed: denied | Proposed: own tenant | No automatic access | None |
+| Open or update a return/claim case (PR-44) | Proposed: permitted within tenant | Proposed: own tenant | No automatic access | Case creation from return events only |
+| Close a case; revoke a tracking link (PR-40, PR-44) | Proposed: denied | Proposed: own tenant | No automatic access | None |
+| Edit declaration texts, billable-weight and claim-window rules, masking acceptance per courier (PR-41, PR-43, PR-44, PR-46) | Denied | Denied | Proposed: explicit platform capability with audit | None |
 | Grant/revoke platform administrator access | Denied | Denied | Governed privileged action; final-admin guard; IAM-7 | Bootstrap/recovery only through approved bounded path |
+
+Rows for PR-38 to PR-46 (counter operations, 2026-11-02) are not covered by DEC-008; their cells stay Proposed until the owner accepts them. They narrow the "Financial/reporting/export" row for these specific counter actions only.
 
 The application-owned auth module (`src/lib/auth/**` and PostgreSQL schema `auth`
 behind 14 `service_role`-only `public.auth_*` RPCs, DEC-021, ADR-0002; replacing
@@ -190,8 +198,10 @@ and recovery availability without granting a universal bypass.
 If a person also has a tenant membership, platform and tenant workspaces keep
 separate explicit context. Routine tenant APIs still apply tenant rules.
 
-Support impersonation or access to customer detail remains a separate future
-policy and is unavailable by default. Necessary owner onboarding contact data
+Support impersonation remains unavailable (DEC-024 owner selection: Super Admin only monitors).
+The owner selected Super Admin visibility of customer detail (DEC-024). Proposed control
+(assistant safeguard, not an owner selection): reads only with a separate `customer_data_review`
+capability, a recorded reason and an audit row (T-093); without it, access stays denied. Necessary owner onboarding contact data
 is purpose-bound tenant-business information, not a platform-wide customer book.
 No fixed session lifetime or recovery exception is copied from Better Auth.
 

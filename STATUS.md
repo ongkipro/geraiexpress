@@ -1,13 +1,248 @@
 # GeraiExpress — Status
 
-Updated: 2026-10-29
+Updated: 2026-11-03
 Status: Active
 State: INTEGRATING
 Review-Risk: R3
-Primary-Worker: codex-backend-audit
-Independent-Review: PASS for the inspected T-068 source delta; final digest-bound acceptance is recorded in the verification run. No unresolved High/Medium in the inspected audit changes.
-Independent-Reviewer: security_review (separate read-only agent)
+Primary-Worker: 01a19c76-b807-7288-ba09-fbeb00ac5f06
+Independent-Review: Regular baseline approval belongs to RUN-20261103T085327Z-57f4e09f. The separate cargo-transport source review and exact digest acceptance belong to RUN-20261103T114322Z-9ac39bc7; this summary is not review evidence. Neither slice closes full T-080, cargo activation or release gates.
+Independent-Reviewer: d264fdd1-6723-4373-8d56-67733f212566 (separate reviewer; latest repair review 2957899e-9617-4acf-90f0-5ce0656fe7b7; same retained session)
 Independent-Review-Head: Uncommitted worktree; approval must bind to the delivery boundary digest, not HEAD alone.
+
+## Current focus — T-092 Super Admin monitoring (2026-11-03)
+
+T-091 closed PASS (re-review APPROVE). Run `RUN-20261103T151534Z-fdd8ce09`: forward migration
+`20261103130000_platform_monitoring.sql` adds read-only RPCs `platform_overview()`,
+`platform_tenant_directory(q, lifecycle, limit, offset)` and `platform_tenant_summary(tenant)` for
+`platform_monitoring` or `tenant_governance` (aggregates only, demo excluded, LIKE wildcards escaped).
+`/admin` now shows a platform summary (active gerai, today's shipments/resi, unknown, awaiting payment,
+queued/in-flight, failed), a searchable/filterable/paged directory with readiness and 30-day activity,
+and `/admin/tenant/[id]` an activity, state and cabang/pickup summary. Monitoring-only admins see these
+without lifecycle/registration/masking controls; their landing moved from Audit to `/admin`. Focused
+DB 33/33. Focused browser runs showed two intermittent hangs under load (a sign-in button and a save
+staying pending); immediate reruns passed 6/6 twice. Logs are kept in `.pi/tasks/t092/`; this is
+recorded, not hidden by retries.
+First review (075da8e3) CHANGES REQUIRED: overview 'created' counted older shipments issued today;
+tiles had no drill-down; monitoring-only admins could not see pending applications. Repaired:
+created filtered by WIB creation day, every tile links to `/admin?perhatian=…` (directory narrowed by
+`p_attention`) or the status filter, and a read-only pending-applications tile (linked only with
+tenant_governance), with DB and e2e regressions.
+Root cause of the intermittent sign-in hang (3 occurrences): the e2e sign-in waits for a token from the
+real Cloudflare Turnstile script (test site key, live network); when it is late the Masuk button stays
+aria-disabled and the 30 s test times out. Third-party/network dependency in the test environment,
+already in the T-059 sign-in-timeout class; not a T-092 defect. Logs kept as
+`.pi/tasks/t092/browser-turnstile-signin-flake.*`. After a third occurrence the e2e fixtures now serve a local Turnstile stand-in (test infrastructure only; the stack under test already disables server CAPTCHA). A separate WIB-midnight flake in the discount spec is recorded under T-059.
+The next full run surfaced two test-harness defects, now fixed in tests only: the F3 grant
+revoke/restore used try/finally inside a body that could time out, so a timed-out test left
+`tenant_invitations_list` revoked and broke later member specs (restore moved to `afterEach` with
+`lock_timeout`); and `signIn` could meet the server's per-account sign-in budget before its
+client-side window expected it (it now recognizes the named refusal, waits one window and retries
+once). Logs: `.pi/tasks/t092/browser-f3-grant-leak.*`, `e2e-f3-fix-focused*.log`.
+Re-review 94f918c8 found the stand-in's `reset` was a no-op, so a same-page retry after a failed
+sign-in would stay disabled (auth-demo rate-limit specs, outside the selected suite). Fixed: the
+stand-in tracks widgets and reissues a token on reset; auth-demo now runs in the T-092 browser
+receipt (focused: 42 passed / 2 skipped at 390+1280).
+The clipboard spec then timed out only after earlier specs had signed in owner-a nine times: the
+helper's client-side budget wait (up to 61 s) ran inside a 30 s test. The wait now extends that test's
+timeout; the shipping spec passes 35/35 on mobile-390 (`e2e-clipboard-budget-wait.log` is the
+reproduction).
+An interrupted session left disposable test containers on port 18080 (removed after confirming
+their runner was gone). `platform-decisions` beforeAll then reached /admin but exceeded its 30 s hook
+budget (admin-2 budget/TOTP waits after the new admin specs); the hook now has an explicit 150 s budget.
+Re-review (3701a6a0) CHANGES REQUIRED: monitoring-only pending tile had no list; search dropped
+the attention filter. Repaired: read-only `platform_pending_applications()` (business/outlet name,
+area, submitted time, revision; no contact data or review action) at `/admin/pantau-pengajuan`, and the
+search form keeps `perhatian`; DB and e2e regressions.
+
+## Previous — T-091 Super Admin Konfigurasi (2026-11-03, PASS)
+
+T-090 (DEC-024 docs) closed PASS after a provenance repair. Run `RUN-20261103T142255Z-9ce2f764`
+adds `/admin/konfigurasi` (menu "Konfigurasi", visible with tenant_governance or
+integration_operations): current declaration text + history and append (tenant_governance), every
+billable-weight/cargo rule version with current/scheduled flags and per-service append
+(integration_operations), each behind a confirmation with a required reason (audit). New read RPC
+`platform_billable_weight_rules()` in forward migration `20261103120000_platform_configuration.sql`.
+Focused DB 43/43 and e2e 6/6 at 390/1280 passed; full verification and review pending.
+
+## Previous — owner decisions DEC-024 and next queue (2026-11-03)
+
+T-089 closed PASS (re-review APPROVE). DEC-024 records the owner's Super Admin selections (full
+oversight incl. customer data; monitoring only; one gerai = one cabang) and, labelled separately,
+assistant-proposed safeguards (separate audited capability) and an unconfirmed counsel implication and the queue T-091 configuration → T-092 monitoring/directory/per-gerai → T-093 customer
+data → T-094 sender address → T-095 resi formats (pending owner answers). Correction: DEC-012 records
+Partner ID `ongkirich` as GeraiExpress's own Partner account, so the sandbox Partner credential the
+owner supplied belongs to GeraiExpress; the earlier "99ribu" attribution referred to the 3099 preview
+URL only. Authenticated sandbox use still needs an explicit go-ahead per call class.
+
+## Previous — T-089 UI/UX audit fixes (2026-11-03, PASS)
+
+Owner asked to continue with UI/UX, menus, Super Admin and Admin Gerai. A read-only source audit
+(`docs/review/2026-11-03-uiux-admin-audit.md`) found no P0, 2 P1 and 8 P2. Run
+`RUN-20261103T132554Z-e20e30af` fixes F1 (chosen service kept across contact search), F2 (no "pay in
+Mengantar" hint on overview tiles), F3 (load-error state instead of empty/default on Anggota,
+Integrasi, Diskon detail, Pengaturan), F4 (integration-only Super Admin lands on Integrasi), F6
+(mobile menu scrolls), F7 (cached contact address works), F8 (tile says "Dibuat & terbit hari ini"),
+F9 (cargo exclusions named; one summary for below-minimum), F10 (confirmation before "Kirim
+sekarang") and G2 (audit labels/filters for declaration-text and weight-rule versions). F5 was fixed
+inside T-081. New e2e `tests/e2e/uiux-audit.spec.ts` failed on the previous image and passes on the
+rebuilt one (logs in `.pi/tasks/t089/`). Owner decisions remain: G1 Super Admin editor for
+declaration/weight rules, G3 monitoring-only workspace, G4 fuller tenant directory/detail.
+
+## Previous — T-081 content declaration (2026-11-03, PASS)
+
+Next task after the non-COD cargo run closed PASS. Bounded R3 run `RUN-20261103T124731Z-215400e6`.
+Forward migration `20261103110000_content_declaration.sql`: append-only declaration texts (v1 seeded
+with Permenkomdigi 8/2025 Pasal 22(3) categories verified verbatim from JDIH Komdigi; acknowledgement
+wording provisional until the Mengantar sync), platform-only append, and `confirm_shipment` with
+`p_declaration_version` (old signature dropped) that refuses a blank description or non-current
+version and freezes version/member/time. The confirm dialog shows a checkbox, the body and an
+expandable category list; refusal is named in Bahasa; detail shows the frozen declaration.
+First independent review (157a1d98) returned CHANGES REQUIRED: the detail collapsed other confirmers to
+"anggota gerai". Repair freezes the confirmer email at confirmation and shows it to other members, with
+DB and e2e two-member regressions; audit finding F5 (required state, disabled confirm without text) is
+folded in. Fresh verification and re-review are required before closing.
+Verification and independent review belong to the run.
+
+## Previous — T-080 non-COD cargo activation (2026-11-03, PASS)
+
+Owner asked to adjust non-COD cargo, then review/audit/develop the remaining points, re-reviewing
+each task before the next. Bounded R3 run `RUN-20261103T122618Z-12425328`.
+
+Implemented: forward migration `20261103100000_cargo_noncod.sql` (quote `service_class`, a table
+check that cargo is never COD, sourced cargo min/max versions JNE 10–30, SiCepat 10–50, iDexpress
+10–70 kg from help 5502313; SAP cargo kept excluded for region-dependent minimums); live quoting now
+requests regular plus non-COD cargo (`quoteServices`), stores cargo as service `Kargo` only when the
+provider route minimum equals the rule; confirmation refuses cargo COD and freezes `service_class`;
+dispatch sends base courier + `orders[].cargo`; reconciliation refuses to settle with an order of the
+other service (`service_mismatch`, Bahasa copy added). Applied migrations are unchanged.
+
+Not claimed: live sandbox cargo order acceptance (account attribution unresolved), cargo COD, SAP
+cargo, provider reweigh (T-045). Verification and independent review results belong to this run.
+
+## Previous focus — T-080 cargo transport implementation (2026-11-03)
+
+Owner renewed implementation authorization after the public research, while requesting a
+separate GeraiExpress dev server. Current bounded R3 run:
+`RUN-20261103T114322Z-9ac39bc7`. Seven transport/test/fixture files prepared in the
+existing `feat/t-080` worktree are now integrated. Main typecheck and the full unit suite
+passed (**59 files / 1004 tests**). Final independent review/digest acceptance must bind
+the unchanged surface in that run; this summary is not an approval.
+The implementation is an
+explicit non-COD transport capability and service-identity hardening, not cargo activation.
+No UI, database schema, historical migration or credential binding is changed by this slice.
+The first focused run passed82/83; its one failure was the old exact-shape read-back
+expectation missing the newly retained `cargo: false`. That assertion now explicitly
+checks false rather than removing mode metadata; typecheck did not run after that failed
+suite. Final main `GX_TEST_ENV_FILE=/dev/null pnpm typecheck` and `pnpm test:unit`
+checks actually exited0, with local test-env loading disabled and source unchanged during
+execution. Fresh main LSP also reported zero diagnostics across all five edited TS files.
+Both the initial red suite and focused failure are retained under `.pi/tasks/cargo-transport/`;
+final logs are `typecheck.log` and `unit.log`. No build, DB suite, E2E or new UI proof is
+claimed for this transport-only slice; the earlier regular-slice evidence remains historical.
+
+Closeout freshness: the first finish attempt was denied because the mandatory direct-record
+checks became stale after docs/runtime artifacts changed, not because tests failed. Direct
+pass logs are preserved in `pre-receipt-pass/`. An isolated byte-identical copy of the
+already-reviewed T-080 receipt runner and its two regression methods now lives in
+`.pi/tasks/cargo-transport/`. Fresh execution `b9fc7fadb` exited0 after actually rerunning
+both commands: typecheck PASS and **59 files / 1004 unit tests PASS**, with identical
+before/after product/test/foundation manifests. Final JSON receipts/logs are in that folder;
+closeout requires executable grading of those completed commands on the final source.
+Grading does not claim to rerun a suite; final docs/runtime artifacts
+remain bound separately by traceability and a new independent final-digest approval.
+The original regular-slice receipts are untouched; the denied attempt is not hidden.
+
+The regular workflow still requests regular services only. Cargo parsing is opt-in, requires
+explicit cargo prices and a positive route minimum, and never borrows generic regular
+net/discount fields. All cargo COD is blocked pending verified fee semantics. Creation
+uses the base courier and an item-level Boolean flag; missing/wrong cargo echo or unreadable/
+contradictory cargo price leaves the original operation unknown, without retry. Read-back
+preserves known mode and leaves absent/unreadable mode unknown. Grouping keeps courier plus
+service class separate and rejects a route minimum inconsistent with its verified rule.
+
+Credential/account attribution from the latest owner correction remains unresolved; no
+credential is used or rebound based on an env-variable name. No authenticated provider call,
+seller registration, order, payment, rotation or existing-database operation is authorized
+by this offline implementation. Before cargo activation, verify the GeraiExpress account,
+sandbox route/order behavior, forward limit correction, server/Data API snapshots and
+end-to-end UI/dispatch/reconciliation. Full T-080 stays open; no live cargo support is claimed.
+
+GeraiExpress dev is running at the private tailnet address (port 3100), verified by native browser title
+and public-page snapshot. Port3099 belongs to the separate 99ribu checkout; that server is
+untouched. The dev start did not regenerate env files, migrate/reset a database or inject
+provider credentials. Public landing-page readiness is not authenticated workflow proof.
+
+## Approved public cargo research baseline (2026-11-03)
+
+Owner requested cargo analysis, external research and API study before implementation.
+Bounded research run: `RUN-20261103T104120Z-26594853`, T-080 / PR-43,
+declared R2 and classified effective R3 by the change boundary;
+no new application/migration code or authenticated call is part of this slice. The review
+header above describes the verified regular baseline, not cargo approval.
+
+Fresh official docs confirm cargo uses the base courier plus `orders[].cargo: true`.
+Four unauthenticated public tariff GETs expose `minimumWeightCargo` and cargo-specific
+price fields. Official help distinguishes JTR/Gokil/IDX minimum/maximum pairs from SAP's
+regional minima; the historical cargo range interpretation needs a forward correction,
+not a migration rewrite. Public COD replies also show a one-rupiah disagreement between
+generic `codFee` and cargo total-minus-tariff. No guessed tolerance, fixed fee, universal
+cargo cap or account discount is accepted from this research.
+
+Findings, public response snapshots and implementation impact are in
+[the cargo follow-up](docs/research/geraiexpress-mengantar-public-api.md#cargo-follow-up--public-contract-and-read-only-probes-2026-11-03-t-080).
+This completed research slice did not authorize implementation or activation. The owner
+subsequently authorized the offline transport slice above; activation still requires approval
+for sandbox credential use,
+bounded seller estimates/pickup-reference checks and at most one supported synthetic
+non-COD cargo order plus read-back. No production account/key, payment, top-up, delete
+or blind replay. Cargo remains disabled and full T-080 stays open. This is an approval
+boundary, not a claim that the sandbox or cargo order contract has been exercised.
+
+## Verified regular-service baseline (2026-11-03)
+
+Owner approved integrating and verifying **regular services only**, with cargo disabled
+and full T-080 remaining open until route-specific cargo minima/order support are verified.
+TASKS.md remains the sole work queue. No subsequent task starts before this bounded slice
+has verification, independent review, repairs/rechecks and canonical-document closeout.
+
+Current bounded R3 run: `RUN-20261103T085327Z-57f4e09f`, T-080 / PR-43.
+The existing `feat/t-080` source has been integrated without copying its pre-existing
+research/specification baseline over the parent tree. The original forward migration is
+preserved byte-for-byte; no historical migration was rewritten. DATA-14 now states the
+implemented heavier-raw-weight rounding and exact-actual fallback explicitly. Sub-kg
+values retain positive integer-gram precision without invented minimums or half-fares.
+
+Initial independent review `d264fdd1-6723-4373-8d56-67733f212566` found no concrete
+correctness/security defect in the approved regular path. Its two behavioral coverage gaps
+were addressed with disposable-DB/offline-dispatch scenarios: legacy NULL-weight quote
+confirmation, and effective rule A → B / future C selection while A remains frozen through
+dispatch. Corrected final execution `ba24c71f4` passed typecheck; **58 files / 961 unit
+checks**; **30 files / 444 disposable DB checks**; the secret-free Docker build/bundle
+scan; and **85 browser checks / 1 intentional skip** across 390/1280 px, including
+readiness outage/recovery. Product/test/foundation source stayed unchanged during every
+check. These are local/synthetic-provider results, not live provider pricing proof.
+
+Two added DB fixture defects were fixed without changing application/migration code.
+Follow-up review gave the weight additions bounded visual PASS, and caught two receipt
+grader defects (optimized Python bypass and omitted foundation SQL). Both were reproduced,
+fixed, regression-tested and independently reviewed with no remaining issues. Final
+commands were then re-executed with the corrected grader; old-runner passes and failures
+remain preserved separately. Final ledger checks grade completed commands by their real
+exit codes, command/log/runner hashes and unchanged source manifests; they do not claim
+to rerun those suites. Final docs and all runtime artifacts are bound separately by the
+delivery surface and fresh traceability. Four final captures with hashes/dimensions are
+retained under `.pi/tasks/t080-verification/visual-final/`. Full boundary review and its
+matching approval must be present in the run before PASS; this paragraph is not a
+substitute for that gate. See [the T-080 report](docs/review/2026-11-02-t080-implementation-review.md).
+
+The earlier [cross-project review](docs/review/2026-11-02-cross-project-improvement-review.md)
+closed its bounded T-037 documentation run `RUN-20261102T204950Z-70286b58` **PASS**, with
+final digest-bound independent approval. Its 6 files / 115 offline Geraicuan tests are
+reference evidence, not GeraiExpress runtime or release proof. The stale T-054 envelope
+was closed **BLOCKED** for a captured HEAD mismatch, preserving historical evidence.
+Full T-037, full T-080, provider/counsel gates and release gates remain open. No commit,
+push, deployment, live provider request, real customer data or existing DB access is
+part of this integration. Other dirty research/specification edits remain preserved.
 
 ## Current implementation
 

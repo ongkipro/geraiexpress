@@ -259,3 +259,12 @@ Execution task: T-068.
 - Coolify's edge is trusted only at its verified exact address, with right-to-left forwarded-address parsing; all public traffic passes the internal gateway and no app/data ports are published. Evidence: `scripts/test-coolify-proxy.mjs` and environment model checks.
 - Database-owner/login credentials are excluded from the app environment. Migration runners serialize through a PostgreSQL advisory lock and validate the complete applied manifest before writing. Evidence: `tests/db/migration-runner.test.ts` and `tests/unit/db-environment.test.ts`.
 - These are locally executable controls, not proof of the remote host, public TLS, backup storage or provider entitlements. See STATUS.md for the latest executed result.
+
+## SEC-8 — Public tracking surface
+- Status: Proposed (PR-40; UX-18; DATA-12); not built; task T-085
+- Owner: Engineering owner
+- Source: PR-40; gap analysis section 1 (competitor tracking pages map full names, addresses, driver data or proof-of-delivery links; COD-recipient scam reviews); DEC-023.
+- Statement: The public tracking page shall be the only anonymous read of shipment data, shall expose a fixed minimal projection, and shall resist enumeration and abuse.
+- Acceptance: (1) `/lacak/[token]` is a route family on the public (apex) audience only and answers 404 on the app, owner, hooks and internal hosts (host-matrix unit test); it reads no session cookie and sets none; responses carry `X-Robots-Tag: noindex`, a robots disallow entry despite the indexable apex, `Cache-Control: private, no-store` and the host CSP. The token derivation secret `TRACKING_TOKEN_SECRET` is server-only, read through `src/lib/config.ts` and included in the client-bundle scan. (2) The only data path is `public.track_shipment(token)`; a test proves the projection type lacks name, phone, address, amount and item columns. (3) Per-client rate limit through the existing limiter (Proposal: 30 lookups per minute per address, fail closed when the client address is missing); repeated invalid tokens are counted separately. (4) Unknown, revoked and expired tokens return the same 404 body and similar timing. (5) The share message and page never contain the AWB in the URL. (6) Bundle scan shows no server secret in the page.
+- Constraints: SEC-1, SEC-6, PR-36, RATE-1, DATA-12, NFR-3.
+- Evidence: Not built.

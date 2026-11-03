@@ -5,8 +5,8 @@
 
 - Status: Reconciled implementation evidence from 2026-10-28, with runtime and data/auth status amended 2026-10-29 for Decisions DEC-020 and DEC-021 (ADR-0002, owner). Observed: the local product foundation and sandbox issuance remain; merged self-hosted Node-container code (T-062) and the plain PostgreSQL 17 + PostgREST + application-owned auth cutover (T-064..T-066) replace Cloudflare Workers and Supabase in the working tree, while the T-067 independent security review, PostgreSQL backup/PITR gates and production gates remain open.
 - Owner: Paduka Ongki
-- Updated: 2026-10-29
-- Context: `CONTEXT-RECORD.md` is the current decision and evidence owner (CTX-39 to CTX-43 and DEC-011 to DEC-021 were added in 2026-10-28/29). Authority order when sources disagree: repository disk and executed checks, then `ARCHITECTURE.md` (what is built), then `DECISIONS.md` and `CONTEXT-RECORD.md`, then older prose in this file.
+- Updated: 2026-11-02
+- Context: `CONTEXT-RECORD.md` is the current decision and evidence owner (CTX-39 to CTX-44 and DEC-011 to DEC-023 were added from 2026-10-28 to 2026-11-02). Authority order when sources disagree: repository disk and executed checks, then `ARCHITECTURE.md` (what is built), then `DECISIONS.md` and `CONTEXT-RECORD.md`, then older prose in this file.
 - Execution: `TASKS.md` is the sole work queue; this document does not mark any task complete.
 - Review basis: Original and advanced LegacyReference worktree scans, bounded local tests, and current vendor documentation (CTX-11 through CTX-15); the 2026-10-28 full review (`docs/review/2026-10-28-full-review.md`) with its traceability appendix, and the 2026-10-28 legacy-project comparison (`docs/review/2026-10-28-legacy-project-comparison.md`).
 - Hosting and data/auth status: Decisions DEC-020 and DEC-021 (ADR-0002, owner) supersede the older Cloudflare Workers/OpenNext, Vultr/Coolify and Supabase/GoTrue/Send Email Hook descriptions in this PRD, not the product requirements. Observed merged implementation: `Dockerfile`, `compose.yaml`, `compose.db.yaml`, `infra/`, `db/foundation/`, `db/migrations/`, `src/lib/db/**`, `src/lib/auth/**`, `src/proxy.ts`, `src/lib/config.ts`, `client-address.ts`, `limiter.ts` and `cron.ts`; current runtime and data/auth mechanics belong to ARCH-1, ARCH-3, ARCH-5, SEC-5, SEC-6 and DEL-2. Plain PostgreSQL 17 + PostgREST + application-owned auth replace Supabase; Cloudflare Turnstile stays as the CAPTCHA. The Send Email Hook is removed and the app renders/sends code mail directly (`src/lib/auth-mail.ts`, `src/lib/mail-transport.ts`: Mailpit locally; production transport is Proposal, unbuilt, T-063). Old Worker and Supabase checks and preview references are historical, not current container/PostgreSQL or production evidence.
@@ -61,9 +61,15 @@ new provider capabilities or legal claims.
 
 This section records only what the owner decided, what is assumed and what is
 unknown. It states no market-size, competitor, demand or regulatory fact; each
-of those needs a cited source. The research note
-`docs/research/geraiexpress-market-and-regulatory-research.md` is pending; until
-it exists and the owner has reviewed it, this PRD relies on none of its content.
+of those needs a cited source. Evidence lives in two research notes that the owner
+reviews before any claim here changes: the
+[market and regulatory research](../research/geraiexpress-market-and-regulatory-research.md)
+(2026-10-28: segments, competitor offers, Mengantar discount mechanics, masking,
+UU PDP, PSE, pickup reality) and the
+[Indonesia market gap analysis](../research/geraiexpress-indonesia-market-gap-analysis.md)
+(2026-11-02: competitor feature matrix, counter jobs versus the build,
+Permenkomdigi 8/2025 and 15/2025 duties, unit economics and PR-38 to PR-46; version 2
+integrates five research lanes kept under `docs/research/evidence/2026-11-02/`).
 
 | Label | Statement | Source |
 |---|---|---|
@@ -74,7 +80,12 @@ it exists and the owner has reviewed it, this PRD relies on none of its content.
 | Assumption | About 50 tenants is a planning figure, not a commitment; the Partner limits of 1,000 registrations per day and 60 requests per minute shared are assumed not to constrain that scale | CTX-39 |
 | Unknown | Demand, willingness to pay, how many gerai would switch from a conventional counter, counter throughput, staffing and competitor positioning: no customer interview, survey or measurement exists | Statement under "Problem, goals and evaluation" |
 | Unknown | Who the pilot gerai is (entity, location, go-live date), its shipment volume and the commercial timing | CTX-39 (confidence Low for volume, timing and commercial terms) |
-| Unknown | Market size and the regulatory obligations of an expedition counter or reseller in Indonesia: no source is relied on here | Research note path above, pending |
+| Unknown | Number of independent multi-courier gerai, parcels per gerai per day and counter margins: no official source exists; national e-commerce growth (e-Conomy SEA 2025, projected US$71 billion GMV) is a tailwind, not segment demand | Gap analysis section 3.1 |
+| Observed | Of 14 aggregator or seller tools and 10 courier programs reviewed, about 12 aggregator-style and 8 courier programs recruit counters, mostly free to join, with headline earnings of 20% to 40% (Lion and SAPX courier programs 20% to 35%; some programs lower, e.g. KirimAja SubConsole 10%); multi-courier booking, pickup, COD and in-app tracking are table stakes; counter receipt, branded label and multi-branch dashboards are rare, and customer WhatsApp notification is rare among counter programs though common in seller aggregators; cash or shift close, per-cashier receipts and explicit duplicate-resi protection were not seen on the public surfaces read; no counter vendor advertises sender masking | Gap analysis section 3.2 (vendor self-description only) |
+| Observed | In 177 negative Play reviews across 11 agent and seller-aggregator apps (reviewers mostly online sellers, not counter-specific), the leading complaints are balance and payout access (37), slow support (31), app errors (31), KYC friction (30), COD, return and claim problems (24) and scam WhatsApp messages to COD recipients (12); commission cuts were never mentioned (keyword coding, directional only) | Gap analysis section 3.3 |
+| Observed | Outside Jawa-Bali most courier orders are placed offline (BPS VPEK-2024, firm-level averages for medium and large firms); QRIS reached 44.86 million merchants, 96.68% UMKM, by June 2026 and carries 0% MDR up to Rp100,000 from 1 October 2026 (BI text retrieved indirectly; one BI value contradiction recorded) | Gap analysis section 3.1 |
+| Observed | Permenkomdigi 8/2025 places insurance-information, prohibited-goods, return (with the cost charged to the sender, Art 20), compensation (up to 10x the shipping fee), four-month shipping-data and resi-QR duties on licensed postal operators, with agents liable to the operator (Art 75); Art 77 requires the resi QR to carry sender and recipient names and addresses; Permenkomdigi 15/2025 defines KBLI 53202 courier agents (scale, computer and printer, written agreement with a postal operator); whether a gerai on a Mengantar seller account is such an agent is Unknown (counsel) | Gap analysis section 6 |
+| Inference | Under DEC-016 and Mengantar's documented 20% default the platform earns nothing per shipment and cannot match the 25% that several competitors advertise; a revenue model is an open owner decision | Gap analysis section 5 |
 | Unknown | Whether couriers, Mengantar and recipients accept a locally printed masked label | PR-34; pilot scan |
 
 ## Problem, goals and evaluation
@@ -125,7 +136,7 @@ source presence alone does not accept an optional feature.
 | Find a shipment while helping a customer | Search/filter queue and inspect status/history/next valid action | Initial recommendation; PR-9, PR-12; no broad cross-tenant provider search |
 | Work with more than one staff member | Explicit memberships/roles, current authority, conflict handling and actor audit | Requested multi-user direction; PR-1, PR-10; roles per DEC-008, outlet-level assignment deferred |
 | Operate under the gerai's identity | Validated app name/logo and visible outlet context | Requested; PR-13; the identity on the printed label is PR-34; customer receipt and invoice content need separate acceptance |
-| See what needs attention during the day | Unknown/unpaid/label-failure worklist first; scoped count/time basis and refresh | Queue PR-9 first; overview PR-14 proposed after shipping pilot |
+| See what needs attention during the day | Unknown/unpaid/label-failure worklist first; scoped count/time basis and refresh | Queue PR-9; first overview form built as the gerai Dashboard (PR-14, T-078, UX-16) |
 | Keep a record of customer charges and receipts | Separate selected normal customer tariff, gerai discount configuration, fee/insurance and payment status | PR-22/PR-23 select pricing; receipt/cashier/extra markup/ledger remain conditional; no platform ledger in the first release (DEC-016) |
 | Pass parcels to a courier and handle cancellations | Verified courier events and state-valid cancellation; explicit local custody/handover | Cancellation and tracking scheduled as PR-12 (T-045, DEC-014); custody/handover remains a candidate under TD-1 |
 | Process larger repeat batches | CSV preview, selected-row confirmation, scoped export and batch-print behavior | CSV export scheduled as PR-16 (T-047); CSV intake PR-11 and batch print remain later candidates under TD-1; volume/limits not inherited automatically |
@@ -560,7 +571,7 @@ tasks are table rows there and are written here as bare numbers (for example 003
 | PR-11 · CSV intake | Deferred | none | TASKS.md Deferred list |
 | PR-12 · Tracking, webhook, cancel | Not implemented | T-045 | /pengaturan shows tracking not enabled; webhook gated by a public URL and the callback secret |
 | PR-13 · Tenant identity and brand | Partial | 003 | gerai and outlet names only, no logo; T-029 belongs to PR-35 |
-| PR-14 · Daily overview | Deferred | none | TASKS.md Deferred list; only the attention list exists in the queue |
+| PR-14 · Daily overview | Partial | T-078 | gerai Dashboard at `/` (UX-16): attention list, today's counts against yesterday, 7/14/30-day trend in WIB, status split and courier ranking from the gerai's own shipments; the stale-data refresh path and the overview-versus-filter parity check of the acceptance are not yet proven |
 | PR-15 · Tenant lifecycle | Implemented | 012, 013 | tests/db platform and registration; e2e platform |
 | PR-16 · Safe export | Partial | T-047 | CSV export (tenant admin, 10000-row cap, formula guard, audited) and invoice snapshots built; wilayah reference deferred (owner decision) |
 | PR-17 · Partner seller onboarding | Partial | 020, T-027, T-032, T-034 | sandbox works; the binding is machine-attested since T-032; gaps: pre-T-032 bindings not re-verified, retry_after wiped by begin (T-054), no environment scope (T-050) |
@@ -584,6 +595,15 @@ tasks are table rows there and are written here as bare numbers (for example 003
 | PR-35 · Public marketing claims | Implemented | T-036 (pages built by T-029, T-031) | approved-claims copy, derived couriers, noindex on non-apex hosts (tests/unit marketing-rebrand and proxy); the pages do not yet describe pickup or the local label |
 | PR-36 · Host topology | Partial | T-042, T-055, T-062, T-066 | `src/lib/hosts.ts`, `src/proxy.ts`, `src/lib/db/cookies.ts` (`gx_at`/`gx_rt`) and Caddy templates built; DNS/TLS, cross-host Server Actions and production host cutover remain unproved |
 | PR-37 · Tenant slug and reference | Implemented | T-049 | slug, prefix and counter built and tested locally; the prefix is assigned at approval by a trigger |
+| PR-38 · Counter payment and receipt | Not implemented | Proposed; contract UX-17, DATA-11; T-082 | gap analysis J5; `invoice-content.ts` states the invoice is not a receipt |
+| PR-39 · Shift and day close | Not implemented | Proposed; contract UX-17, DATA-11; T-083 | gap analysis J6 |
+| PR-40 · Resi message and tracking link | Not implemented | Proposed; contract UX-18, DATA-12, SEC-8; T-085 (needs T-045) | gap analysis J9/J10; only `wa.me` link is marketing |
+| PR-41 · Content declaration | Not implemented | Proposed; contract UX-19, DATA-13; T-081 | gap analysis J3; Permenkomdigi 8/2025 Art 22 |
+| PR-42 · Insurance offer | Not implemented (insurance Deferred, DEC-013) | none (Proposed) | gap analysis J4; Permenkomdigi 8/2025 Art 27 |
+| PR-43 · Measured and billable weight | Not implemented | Proposed; contract UX-19, DATA-14; T-080 | gap analysis J2; Mengantar formula published; scheduled as T-080 |
+| PR-44 · Return and claim cases | Not implemented | Proposed; contract UX-20, DATA-15; T-086 (needs T-045) | gap analysis J11/J12 |
+| PR-45 · Pilot measurement and earnings | Not implemented | Proposed; contract UX-17; T-087 | gap analysis J13; PRD evaluation measures have no instrument |
+| PR-46 · Masked-label acceptance gate | Not implemented | Proposed; contract UX-9 (amended); T-084 (T-048 evidence) | gap analysis section 6 (Art 77); Mengantar Java-only return address |
 | NFR-1 · Isolation proof | Partial | 002, T-032, T-035, T-064, T-065 | `tests/db` (27 files / 410 tests against PostgreSQL 17 + PostgREST); seller binding closed; signature-based catalog test includes the 14 `auth_*` machine functions; local database only |
 | NFR-2 · Duplicate and interrupted operations | Partial | 005, 022, 024, T-026, T-033, T-043 | dispatcher tests; payment replay closed locally by the attempt table; live behavior unproven |
 | NFR-3 · Private payloads | Implemented | 001, 015, T-030, T-038, T-066 | client-bundle scan (including `AUTH_JWT_SECRET`, `AUTH_SECRET`, `SERVICE_ROLE_JWT`); no-store `src/proxy.ts`; HttpOnly `gx_at`/`gx_rt` cookies, CSP base policy and account limiters (T-038, T-066); the script CSP is Report-Only |
@@ -730,13 +750,13 @@ tasks are table rows there and are written here as bare numbers (for example 003
 - Evidence: Observed: the workspace shows the current gerai and outlet names (tests/e2e auth-demo); there is no logo or branding setting. TASKS T-029 lists this requirement for the public marketing pages, which belong to PR-35.
 
 ### PR-14 — Daily operational overview
-- Status: Proposed; recommended after shipping pilot; Deferred (TASKS.md Deferred list, no task)
+- Status: Proposed; first form built as the gerai Dashboard (T-078, UX-16); the parity and stale-data acceptance remain open
 - Owner: Paduka Ongki
 - Source: CTX-11.
 - Statement: When a permitted user opens the overview, the system shall distinguish work requiring action now from period-based shipment activity and show the data timestamp.
 - Acceptance: Given a period crossing local midnight and a stale result, When overview and shipment filters are compared, Then they use the same selected timezone and event basis, show the same scoped count, and present a refresh path without claiming stale data is current.
 - Constraints: UX-1, TD-6, TEN-1. Financial revenue, net margin, and COD-settlement metrics remain outside this contract until their policies are accepted.
-- Evidence: Reference date/filter/freshness subset passed; GeraiExpress data/UI verification pending.
+- Evidence: Observed: the gerai Dashboard at `/` (T-078, UX-16) shows attention, today's counts, trends, status split and courier ranking in WIB; the overview-versus-filter parity and stale-data refresh acceptance are not yet proven.
 
 ### PR-15 — Tenant lifecycle administration
 - Status: Proposed (manual review during the pilot chosen by DEC-007); built under CTX-29, CTX-30
@@ -957,6 +977,7 @@ tasks are table rows there and are written here as bare numbers (for example 003
 - Acceptance: Given the host matrix, When each host is asked for the other hosts' paths, Then it answers 404 (unit test); given a session on the app host, When the owner host is requested, Then the cookie is not sent (e2e); given an invitation or marketing link, Then it is built from per-environment configuration (`APP_ORIGIN`) and not from request headers (code mail is code-only and carries no link); given a non-production deployment, Then its hosts are single-level names; given any non-marketing host, Then it sends X-Robots-Tag noindex.
 - Constraints: SEC-1, IAM-7, TEN-1, PR-12, PR-24, DEC-015, DEC-020, DEC-021. Cloudflare Access in front of the owner host in addition to TOTP is optional (CTX-41 item 5) and not required. There is no separate egress gateway host (DEC-020); `internal.geraiexpress.local` is internal-only for `/api/internal/cron/*` and `/healthz`. Decision (CTX-41 items 11 to 17, accepted 2026-10-28; runtime/data amended by DEC-020 and DEC-021; full text in ARCH-6 and UX-11): the owner host `/` leads to platform sign-in and the platform overview and the app host `/` to sign-in and the shipment queue; one identity may be both platform administrator and tenant member with a separate session per host and no platform action in a tenant context; preview, staging and production each have their own PostgreSQL database, PostgREST instance, Compose deployment, hosts, signing secrets and Mengantar environment with no shared credential or seller id; each host has its own health route, Bahasa Indonesia not-found and error pages and its own CSP, with CORS off; Auth e-mail keeps the apex sender address while sending-domain verification and SPF/DKIM stay a production gate (DEC-009). Items 11 and 12 are stated in PR-37.
 - Evidence: Observed merged `src/lib/hosts.ts`, `src/proxy.ts` (renamed from `src/middleware.ts` in T-066) and `src/lib/db/cookies.ts` (replacing `src/lib/supabase/cookies.ts` in T-066) enforce audience/404 routing, host-only `gx_at`/`gx_rt` cookies and configured origins. `infra/proxy/Caddyfile` maps the four public hosts and `infra/env/*.env.example` supplies their origin templates (DEC-020). The former `/api/auth/send-email` route on the hooks host was removed in T-066 (`hooks.` now reserves `/api/webhooks` plus `/healthz`). DNS, production ACME issuance/renewal, cross-host Server Actions and production host cutover remain unproved; owner TOTP recency remains T-054.
+- Amendment (Proposed, 2026-11-02, PR-40, SEC-8): the apex also serves `/lacak/*`, a non-marketing route that reads and sets no cookie, sends per-route `X-Robots-Tag: noindex` and a robots disallow, and answers 404 on the app, owner, hooks and internal hosts.
 - Change history: 2026-10-28 — Added per DEC-015 and CTX-41.
 - Change history: 2026-10-28 — The Supabase Auth Send Email Hook (`/api/auth/send-email`) was placed on the cookie-less hooks host (DEC-018; ARCH-6, TD-14, SEC-6).
 - Change history: 2026-10-28 — CTX-41 items 11 to 17 accepted by the owner and stated in the constraints.
@@ -973,6 +994,104 @@ tasks are table rows there and are written here as bare numbers (for example 003
 - Change history: 2026-10-28 — Added per CTX-41.
 - Change history: 2026-10-28 — Items 11 and 12 accepted by the owner; the reserved-name list is fixed.
 
+
+## Counter-business requirements from the 2026-11-02 market gap analysis
+
+These requirements come from the [Indonesia market gap analysis](../research/geraiexpress-indonesia-market-gap-analysis.md)
+(counter jobs J2 to J13). All are Proposed; development is permitted by DEC-023 through tasks
+T-080 to T-087, and none is accepted product behavior until the owner accepts it. Priority labels
+are proposals in that note's section 7.
+
+### PR-38 — Counter payment record and customer receipt
+- Status: Proposed (gap analysis, 2026-11-02); receipt content is an existing open owner decision
+- Owner: Paduka Ongki
+- Source: Gap analysis J5; DJP N10 (retail receipts such as bon kontan or kuitansi may serve PKP retailers); BI QRIS MDR rule (gap analysis N8); INDOPAKET "counter charged more than app quote" reviews (gap analysis section 3.3); PR-22.
+- Statement: When an operator records that the customer paid for a confirmed shipment, the system shall store the payment method (cash, QRIS, transfer or other), the amount in whole rupiah, the collecting staff member and the time, and shall offer a printable customer receipt that states the normal customer charge and the payment record without exposing net cost, the gerai discount or the platform remainder.
+- Acceptance: Given a confirmed shipment, When an operator records cash payment, Then the shipment shows "Lunas" with method, amount, staff and time and the receipt prints them; given an amount different from the customer charge, Then the difference is recorded and visible to the tenant administrator, never silently corrected; given a second payment record for the same shipment, Then it is refused unless the first is voided with a reason by a tenant administrator; given a member of another tenant, Then neither the record nor the receipt is reachable; given QRIS as the method, Then no surcharge is added to the customer charge (BI: MDR is borne by the merchant); given a COD shipment, Then the shipping charge is shown as collected by the courier and is never prefilled or counted as counter cash (DEC-003, counted once); given a counter payment marked paid, Then the Mengantar order payment state stays visible and unchanged; given the receipt, Then every amount on it comes from the accepted quote and confirmation snapshot, and any later provider weight or fee correction is shown as a separate line rather than rewriting the original.
+- Constraints: PR-22, TEN-1, IAM-1, DATA-2, BILL-1, NFR-3. GeraiExpress records payments taken by the gerai; this requirement adds no payment processing and does not hold or move customer money; licensing remains a counsel item (market research L6). Unknown payment is distinct from unpaid. Tax wording on the receipt is a tax-owner decision; no PPN amount is hardcoded.
+- Evidence: Not implemented (gap analysis section 2).
+- Change history: 2026-11-02 — Added from the market gap analysis.
+
+### PR-39 — Outlet shift and day close
+- Status: Proposed (gap analysis, 2026-11-02)
+- Owner: Paduka Ongki
+- Source: Gap analysis J6; evidence is weak (one academic case of manual bookkeeping at a small agent); the owner interviews (lane E section 5) should validate it during the pilot, but development is not blocked (DEC-023).
+- Statement: When a permitted user closes a shift or day for an outlet, the system shall total the PR-38 payment records by method and staff for that period in WIB, accept the counted cash, record the variance and the closer, and keep the closed period read-only.
+- Acceptance: Given payments across two staff members and two methods, When the day is closed with a counted cash amount, Then the expected cash, counted cash and variance are stored with the closer and time; given a payment recorded after the close, Then it falls into the next open period; given a reopen, Then only a tenant administrator can do it, with a reason, and the audit log shows it.
+- Constraints: PR-38, IAM-1, DATA-2, UX-1. A period stays open until it is closed and may span midnight; times are shown in WIB.
+- Evidence: Not implemented.
+- Change history: 2026-11-02 — Added from the market gap analysis.
+
+### PR-40 — Customer resi message and tracking link
+- Status: Proposed (gap analysis, 2026-11-02); depends on PR-12 (T-045)
+- Owner: Paduka Ongki
+- Source: Gap analysis J9 and J10; UKURIR customer WhatsApp notifications; Permenkomdigi 8/2025 Art 12(1)(h); public tracking-page privacy benchmark and COD-recipient scam reviews (gap analysis sections 1 and 3.3; lane C section 3).
+- Statement: When a resi is issued, the system shall let the operator share the AWB, courier and a tracking link with the sender through a prefilled WhatsApp message opened on the operator's device, and shall serve a public tracking page, for a valid unguessable token, that shows only the status history, courier, AWB, destination city, the sender and recipient as initials (for a masked shipment, the initials of the printed sender) and the gerai name when masking is off, never the real pickup identity.
+- Acceptance: Given an issued shipment, When the operator chooses "Kirim resi ke pelanggan", Then a `wa.me` link opens with the sender's normalized phone and a message containing the AWB and the tracking link, and nothing is sent by the server; given the tracking link, When opened without a session, Then it shows status history, courier, AWB, destination city, initials and the gerai name only when masking is off, with no full names, phone numbers, street address, price, tenant cost, COD amount, item description, courier driver details or proof-of-delivery photo, and sends noindex; given a guessed or revoked token, Then it answers 404; given a masked shipment, Then the initials are those of the printed sender and no gerai name or real pickup identity appears; given repeated lookups from one client, Then rate limiting applies and tokens cannot be enumerated.
+- Constraints: PR-12, PR-34, PRIV-1, SEC-2, PR-36, NFR-3. No automated WhatsApp Business API sending is implied; that needs its own provider decision. Tracking data comes only from PR-12 events.
+- Evidence: Not implemented.
+- Change history: 2026-11-02 — Added from the market gap analysis.
+
+### PR-41 — Parcel content declaration and prohibited-goods acknowledgement
+- Status: Proposed (gap analysis, 2026-11-02); acknowledgement wording needs counsel (T-048)
+- Owner: Paduka Ongki
+- Source: Gap analysis J3; Permenkomdigi 8/2025 Art 22.
+- Statement: Before a shipment is confirmed, the system shall require a content description and the operator's confirmation that the sender declared the parcel free of prohibited items, and shall store both in the shipment snapshot.
+- Acceptance: Given a draft without a content description or without the confirmation, When the operator confirms, Then confirmation is refused with the missing item named; given a confirmed shipment, Then its snapshot shows the description, the declaration version, the confirming staff member and the time; given the declaration text, Then it lists the Art 22 categories in Bahasa Indonesia. Wording gate (not a development gate, DEC-023): the text is marked provisional until the Mengantar sync approves it.
+- Constraints: PR-5, PR-7, DATA-2. The system does not inspect parcels; it records the declaration. Courier-specific restricted lists stay the courier's.
+- Evidence: Implemented locally by T-081 (DATA-13); the acknowledgement text is provisional (DEC-023) and categories quote Permenkomdigi 8/2025 Pasal 22(3).
+- Change history: 2026-11-02 — Added from the market gap analysis.
+
+### PR-42 — Insurance offer and recorded choice
+- Status: Proposed (gap analysis, 2026-11-02); insurance itself stays Deferred under DEC-013 until the provider capability is verified
+- Owner: Paduka Ongki
+- Source: Gap analysis J4; Permenkomdigi 8/2025 Art 27; DEC-013. Observed (Mengantar homepage, marketing copy identical to a 2023 page and possibly stale): free insurance below Rp500,000 goods value and Rp1,000 above, but the Public API has no insurance field, so the provider capability for API orders is Unknown.
+- Statement: When a shipment is quoted for a courier service whose insurance capability the provider has verified, the system shall show that insurance is available with its verified premium and shall record whether the sender accepted or declined.
+- Acceptance: Given a verified insurance capability, When the operator reaches review, Then the offer is shown and a choice is required; given acceptance, Then the premium is added once (PR-22) and sent in the provider order; given decline, Then the choice is stored and printed on the receipt; given no verified capability, Then no offer appears and nothing implies coverage.
+- Constraints: PR-22, DEC-003, DEC-013, BILL-1. No invented premium percentage.
+- Evidence: Not implemented; Deferred.
+- Change history: 2026-11-02 — Added from the market gap analysis.
+
+### PR-43 — Measured weight, dimensions and billable-weight estimate
+- Status: Accepted for regular-service integration (owner, 2026-11-03); full T-080 remains open for verified route-specific cargo constraints/order support. The Mengantar formula is published (help article 5387484).
+- Non-COD cargo (owner, 2026-11-03): JNE (JTR), SiCepat (Gokil) and iDexpress cargo are quoted beside regular services for non-COD shipments only, within their sourced minimum/maximum weight and with the provider's route minimum matching the rule; the counter sees them as service `Kargo`. Cargo COD and SAP cargo stay unavailable until verified.
+- Owner: Paduka Ongki
+- Source: Gap analysis J2; Permenkomdigi 8/2025 Art 12(1)(f) (operator duty, context only); Permenkomdigi 15/2025 KBLI 53202 scale standard (0 to 50 kg, 100 g precision); KirimAja SubConsole weight verification; operator dispute evidence (lane E E6 to E8). Observed (Mengantar help 5387484, updated 2026-10-19): volumetric weight is (L x W x H) / 6000, JNE and IDX Kargo divide by 4000, the heavier of actual and volumetric applies, rounding tolerance 0.30 kg (Lion 0.31 kg), and a weight difference is debited from or credited to the seller balance.
+- Statement: When an operator enters a parcel, the system shall store measured weight and dimensions as entered at the counter, show a billable-weight estimate only from a provider-verified formula, and keep the measured values on the shipment snapshot as dispute evidence.
+- Acceptance: Given dimensions and weight, When the per-courier formula is recorded as provider configuration with its source and date, Then the quote shows actual, volumetric and billable weight per courier and uses the billable weight; given no verified formula, Then the quote states that volumetric weight is not included; given a later provider weight correction, Then both values are shown and the difference is visible.
+- Constraints: PR-4, PR-7, DATA-2. Units are validated at the backend.
+- Evidence: The Public API has no dimension field (lane D finding 5). The regular-service implementation instead groups courier estimates by derived billable grams and freezes the selected quote's weight through create-order, retaining measured values and legacy NULL-weight compatibility. DATA-14 specifies fallback and sub-kg behavior; cargo ranges are evidence only and cargo remains disabled. Provider reweigh ingestion remains T-045; nullable storage/presentation does not claim ingestion is complete. See STATUS.md and the T-080 review report for current verification.
+- Change history: 2026-11-02 — Added from the market gap analysis. 2026-11-03 — Owner approved regular-service integration with cargo disabled; aligned rounding/fallback semantics with DATA-14 without closing T-080.
+
+### PR-44 — Return-to-sender and claim cases
+- Status: Proposed (gap analysis, 2026-11-02); depends on PR-12 (T-045)
+- Owner: Paduka Ongki
+- Source: Gap analysis J11 and J12; Permenkomdigi 8/2025 Art 20, 47(2)(i), 73, 75 (operator duties, context only); Mengantar return-fare rules; Mengantar claim rules (help 8140017, 5596208): claim decided within 14 days, per-courier filing windows from 3x24 hours to 60 working days, no claims API; Mengantar web UI adds a Lost final status whose webhook value is Unknown.
+- Statement: When a provider status shows a return or a permitted user reports loss, damage or delay, the system shall open a case on the shipment that records the type, dates, evidence references, the courier or Mengantar ticket reference and the outcome, and shall show return charges as provider facts without promising compensation on the courier's behalf.
+- Acceptance: Given a return status event, Then the shipment enters a visible return state and the queue lists it under attention; given a claim case, Then the courier's filing deadline (from provider configuration with source and date) and its age in working days are shown, and closing it requires an outcome; given a member of another tenant, Then the case is unreachable.
+- Constraints: PR-12, PR-9, TEN-1, DATA-2. Compensation is decided by the courier (Penyelenggara Pos) or Mengantar; the system records the decided amount and never promises one.
+- Evidence: Not implemented.
+- Change history: 2026-11-02 — Added from the market gap analysis.
+
+### PR-45 — Pilot measurement and gerai earnings view
+- Status: Proposed (gap analysis, 2026-11-02)
+- Owner: Paduka Ongki
+- Source: Gap analysis J13; "Problem, goals and evaluation" (measures with no instrument); T-048 pilot log.
+- Statement: While a pilot runs, the system shall report per outlet and day in WIB the shipments issued, time from draft to resi, payment-method mix (PR-38), share of masked labels and, for the tenant administrator only, the estimated earnings: the normal tariff minus the gerai-facing cost from the assigned discount at quote time (DEC-018), with COD fee and insurance passed through and excluded, never the provider net cost or percentage.
+- Acceptance: Given a pilot period, When the tenant administrator exports the report, Then each measure has its definition, period and data timestamp; given an operator, Then the earnings column is not visible; given an unknown gerai cost, Then earnings are shown as unknown, never zero; given any role, Then no provider net cost or observed percentage appears.
+- Constraints: PR-14, PR-22, PR-23, IAM-1, NFR-3. These are evaluation measures, not revenue promises.
+- Evidence: Not implemented.
+- Change history: 2026-11-02 — Added from the market gap analysis.
+
+### PR-46 — Masked-label regulatory and return-path acceptance gate
+- Status: Proposed (gap analysis v2, 2026-11-02); gates the public masking claim, not the existing built label
+- Owner: Paduka Ongki
+- Source: Permenkomdigi 8/2025 Art 77 (the licensed operator's resi QR contains sender and recipient names, addresses, postcode, phone, item and tariff), Art 58(4), Art 84; Mengantar return-address rule (pickup address, or a configured return address only when origin and destination are both on Java, help 14715369); courier exceptions (Anteraja manual drops return to the dropping agent; SPX returns are collected by the shipper; lane E E15); DEC-017; PR-34; T-048.
+- Statement: Before the masked local label is presented to gerai or customers as an approved way to ship, the system shall require recorded evidence that the receiving courier accepts the label for each enabled courier and recorded counsel advice on Art 77, and shall tell the operator at masking time that a returned parcel goes to the provider pickup address or configured return address under the courier's rule, never to the printed masked sender.
+- Acceptance: Given a courier without recorded scan acceptance, When an operator opens the masking choice for that courier, Then the masked option is marked "belum terverifikasi" and requires an explicit acknowledgement (whether it should instead be unavailable is blocked until the owner selects); given masking is chosen, Then the screen states the return destination for that courier and route; given the public marketing pages, Then they make no masking claim until both records exist (PR-35).
+- Constraints: PR-34, PR-35, DEC-017, DEC-018, DEC-023, T-048. This requirement does not change the label layout; the Mengantar sync may require one. Development of the gate is not blocked (DEC-023); only the recorded acceptance evidence waits for the sync and the courier test.
+- Evidence: Not implemented; courier scan and counsel advice pending (T-048).
+- Change history: 2026-11-02 — Added from the market gap analysis v2.
 
 ## Non-functional acceptance proposals
 
@@ -1086,9 +1205,21 @@ deployment or live provider calls (DECISIONS.md).
 
 ### Open owner decisions and gates
 
+Decision (DEC-023, CTX-44, 2026-11-02): GeraiExpress is an official Mengantar sub-partner;
+legal-status, regulatory and commercial items below that involve Mengantar or counsel are
+settled with Mengantar later. They gate live provider use, production release and public
+claims; they do not gate development of PR-38 to PR-46.
+
 | Question | Owner | Due gate |
 |---|---|---|
 | Written Mengantar answer on discount terms (CTX-42): does a partner-registered seller get a negotiated discount and is it 30% from the first shipment; can the partner set or change a per-seller discount and how is it activated; are the partner's sellers pooled for volume steps; does Mengantar pay the partner a rebate and how is it settled; or must the platform remainder be collected from the gerai | Paduka Ongki with the Integration owner | Before any discount is marked provider-verified (T-041) and before any percentage is shown publicly (DEC-012) |
+| Revenue model: subscription per outlet, per-resi platform fee, negotiated volume pooling with Mengantar, or a free product feeding another revenue line; DEC-016 currently yields zero platform revenue at Mengantar's documented 20% (gap analysis section 5) | Paduka Ongki | Before the paid pilot and before any public pricing |
+| Positioning against free competitors (bosAgen, SIMASRIM, UKURIR, AutoKirim, Fastpay): which proven outcome leads the offer, and whether PPOB or bill payments are ever in scope | Paduka Ongki | Before marketing copy beyond PR-35 |
+| Whether a gerai using a GeraiExpress seller account is an agent under Permenkomdigi 8/2025 Art 10 and 75 and KBLI 53202 (Permenkomdigi 15/2025, which requires a written agreement with a postal operator), and which operator duties (Art 22, 27, 51, 73, 77) it must surface | Paduka Ongki with counsel | Before PR-41 wording, PR-46 and the live pilot |
+| Whether the masked local label is compatible with Art 77 resi QR content and courier acceptance (PR-46) | Paduka Ongki with counsel and the Integration owner | Before any masking claim |
+| Tax treatment: whether PPN besaran tertentu (PMK 71/2022 as amended by PMK 11/2025) applies to a counter or a platform fee, and whether PP 20/2026 excludes a counter's spread as intermediary income | Paduka Ongki with a tax adviser | Before receipts state tax and before any platform fee |
+| Breach-notice duty and controller/processor roles under PP 33/2026 (3x24-hour notice) | Paduka Ongki with counsel | Before real customer data |
+| Owner interviews (at least five gerai, guide in lane E section 5) | Paduka Ongki | Recommended product validation during the pilot; not a development gate (DEC-023) |
 | Expected volume and timing: tenants (about 50 is an Assumption), shipments per gerai and day, staffing and concurrency, go-live date | Paduka Ongki | Before capacity sizing, hosting sizing or any performance commitment |
 | Who the pilot gerai is (entity, location, go-live date; the owner states he runs the first pilot gerai, CTX-39), plus baseline, target and observation period for the counter workflow evaluation | Paduka Ongki | Before business-improvement claims and before the supervised production order |
 | Retention policy for contacts, shipment and label snapshots, print history, invoices, uncompleted registrations and invitations, audit and exports; archive/delete and support access | Paduka Ongki | Before personal-data lifecycle implementation (PRIV-1, PRIV-3); label snapshots and print history before T-044 serves a real gerai |
@@ -1099,9 +1230,9 @@ deployment or live provider calls (DECISIONS.md).
 | Owner transfer, factor recovery, and rejection/resubmission policy for applications | Paduka Ongki | Before those flows are built (PR-30, PR-32) |
 | Production mail provider/domain/quotas (T-063) and production Turnstile keys; former Worker mail binding no longer applies | Engineering owner | Before public real-account registration (DEC-009, DEC-020, PR-33) |
 | Which support investigations may expose customer data or authorize money or credential actions beyond the default platform projection | Paduka Ongki | Before support access or exceptional recovery |
-| Customer receipt and invoice content and branding; cashier, deposits, settlement, refunds and finance scope | Paduka Ongki | Before monetary workflows; before the invoice part of T-047 |
+| Customer receipt and invoice content and branding (the UX-17 receipt field list is the Proposal to decide); cashier, deposits, settlement, refunds (including refund after a voided payment or a failed provider order) and finance scope | Paduka Ongki | Before monetary workflows; before the invoice part of T-047 |
 | COD Ongkir uses normal retail shipping under CTX-28; the actual collection, fee and insurance rule, and who receives COD goods proceeds under Full COD | Paduka Ongki | Before enabling that collection mode |
-| Per-account fee base and inclusion, minimums, rounding, insurance and goods-value semantics, and the billable-weight rule (volumetric weight is deferred) | Integration owner | Before real charge calculation and before the supervised production order |
+| Per-account fee base and inclusion, minimums, rounding, insurance and goods-value semantics, and the billable-weight rule (provider-configured and dated per PR-43; confirm before the supervised production order) | Integration owner | Before real charge calculation and before the supervised production order |
 | Internal cost, discount and payout visibility per role | Paduka Ongki | Before pricing DTO and document acceptance |
 | Server provider/region and fixed IPv4, production PostgreSQL hosting (same server or managed) with backup/PITR proof (T-067), printers and label media | Paduka Ongki | Before infrastructure provisioning and hardware acceptance |
 | Name operational responders; select signal and audit retention, alert and retry budgets, and recovery targets with actual backup entitlements | Paduka Ongki with the Engineering owner | Before the production pilot; DEL-1, DR-1, OBS-1, RATE-1 |
@@ -1171,6 +1302,33 @@ The rest do not become promised features or money/label policies merely because
 their source exists.
 
 ## Change history
+
+- 2026-11-02 — Round 3 review (`docs/review/2026-11-02-counter-operations-review.md`): earnings exclude
+  the COD fee, PR-39 periods may span midnight, PR-40 statement and PR-36 amendment completed, PR-43
+  scheduled as T-080; T-045 amended and T-088 (Mengantar sync question pack) added in TASKS.md.
+- 2026-11-02 — DEC-023 / CTX-44 (owner): official Mengantar sub-partner; legal and commercial
+  items sync with Mengantar later and gate release and public claims, not development.
+  Two independent reviews (schema fit: REVISE; decisions and UX: APPROVE WITH FIXES) were applied:
+  COD never counted twice at the counter, masked shipments hide the gerai on tracking, `/lacak` is
+  apex-only, earnings use the gerai-facing cost not the provider net, IAM rows marked Proposed,
+  cash periods built in T-082, per-courier billable-weight estimate groups, RLS and RPC-only writes.
+  PR-38 to PR-46 (except PR-42, still provider-blocked) gain development contracts
+  (UX-17 to UX-20, DATA-11 to DATA-15, SEC-8) and tasks T-080 to T-087; requirement Status
+  lines stay Proposed until the owner accepts them.
+
+- 2026-11-02 — Market gap analysis v2 (five research lanes): market table extended (competitor, review,
+  BPS, QRIS and regulatory findings); PR-38, PR-40, PR-42, PR-43 and PR-44 sharpened with new
+  evidence; PR-46 added (masked-label acceptance gate); four open decisions added (Art 77,
+  tax, PP 33/2026, owner interviews). Independent evidence audit (PASS WITH FIXES): all 13 Medium and
+  9 Low wording findings applied, including the PR-43 evidence pointer (dimensions are not sent to
+  Mengantar), testable PR-40 and PR-46 acceptance, Art 20/75 attribution and status-table order.
+  No requirement accepted; no task created.
+
+- 2026-11-02 — Market gap analysis (`docs/research/geraiexpress-indonesia-market-gap-analysis.md`): the
+  "Market and users" table now cites both research notes and records competitor, regulatory and
+  unit-economics findings; PR-14 status corrected to Partial (T-078); PR-38 to PR-45 added as
+  Proposed; three open owner decisions added (revenue model, positioning, Art 10 agent status).
+  No requirement was accepted and no task was created.
 
 - 2026-10-29 — Amended for DEC-020 and DEC-021 (ADR-0002, T-062, T-064..T-066): self-hosted
   Node.js container, plain PostgreSQL 17 + PostgREST and the application-owned auth module

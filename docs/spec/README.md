@@ -1,8 +1,8 @@
 # GeraiExpress — Specification Pack Index
 
-- Status: Reviewed specification pack. Requirements are Proposed or Accepted per their own Status line; owner decisions are indexed in `DECISIONS.md` (DEC-001 to DEC-021 as of 2026-10-29). The application is implemented locally on the self-hosted Node.js container + PostgreSQL 17 + PostgREST + application-owned auth stack (T-062, T-064..T-066; T-067 security review open); `ARCHITECTURE.md` records what exists and `04-SYSTEM-ARCHITECTURE.md` owns the target.
+- Status: Reviewed specification pack. Requirements are Proposed or Accepted per their own Status line; owner decisions are indexed in `DECISIONS.md` (DEC-001 to DEC-023 as of 2026-11-02). The application is implemented locally on the self-hosted Node.js container + PostgreSQL 17 + PostgREST + application-owned auth stack (T-062, T-064..T-066; T-067 security review open); `ARCHITECTURE.md` records what exists and `04-SYSTEM-ARCHITECTURE.md` owns the target.
 - Owner: Paduka Ongki
-- Updated: 2026-10-29
+- Updated: 2026-11-02
 - Location: Canonical repository specification at `docs/spec/`; promoted on 2026-10-13. Original staging is a retained non-authoritative snapshot.
 
 GeraiExpress is a multi-tenant shipping-counter product for offline gerai and
@@ -19,7 +19,7 @@ What is built and proved is recorded in the root `ARCHITECTURE.md`.
 When documents disagree, use this order (Decision, repository rules in `AGENTS.md`,
 2026-10-28): repository disk and executed checks, then `ARCHITECTURE.md` (what is built),
 then `DECISIONS.md` and the context record (owner decisions; CTX-39 to CTX-43 and
-DEC-011 to DEC-021 were added in 2026-10-28/29), then the older prose in this pack. The sole
+DEC-011 to DEC-023 were added from 2026-10-28 to 2026-11-02), then the older prose in this pack. The sole
 work queue is `TASKS.md`; `STATUS.md` owns workflow state; documents under `docs/review/`
 are review evidence, not requirements. A statement about the target is a Decision or a
 Proposal, and a statement about the code is Observed with a file pointer; an
@@ -29,26 +29,28 @@ unanswered question is Unknown. A decision recorded after this pack was first wr
 
 | Document | Canonical responsibility |
 |---|---|
-| [Decision index](../../DECISIONS.md) | Accepted owner decisions DEC-001 to DEC-021; the canonical index for decisions |
-| [Context record](CONTEXT-RECORD.md) | User intent, evidence, owner-held decisions, applicability, and verification history; CTX-39 to CTX-42 (market, provider facts, hosts, discount terms) are the newest |
+| [Decision index](../../DECISIONS.md) | Accepted owner decisions DEC-001 to DEC-023; the canonical index for decisions |
+| [Context record](CONTEXT-RECORD.md) | User intent, evidence, owner-held decisions, applicability, and verification history; CTX-44 (official Mengantar sub-partner, development first, DEC-023) is the newest |
 | [Implemented architecture](../../ARCHITECTURE.md) | What the code on disk does and which checks proved it; never the target |
 | [Product requirements](02-PRD.md) | Product direction, intended users, gerai operating needs, goals, scope ordering, requirements and open policies |
 | [Technical design and reuse matrix](03-TECHNICAL-DESIGN.md) | Exact reference modules, extract/adapt/rebuild/conditional dispositions, provider orchestration and target checks |
 | [Runtime architecture](04-SYSTEM-ARCHITECTURE.md) | Target components and trust/runtime boundaries; self-hosted Node deployment and PostgreSQL/PostgREST data boundary (ARCH-5) and host topology with the environment matrix (ARCH-6) |
-| [Data model](05-DATA-MODEL.md) | Logical entities, snapshots, state dimensions, ownership and provider-account identity; seller-binding integrity, tenant slug and shipment reference, discount terms, masked-label snapshot (DATA-4, DATA-8 to DATA-10) |
+| [Data model](05-DATA-MODEL.md) | Logical entities, snapshots, state dimensions, ownership and provider-account identity; seller-binding integrity, tenant slug and shipment reference, discount terms, masked-label snapshot (DATA-4, DATA-8 to DATA-10); counter payments and cash periods, tracking links, content declaration, billable-weight rules, cases (DATA-11 to DATA-15) |
 | [Tenant isolation](06-TENANT-ISOLATION.md) | Direct Data API/RPC and asynchronous scope enforcement; machine-attested seller binding and host scope (TEN-3, TEN-6) |
 | [Identity and permissions](07-IAM-RBAC-ABAC.md) | Candidate role matrix and atomic governance |
 | [Presentation and branding](10-DESIGN-SYSTEM-WHITELABEL.md) | shadcn/ui + Apple-inspired tokens, components, responsive state/accessibility, brand boundaries, local label sheet and error pages (UI-6) |
 | [Shipping money](11-BILLING-PAYMENTS.md) | Payer/collection responsibilities, the first-release discount model with no platform fee (BILL-3), financial authorization and reconciliation boundaries |
-| [Security](12-SECURITY-ARCHITECTURE.md) | Command/credential/tracking trust controls; session cookies, host separation, webhook host and Auth ingress (SEC-6); secret handling and key ring (SEC-7) |
+| [Security](12-SECURITY-ARCHITECTURE.md) | Command/credential/tracking trust controls; session cookies, host separation, webhook host and Auth ingress (SEC-6); secret handling and key ring (SEC-7); public tracking surface (SEC-8) |
 | [Privacy](13-COMPLIANCE-PRIVACY.md) | Personal-data purposes and unresolved lifecycle/processing decisions |
 | [Delivery and recovery](15-DEVOPS-CICD-MIGRATIONS.md) | Demo/sandbox/pilot release gates, environment separation and host cutover (DEL-2), schema compatibility and restoration without duplicate external effects |
 | [Operational signals and limits](16-OBSERVABILITY-RATE-LIMITING.md) | Observable journey outcomes, private telemetry, response ownership, actual-account quotas, Auth ingress limits (RATE-2) and signals promised versus implemented (OBS-2) |
-| [UX flows](17-UX-FLOWS-SCREEN-CONTRACTS.md) | Screen jobs, primary actions, state/recovery and browser acceptance; masking, pickup, entry points, discount assignment and money-action states (UX-9 to UX-13) |
+| [UX flows](17-UX-FLOWS-SCREEN-CONTRACTS.md) | Screen jobs, primary actions, state/recovery and browser acceptance; masking, pickup, entry points, discount assignment and money-action states (UX-9 to UX-13); counter money, share resi and public tracking, intake declaration and billable weight, returns and claims (UX-17 to UX-20) |
 | [Complete Mengantar Partner breakdown](../research/geraiexpress-mengantar-partner-api.md) | Four endpoint contracts, signing, all error codes, seller lifecycle, production egress and verification gates |
+| [Indonesia market gap analysis, 2026-11-02](../research/geraiexpress-indonesia-market-gap-analysis.md) | Version 2 with five evidence lanes: competitors, Play reviews, public tracking privacy, Mengantar current facts, Permenkomdigi 8 and 15/2025, tax, operator voice; source of Proposed PR-38 to PR-46 |
 | [LegacyReference pricing study](../research/geraiexpress-reference-pricing-review.md) | Customer/provider prices, collection modes, legacy formulas, visibility gaps, example and bounded checks |
 | [Official source records](sources.json) | Vendor retrieval provenance and review triggers |
 | [Reference scan and executed check](reference-scan.json) | Reference revision/dirty scope, source hashes, and bounded test result |
+| [Counter-operations contract review, 2026-11-02](../review/2026-11-02-counter-operations-review.md) | Findings RV-01 to RV-33 and Mengantar facts MF-01 to MF-11 on PR-38 to PR-46 contracts and their resolution; evidence, not requirements |
 | [Full review, 2026-10-28](../review/2026-10-28-full-review.md) | Findings P0 to P3, executed gates and owner follow-up; evidence, not requirements |
 
 ## What the review changes

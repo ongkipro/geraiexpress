@@ -822,3 +822,19 @@ created by this promotion. Native generator is none.
 - Confidence: High for the quoted page content; Medium for competitor claims, which are vendor marketing; Low for any market-size or profitability statement, which the notes deliberately do not make.
 - Consequence: DEC-016 and DEC-017 are re-labelled as unproven in `DECISIONS.md`; T-048 holds the verification gates (written Mengantar answers, one real masked parcel per courier, a four-week pilot log, counsel review) and is the dependency for announcing masking or showing any discount percentage publicly.
 - Recheck trigger: Mengantar answers in writing; the courier test finishes; the pilot log exists; counsel answers.
+
+## Development focus after the market gap analysis (2026-11-02)
+
+### CTX-44 — GeraiExpress is an official Mengantar sub-partner; legal and business items sync later
+- Status: Decision
+- Status scope: Decision (owner statement, 2026-11-02); the provider agreement text itself is not in the repository
+- Evidence kind: human-policy
+- Owner: Paduka Ongki
+- Source: User conversation, 2026-11-02, after the market gap analysis v2.
+- Source locator: Owner reply to the gap analysis recommendations (written Mengantar questions, counsel, interviews).
+- Source excerpt: "kita adalah sub resmi mengantar secara hukum atau kebutuhan bisnis nanti sync dengan mengantar jadi kita fokus ke development dulu. awal kita menyempurnakan md doc"
+- Statement (Decision): GeraiExpress operates as an official sub-partner of Mengantar. Legal status questions raised by the gap analysis (whether a gerai is a courier agent under Permenkomdigi 8/2025 Art 10/75 or KBLI 53202, the Art 77 resi-QR question for the masked label, Mengantar Terms B.5 resale, partner liability) and business terms (discount, rebate, pooling, Elite Seller, insurance on API orders) are settled with Mengantar later. They do not block development. Development proceeds now, starting with completing the Markdown contracts so the counter-operations requirements (PR-38 to PR-46) can be built.
+- Statement (unchanged): Accepted policy still does not authorize live provider calls, production deployment or public claims. Public marketing of masking, discount percentages or partnership wording stays under PR-35 and PR-46 until the Mengantar sync is recorded.
+- Confidence: High that this is the owner's direction; the partner agreement text and its exact terms are not in the repository.
+- Consequence: The counsel/Mengantar rows in the PRD open-decision table become release or claim gates, not development gates (DEC-023). PR-38 to PR-46 get development contracts (UX-17 to UX-20, DATA-11 to DATA-14, SEC-8, IAM-1 rows) and tasks T-080 to T-087 in `TASKS.md`. The owner interviews stay recommended as product validation, not as a development precondition.
+- Recheck trigger: The Mengantar sync answers any legal or commercial item; the partner agreement text is added to the repository; Mengantar or a courier refuses a masked label.
