@@ -7,6 +7,7 @@ import { currentUser, dbServer } from "@/lib/db/server";
 import { writeSessionCookies } from "@/lib/db/session";
 import { friendlyError } from "@/lib/errors";
 import { loadPlatform, type Capability } from "@/lib/platform";
+import { wibInstant } from "@/lib/wib";
 import { qrSvgDataUri } from "@/lib/qr";
 import { withinAccountLimit, withinLimit } from "@/lib/rate-limit";
 import { AUTH_BUSY, authThrottleMessage, authUnavailable } from "@/lib/auth-errors";
@@ -111,4 +112,58 @@ export async function revokeGrantAction(_: FormState, form: FormData): Promise<F
   if (error) return { error: friendlyError(error) };
   revalidatePath("/admin/akses");
   return { ok: "Akses Super Admin dicabut." };
+}
+
+// T-091 / DEC-024 (G1): append-only platform configuration. Both RPCs re-check the capability, require a
+// reason and write the audit row; nothing here edits an existing version.
+const lines = (value: FormDataEntryValue | null) => String(value ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+const optionalInt = (value: FormDataEntryValue | null) => {
+  const text = String(value ?? "").trim();
+  return text === "" ? null : Number(text);
+};
+
+export async function addDeclarationTextAction(_: FormState, form: FormData): Promise<FormState> {
+  const scope = await requestScope();
+  if (scope !== "platform" && scope !== "shared") return { error: "Tidak ditemukan." };
+  const categories = lines(form.get("categories"));
+  if (categories.length === 0) return { error: "Isi minimal satu kategori barang terlarang (satu per baris)." };
+  const db = await dbServer();
+  const { data, error } = await db.rpc("platform_add_declaration_text", {
+    p_body: String(form.get("body") ?? "").trim(),
+    p_categories: categories,
+    p_source_url: String(form.get("source_url") ?? "").trim(),
+    p_provisional: form.get("provisional") === "on",
+    p_reason: String(form.get("reason") ?? ""),
+  });
+  if (error) return { error: friendlyError(error) };
+  revalidatePath("/admin/konfigurasi");
+  return { ok: `Versi ${data} teks pernyataan berlaku sekarang.` };
+}
+
+export async function addWeightRuleAction(_: FormState, form: FormData): Promise<FormState> {
+  const scope = await requestScope();
+  if (scope !== "platform" && scope !== "shared") return { error: "Tidak ditemukan." };
+  const kg = (name: string) => { const v = optionalInt(form.get(name)); return v === null ? null : v * 1000; };
+  const effectiveAt = wibInstant(String(form.get("effective_at") ?? ""));
+  if (!effectiveAt) return { error: "Waktu berlaku tidak valid. Pakai format tanggal dan jam, atau kosongkan untuk sekarang." };
+  const rule = {
+    courier: String(form.get("courier") ?? ""),
+    service_class: String(form.get("service_class") ?? ""),
+    divisor: optionalInt(form.get("divisor")),
+    tolerance_grams: optionalInt(form.get("tolerance_grams")),
+    max_weight_grams: kg("max_kg"),
+    min_weight_grams: kg("min_kg"),
+    source_url: String(form.get("source_url") ?? "").trim(),
+    source_updated_at: String(form.get("source_updated_at") ?? ""),
+    // Empty = effective now; a later time schedules the version.
+    effective_at: effectiveAt,
+  };
+  if ([rule.divisor, rule.tolerance_grams, rule.max_weight_grams, rule.min_weight_grams].some((v) => v !== null && !Number.isSafeInteger(v))) {
+    return { error: "Periksa kembali angka yang diisi (bilangan bulat)." };
+  }
+  const db = await dbServer();
+  const { error } = await db.rpc("platform_set_billable_weight_rule", { p_rule: rule, p_reason: String(form.get("reason") ?? "") });
+  if (error) return { error: friendlyError(error) };
+  revalidatePath("/admin/konfigurasi");
+  return { ok: `Versi aturan ${rule.courier} ${rule.service_class === "cargo" ? "Kargo" : "Reguler"} disimpan.` };
 }

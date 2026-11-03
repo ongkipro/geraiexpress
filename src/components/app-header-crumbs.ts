@@ -14,6 +14,8 @@ const LABELS: Record<string, string> = {
   "/admin/diskon": "Diskon gerai",
   "/admin/akses": "Akses Super Admin",
   "/admin/audit": "Audit",
+  "/admin/konfigurasi": "Konfigurasi",
+  "/admin/pantau-pengajuan": "Pengajuan menunggu",
 };
 // A record segment (an id) is named by its parent list. "/admin/tenant" has no page of its own, so it
 // gets no crumb and its record hangs under the "/admin" directory ("Gerai").

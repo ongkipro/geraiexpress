@@ -69,3 +69,4 @@ export async function requirePlatform(capability?: Capability): Promise<Platform
   if (capability && !session.capabilities.includes(capability)) notFound();
   return session;
 }
+

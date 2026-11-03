@@ -7,11 +7,14 @@ import type { NavItem } from "@/components/workspace-nav";
 import { signOutAction } from "@/lib/auth-actions";
 import { requirePlatform, type Capability } from "@/lib/platform";
 
-const ITEMS: (NavItem & { capability: Capability })[] = [
-  { href: "/admin", label: "Gerai", icon: "tenants", group: "Gerai", capability: "tenant_governance" },
+const ITEMS: (NavItem & { capability: Capability | Capability[] })[] = [
+  // T-092: monitoring-only administrators read the overview, directory and per-gerai summary.
+  { href: "/admin", label: "Gerai", icon: "tenants", group: "Gerai", capability: ["tenant_governance", "platform_monitoring"] },
   { href: "/admin/pengajuan", label: "Pengajuan gerai", icon: "review", group: "Gerai", capability: "tenant_governance" },
   { href: "/admin/integrasi", label: "Integrasi Mengantar", icon: "integration", group: "Operasional", capability: "integration_operations" },
   { href: "/admin/diskon", label: "Diskon gerai", icon: "discount", group: "Operasional", capability: "integration_operations" },
+  // T-091: declaration text (tenant_governance) and weight rules (integration_operations) share one page.
+  { href: "/admin/konfigurasi", label: "Konfigurasi", icon: "settings", group: "Operasional", capability: ["tenant_governance", "integration_operations"] },
   { href: "/admin/akses", label: "Akses Super Admin", icon: "access", group: "Keamanan", capability: "access_governance" },
   { href: "/admin/audit", label: "Audit", icon: "audit", group: "Keamanan", capability: "audit_review" },
 ];
@@ -21,7 +24,7 @@ const ITEMS: (NavItem & { capability: Capability })[] = [
 // an account menu that only signs out (no search, no gerai actions).
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await requirePlatform();
-  const items: NavItem[] = ITEMS.filter((i) => session.capabilities.includes(i.capability)).map(({ capability: _capability, ...item }) => item);
+  const items: NavItem[] = ITEMS.filter((i) => [i.capability].flat().some((c) => session.capabilities.includes(c))).map(({ capability: _capability, ...item }) => item);
   const initials = (session.email?.charAt(0) || "S").toUpperCase();
 
   const scope = (

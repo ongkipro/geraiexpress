@@ -43,8 +43,8 @@ test("a new administrator enrols an authenticator before entering", async ({ pag
   const secret = (await page.getByTestId("totp-secret").textContent())!.trim();
   await page.getByLabel("Kode 6 digit").fill(totp(secret));
   await page.getByRole("button", { name: "Verifikasi" }).click();
-  // Monitoring/audit-only administrators land on their first permitted page.
-  await expect(page).toHaveURL(/\/admin\/audit$/);
+  // Monitoring/audit-only administrators land on their first permitted page (T-092: the monitoring overview).
+  await expect(page).toHaveURL(/\/admin$/);
   expect((await page.goto("/admin/akses"))?.status()).toBe(404);
   localSql(`delete from auth.mfa_factors where user_id = '00000000-0000-4000-a000-0000000000f3'`);
 });

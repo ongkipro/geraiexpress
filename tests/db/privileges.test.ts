@@ -35,10 +35,11 @@ const AUTHENTICATED_EXECUTE = [
   "public.begin_partner_key_rotation(uuid)",
   "public.begin_partner_seller_key_recovery(uuid)",
   "public.begin_partner_seller_onboarding(uuid,text,text,text,text,text,boolean)",
+  "public.billable_weight_rules(uuid)",
   "public.close_ambiguous_pickup_reservation(uuid,text)",
   "public.close_failed_operation(uuid,text)",
   "public.close_unknown_batch_payment(uuid,uuid,text)",
-  "public.confirm_shipment(uuid,uuid,integer,text)",
+  "public.confirm_shipment(uuid,uuid,integer,text,integer)",
   "public.create_invoice_snapshot(uuid)",
   "public.create_label_snapshot(uuid,boolean,text,text,text,text)",
   "public.create_shipment_draft(uuid)",
@@ -48,25 +49,32 @@ const AUTHENTICATED_EXECUTE = [
   "public.my_account_state()",
   "public.my_invitations()",
   "public.partner_onboarding_status(uuid)",
+  "public.platform_add_declaration_text(text,text[],text,boolean,text)",
   "public.platform_admins()",
   "public.platform_applications(text)",
   "public.platform_audit(text,integer)",
+  "public.platform_billable_weight_rules()",
   "public.platform_clear_partner_stop(uuid,text)",
   "public.platform_discount_history(uuid)",
   "public.platform_discount_observations(uuid)",
   "public.platform_discount_overview()",
   "public.platform_integrations()",
+  "public.platform_overview()",
   "public.platform_partner_config()",
+  "public.platform_pending_applications()",
   "public.platform_review_application(uuid,integer,text,text)",
   "public.platform_revoke_grant(uuid,integer,text)",
+  "public.platform_set_billable_weight_rule(jsonb,text)",
   "public.platform_set_gerai_discount(uuid,integer,integer,date,text,text,text,text)",
   "public.platform_set_grant(text,text[],text)",
   "public.platform_set_masking_allowed(uuid,boolean,text)",
   "public.platform_set_partner_id(text,text)",
   "public.platform_set_registration(boolean,text)",
   "public.platform_set_tenant_lifecycle(uuid,text,text,text)",
+  "public.platform_tenant_directory(text,text,integer,integer,text)",
   "public.platform_tenant_masking(uuid)",
   "public.platform_tenant_slugs()",
+  "public.platform_tenant_summary(uuid)",
   "public.platform_tenants()",
   "public.reconcile_shipment(uuid)",
   "public.record_export(uuid,text,jsonb,integer,boolean)",
@@ -255,7 +263,7 @@ describe("function EXECUTE catalog (DIL-02)", () => {
   it("the Data API refuses anon for user-callable and machine RPCs, and users for machine RPCs", async () => {
     const anon = client();
     for (const [fn, args] of [
-      ["confirm_shipment", { p_shipment: IDS.shipmentA, p_quote: IDS.shipmentA, p_expected_revision: 1, p_idempotency_key: "anon-key-1" }],
+      ["confirm_shipment", { p_shipment: IDS.shipmentA, p_quote: IDS.shipmentA, p_expected_revision: 1, p_idempotency_key: "anon-key-1", p_declaration_version: 1 }],
       ["dispatch_claim", { p_operation: IDS.shipmentA, p_env: "sandbox" }],
       ["record_live_quotes", { p_tenant: IDS.tenantA, p_shipment: IDS.shipmentA, p_expected_revision: 1, p_rows: [], p_origin_area_id: "5fc62f60f8f44b34aa4c0dcd", p_origin_address_id: "6acf44a4771fe2b474c055ca" }],
       ["cleanup_expired_demos", {}],
@@ -539,7 +547,7 @@ describe("confirm_shipment COD charge through a user session (DIL-12 d)", () => 
   }
 
   const confirm = (c: TestClient, d: { id: string; quote: string; revision: number }, key = randomUUID()) =>
-    c.rpc("confirm_shipment", { p_shipment: d.id, p_quote: d.quote, p_expected_revision: d.revision, p_idempotency_key: key });
+    c.rpc("confirm_shipment", { p_shipment: d.id, p_quote: d.quote, p_expected_revision: d.revision, p_idempotency_key: key, p_declaration_version: 1 });
 
   it("freezes customer_charge = tariff + COD fee and cod_amount = goods + charge, applied once", async () => {
     const d = await quotedDraft(true, { courier: "JT", tariff: 93000, cod_fee: 4994, cod_supported: true, net: 65100, eta: "2 - 4 days" });

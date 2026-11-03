@@ -24,6 +24,9 @@ function addApplication(a: { user: string; app: string; name: string }) {
 }
 
 test.beforeAll(async ({ browser }) => {
+  // Admin sign-in can wait for the account budget window and a fresh TOTP step after earlier specs
+  // used admin-2 (T-091/T-092 specs added several), which can exceed the default 30 s hook budget.
+  test.setTimeout(150_000);
   localSql(`insert into public.tenants (id, name, lifecycle, is_demo) values
     ('${SUSPENDED.id}', '${SUSPENDED.name}', 'suspended', false),
     ('${PROVISIONING.id}', '${PROVISIONING.name}', 'provisioning', false)`);

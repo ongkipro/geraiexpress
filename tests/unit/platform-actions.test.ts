@@ -25,6 +25,8 @@ vi.mock("@/lib/auth-errors", () => vi.importActual("../../src/lib/auth-errors"))
 vi.mock("@/lib/auth/store", () => vi.importActual("../../src/lib/auth/store"));
 vi.mock("@/lib/errors", () => vi.importActual("../../src/lib/errors"));
 vi.mock("@/lib/qr", () => vi.importActual("../../src/lib/qr"));
+// T-091: the WIB effective-time parser is a pure helper of platform-actions.
+vi.mock("@/lib/wib", () => vi.importActual("../../src/lib/wib"));
 vi.mock("@/lib/hosts", () => ({ requestScope: () => requestScope() }));
 vi.mock("@/lib/auth/instance", () => ({ getAuth: () => auth }));
 vi.mock("@/lib/platform", () => ({ loadPlatform: () => loadPlatform() }));
