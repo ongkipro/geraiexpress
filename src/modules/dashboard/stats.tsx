@@ -41,13 +41,14 @@ export async function StatsRegion({ tenantId, periodDays, sample }: { tenantId: 
       delta: summary ? { change: summary.delta.created, yesterday: summary.yesterday.created } : null,
     },
     {
-      key: "issued-today", label: "Terbit hari ini", count: summary?.today.issued ?? null, icon: CheckCircle2, tone: "text-success",
+      // F8: counted from shipments CREATED today that are now issued (same basis as the list filter).
+      key: "issued-today", label: "Dibuat & terbit hari ini", count: summary?.today.issued ?? null, icon: CheckCircle2, tone: "text-success",
       href: todayRange ? `/pengiriman?${new URLSearchParams({ status: "issued", ...todayRange })}` : "/pengiriman?status=issued",
       delta: summary ? { change: summary.delta.issued, yesterday: summary.yesterday.issued } : null,
     },
     {
       key: "awaiting", label: "Menunggu pembayaran", count: open.awaiting, icon: Wallet, tone: "text-warning",
-      href: "/pengiriman?status=awaiting_payment", hint: "Bayar di aplikasi Mengantar",
+      href: "/pengiriman?status=awaiting_payment", hint: "Periksa pembayaran batch di detail",
     },
     {
       key: "drafts", label: "Draf terbuka", count: open.drafts, icon: FileText, tone: "text-muted-foreground",

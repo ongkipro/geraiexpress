@@ -15,7 +15,8 @@ export function MobileNav({ children, items }: { children: React.ReactNode; item
           <Menu aria-hidden="true" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="flex w-[300px] flex-col gap-6 p-5">
+      {/* F6: short or zoomed viewports scroll the whole menu, so Pengaturan and Keluar stay reachable. */}
+      <SheetContent side="left" className="flex w-[300px] flex-col gap-6 overflow-y-auto overscroll-contain p-5">
         <SheetHeader className="p-0">
           <SheetTitle>Menu</SheetTitle>
         </SheetHeader>

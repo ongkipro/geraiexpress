@@ -20,6 +20,7 @@ import { WhatsappForm } from "@/modules/labels/whatsapp-form";
 import { MASKING_DISABLED, RETENTION_NOTE } from "@/modules/labels/messages";
 import { GeraiDiscountCard } from "@/modules/pricing/gerai-discount-card";
 import { SettingsNav, type SettingsSection } from "./settings-nav";
+import { LoadError } from "@/components/notice";
 
 type CredentialStatus = { configured: boolean; mode?: string | null; hint: string | null; version: number | null; created_at: string | null; latest_version: number };
 
@@ -57,11 +58,12 @@ const CARD = "flex flex-col gap-4 rounded-lg bg-card p-5 ring-1 ring-border sm:p
 export default async function SettingsPage() {
   const ws = await requireWorkspace();
   const db = await dbServer();
-  const [{ data: raw }, { data: rawOnboarding }, { data: tenantRow }] = await Promise.all([
+  const [{ data: raw, error: ce }, { data: rawOnboarding, error: oe }, { data: tenantRow, error: te }] = await Promise.all([
     db.rpc("seller_credential_status", { p_tenant: ws.tenant.id }),
     db.rpc("partner_onboarding_status", { p_tenant: ws.tenant.id }),
     db.from("tenants").select("contact_whatsapp, contact_whatsapp_revision, masking_allowed").eq("id", ws.tenant.id).maybeSingle(),
   ]);
+  if (ce || oe || te) return <LoadError title="Pengaturan" what="Status akun Mengantar atau data gerai" />;
   // PR-34: the gerai WhatsApp printed on the local label while masking is off, and the platform's masking flag.
   const whatsapp = tenantRow?.contact_whatsapp ?? null;
   const maskingAllowed = tenantRow?.masking_allowed ?? true;

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { PartnerIdForm } from "@/modules/credentials/forms";
 import { Notice } from "@/components/notice";
 import { EmptyState, LifecycleBadge, PageHeader, RT, SectionHeader } from "../ui";
+import { LoadError } from "@/components/notice";
 
 export const metadata: Metadata = { title: "Integrasi Mengantar · Super Admin" };
 
@@ -39,10 +40,11 @@ const ENVIRONMENT_NOTE: Record<string, string> = {
 export default async function IntegrationsPage() {
   await requirePlatform("integration_operations");
   const db = await dbServer();
-  const [{ data: partnerConfig }, { data: raw }] = await Promise.all([
+  const [{ data: partnerConfig, error: pe }, { data: raw, error: re }] = await Promise.all([
     db.rpc("platform_partner_config"),
     db.rpc("platform_integrations"),
   ]);
+  if (pe || re) return <LoadError title="Integrasi Mengantar" what="Konfigurasi Partner atau daftar akun penjual" />;
   const partnerId = ((partnerConfig ?? []) as { partner_id: string | null }[])[0]?.partner_id ?? null;
   const secretPresent = Boolean(config("MENGANTAR_PARTNER_SECRET"));
   const sealingPresent = Boolean(keyMaterialFromReader(config));

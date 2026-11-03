@@ -23,3 +23,16 @@ export function Notice({ tone, children, className, ...props }: {
     </div>
   );
 }
+
+// F3 / UX-1: a failed read is not an empty result. Pages render this instead of "nothing here",
+// default values or 404, and withhold the forms that depend on the data that did not load.
+export function LoadError({ title, what }: { title: string; what: string }) {
+  return (
+    <div className="flex max-w-[680px] flex-col gap-4">
+      <h1 className="text-3xl tracking-tight">{title}</h1>
+      <Notice tone="danger" data-testid="load-error">
+        {what} belum bisa dimuat. Muat ulang halaman; jika berulang, hubungi admin GeraiExpress.
+      </Notice>
+    </div>
+  );
+}

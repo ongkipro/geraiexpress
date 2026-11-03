@@ -8,6 +8,7 @@ import { dbServer } from "@/lib/db/server";
 import { requireWorkspace } from "@/lib/workspace";
 import { InviteForm, MemberControls, RevokeInvitationForm } from "@/modules/members/forms";
 import { ROLE_LABEL } from "@/modules/members/labels";
+import { LoadError } from "@/components/notice";
 
 export const metadata: Metadata = { title: "Anggota" };
 
@@ -25,10 +26,11 @@ export default async function MembersPage() {
   const ws = await requireWorkspace();
   if (ws.role !== "tenant_admin" || ws.isDemo) notFound();
   const db = await dbServer();
-  const [{ data: m }, { data: i }] = await Promise.all([
+  const [{ data: m, error: me }, { data: i, error: ie }] = await Promise.all([
     db.rpc("tenant_members", { p_tenant: ws.tenant.id }),
     db.rpc("tenant_invitations_list", { p_tenant: ws.tenant.id }),
   ]);
+  if (me || ie) return <LoadError title="Anggota" what="Daftar anggota atau undangan" />;
   const members = ((m ?? []) as Member[]).filter((x) => x.status === "active");
   const invitations = (i ?? []) as Invitation[];
   // Environment-configured app origin, never the request's Host or X-Forwarded-* headers (PR-36).

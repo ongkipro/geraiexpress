@@ -8,6 +8,7 @@ import {
   jakartaToday, type DiscountHistoryRow, type DiscountObservation, type DiscountOverviewRow,
 } from "@/modules/pricing/types";
 import { PageHeader, SectionHeader } from "../../ui";
+import { LoadError } from "@/components/notice";
 
 export const metadata: Metadata = { title: "Atur diskon gerai · Super Admin" };
 
@@ -21,12 +22,13 @@ export default async function TenantDiscountPage({ params }: { params: Promise<{
   const { tenant } = await params;
   if (!UUID.test(tenant)) notFound();
   const db = await dbServer();
-  const [{ data: overview }, { data: historyRaw }, { data: observationsRaw }, { data: templateRaw }] = await Promise.all([
+  const [{ data: overview, error: oe }, { data: historyRaw, error: he }, { data: observationsRaw, error: be }, { data: templateRaw, error: te }] = await Promise.all([
     db.rpc("platform_discount_overview"),
     db.rpc("platform_discount_history", { p_tenant: tenant }),
     db.rpc("platform_discount_observations", { p_tenant: tenant }),
     db.rpc("platform_discount_history", { p_tenant: null }),
   ]);
+  if (oe || he || be || te) return <LoadError title="Diskon gerai" what="Riwayat diskon atau pengamatan gerai ini" />;
   const row = ((overview ?? []) as DiscountOverviewRow[]).find((r) => r.tenant_id === tenant);
   if (!row) notFound();
   const history = (historyRaw ?? []) as DiscountHistoryRow[];

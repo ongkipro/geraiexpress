@@ -41,16 +41,19 @@ const ACTIONS: Record<string, string> = {
   "label.snapshot": "Snapshot label",
   "invoice.snapshot": "Snapshot faktur",
   "export.shipments": "Ekspor daftar pengiriman",
+  // T-081 / T-080 (G2): append-only provider configuration versions.
+  "declaration_text.append": "Versi teks pernyataan isi paket",
+  "billable_weight_rule.append": "Versi aturan berat Mengantar",
 };
 
 // Category tabs group the decision types; every type belongs to exactly one category.
 const CATEGORIES: Record<string, { label: string; actions: string[] }> = {
-  gerai: { label: "Gerai", actions: ["tenant.lifecycle", "application.review", "registration.toggle", "tenant.contact_whatsapp", "tenant.masking"] },
+  gerai: { label: "Gerai", actions: ["tenant.lifecycle", "application.review", "registration.toggle", "tenant.contact_whatsapp", "tenant.masking", "declaration_text.append"] },
   akses: { label: "Akses admin", actions: ["platform.grant", "platform.revoke"] },
   anggota: { label: "Anggota", actions: ["member.invite", "member.invite_revoke", "member.accept", "member.role", "member.deactivate"] },
   integrasi: {
     label: "Integrasi",
-    actions: ["credential.store", "credential.remove", "integration.partner_id", "partner.onboarding_begin", "partner.onboarding_complete", "partner.onboarding_outcome", "outlet.mengantar_pickup"],
+    actions: ["credential.store", "credential.remove", "integration.partner_id", "partner.onboarding_begin", "partner.onboarding_complete", "partner.onboarding_outcome", "outlet.mengantar_pickup", "billable_weight_rule.append"],
   },
   diskon: { label: "Diskon", actions: ["discount.terms", "discount.template"] },
   pengiriman: { label: "Pengiriman", actions: ["shipment.batch_pay", "shipment.close_failed", "label.snapshot", "invoice.snapshot", "export.shipments"] },
