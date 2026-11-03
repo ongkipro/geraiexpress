@@ -9,7 +9,24 @@ Independent-Review: Regular baseline approval belongs to RUN-20261103T085327Z-57
 Independent-Reviewer: d264fdd1-6723-4373-8d56-67733f212566 (separate reviewer; latest repair review 2957899e-9617-4acf-90f0-5ce0656fe7b7; same retained session)
 Independent-Review-Head: Uncommitted worktree; approval must bind to the delivery boundary digest, not HEAD alone.
 
-## Current focus — T-092 Super Admin monitoring (2026-11-03)
+## Handoff — paused by owner (2026-11-04)
+
+Last closed task: **T-092** (`RUN-20261103T151534Z-fdd8ce09`, PASS, final re-review APPROVE).
+All session work is committed on branch `feat/counter-ops-2026-11` (7 commits `48221d4`..`a01b27e`)
+and pushed to `origin` (repository is now **public**; gitleaks: 0 findings in the new commits; only
+pre-existing test fixtures on `main`). Not merged to `main`, not deployed. No active delivery run.
+GeraiExpress dev server (port 3100) and background jobs stopped at pause.
+
+Next queue when resuming (same rule: implement → full verification → independent review → repair →
+close → commit/push): (1) replace hand-written controls from T-091/T-092 with shadcn `Input`,
+`Checkbox`, `Select`; (2) T-093 Super Admin customer data (DEC-024, capability `customer_data_review`);
+(3) T-094 sender address; (4) T-096 gerai logo upload; (5) T-095 resi formats 10x15 (10x10 + 10x5 slip:
+gerai logo/name | courier, barcode, resi number) and 10x10, locked at first print; (6) legacy native
+`<select>` controls to shadcn. Owner working rule (2026-11-04): decisions → apply the best
+recommendation and record it as assistant-recommended; risky/binding items → build behind a gate or
+defer. Authenticated Mengantar calls, live orders and deploy still need explicit approval.
+
+## Previous — T-092 Super Admin monitoring (2026-11-03, PASS)
 
 T-091 closed PASS (re-review APPROVE). Run `RUN-20261103T151534Z-fdd8ce09`: forward migration
 `20261103130000_platform_monitoring.sql` adds read-only RPCs `platform_overview()`,
