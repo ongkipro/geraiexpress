@@ -43,9 +43,19 @@ export type QuoteOption = {
   customer_charge_idr?: number;
   eta_days: string;
   is_simulated: boolean;
+  actual_weight_grams?: number | null;
+  volumetric_weight_grams?: number | null;
+  billable_weight_grams?: number | null;
+  weight_rule_id?: string | null;
+  weight_formula_verified?: boolean;
+  weight_source?: { url: string; date: string } | null;
 };
 
+// PR-41 / DATA-13: the current declaration text version, shown and accepted at confirmation.
+export type Declaration = { version: number; body: string; prohibited_categories: string[]; provisional: boolean };
+
 type Props = {
+  declaration?: Declaration | null;
   shipmentId: string;
   reference: string;
   revision: number;
@@ -55,6 +65,7 @@ type Props = {
   outlet: { name: string; pickupAddress: string | null; pickupArea: string | null };
   contacts: ContactOption[];
   quotes: QuoteOption[];
+  weightWarnings?: string[];
   idempotencyKey: string;
   // A connected real gerai: recipient area comes from Mengantar and quotes are live (T-023).
   live: boolean;
@@ -102,7 +113,9 @@ export function IntakeForm(props: Props) {
     // adopting it only when the saved revision changes keeps unsaved edits through a search.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, props.revision]);
-  useEffect(() => setQuoteId(props.quotes[0]?.id ?? ""), [props.quotes]);
+  // UX-4: never silently replace the operator's chosen service. A re-render with the same quotes (a
+  // contact search) keeps the choice; only when that quote is gone does the first one apply.
+  useEffect(() => setQuoteId((current) => (props.quotes.some((q) => q.id === current) ? current : props.quotes[0]?.id ?? "")), [props.quotes]);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -139,7 +152,8 @@ export function IntakeForm(props: Props) {
     }));
   };
   const pickAddress = (addressId: string) => {
-    const a = props.contacts.find((x) => x.id === recipientContact)?.addresses.find((x) => x.id === addressId);
+    // The same merged list the picker shows: a contact picked earlier stays usable after another search.
+    const a = [...props.contacts, ...Object.values(picked)].find((x) => x.id === recipientContact)?.addresses.find((x) => x.id === addressId);
     if (!a) return;
     setValues((v) => ({ ...v, recipient_address: a.address_line, recipient_area: a.area, recipient_area_id: a.area_id ?? "", recipient_postal_code: a.postal_code ?? "" }));
     setDirty(true);
@@ -320,21 +334,20 @@ export function IntakeForm(props: Props) {
             </IntakeStep>
 
             <IntakeStep n={3} total={STEPS} title="Paket & serah" state={steps[2]}>
-              {field("item_description", "Isi paket")}
               <div className="grid gap-4 @md:grid-cols-2">
                 {field("weight_grams", "Berat (gram)", { inputMode: "numeric" })}
                 {field("goods_value_idr", "Nilai barang (Rp)", { inputMode: "numeric" })}
               </div>
               <div className="grid grid-cols-3 items-end gap-3">
-                {field("length_cm", "Panjang (cm)", { inputMode: "numeric", describedBy: props.live ? "dims-note" : undefined })}
-                {field("width_cm", "Lebar (cm)", { inputMode: "numeric", describedBy: props.live ? "dims-note" : undefined })}
-                {field("height_cm", "Tinggi (cm)", { inputMode: "numeric", describedBy: props.live ? "dims-note" : undefined })}
+                {field("length_cm", "Panjang (cm)", { inputMode: "numeric", describedBy: "dims-note" })}
+                {field("width_cm", "Lebar (cm)", { inputMode: "numeric", describedBy: "dims-note" })}
+                {field("height_cm", "Tinggi (cm)", { inputMode: "numeric", describedBy: "dims-note" })}
               </div>
-              {props.live ? (
-                <p id="dims-note" className="-mt-2 text-sm text-muted-foreground">
-                  Dimensi belum memengaruhi ongkir Mengantar: estimasi memakai berat sebenarnya. Isi dimensi hanya sebagai catatan.
-                </p>
-              ) : null}
+              <p id="dims-note" className="-mt-2 text-sm text-muted-foreground">
+                Ukuran opsional. Berat ditagih mengikuti aturan tiap kurir. Kurir dapat menimbang ulang;
+                selisih ongkir didebit atau dikreditkan ke saldo Mengantar penjual. Besarnya selisih ditentukan kurir.
+              </p>
+              {field("item_description", "Isi paket")}
               <input type="hidden" name="is_cod" value={values.is_cod === "true" ? "true" : "false"} />
               <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-md p-3 ring-1 ring-border transition-colors has-[[data-state=checked]]:bg-info-soft has-[[data-state=checked]]:ring-primary">
                 <Checkbox
@@ -372,6 +385,7 @@ export function IntakeForm(props: Props) {
 
           <IntakeStep n={4} total={STEPS} title="Ongkir" state={steps[3]}
             description={props.quotes.length > 0 ? "Harga yang ditagih ke pelanggan, termasuk biaya COD bila ada." : undefined}>
+            {props.weightWarnings?.map((warning) => <p key={warning} role="status" className="text-sm text-warning">{warning}</p>)}
             {props.quotes.length === 0 ? (
               <div className="flex items-start gap-3 rounded-md bg-muted p-4">
                 <Calculator className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -409,6 +423,7 @@ export function IntakeForm(props: Props) {
                           {codFee > 0 ? (
                             <span className="text-sm text-muted-foreground tabular-nums">Ongkir {formatIdr(normal)} + biaya COD {formatIdr(codFee)}</span>
                           ) : null}
+                          <QuoteWeights quote={q} />
                           {q.is_simulated ? <span className="text-sm text-muted-foreground">Harga contoh (simulasi)</span> : null}
                         </span>
                         <span className="tabular shrink-0 text-right text-xl font-semibold">{formatIdr(total)}</span>
@@ -468,6 +483,7 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
     ["Penyerahan", handoverSummary(v)],
     ["Paket", `${v.item_description} · ${v.weight_grams} g`],
     ["Layanan", `${serviceName(props.quote)} (${etaLabel(props.quote.eta_days)})`],
+    ["Berat ditagih", props.quote.billable_weight_grams == null ? "Belum dihitung" : `${props.quote.billable_weight_grams} g`],
   ];
   // UX-5: the normal tariff and the COD fee each appear exactly once, then their sum.
   const money: [string, string, boolean?][] = isCod
@@ -521,12 +537,57 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
           <input type="hidden" name="quote_id" value={props.quote.id} />
           <input type="hidden" name="revision" value={props.revision} />
           <input type="hidden" name="idempotency_key" value={props.idempotencyKey} />
+          <ContentDeclaration declaration={props.declaration ?? null} itemDescription={v.item_description} />
           <DialogFooter className="gap-3">
             <DialogClose asChild><Button type="button" variant="outline">Kembali</Button></DialogClose>
-            <SubmitButton pendingLabel="Menerbitkan…">Konfirmasi & terbitkan resi</SubmitButton>
+            <SubmitButton pendingLabel="Menerbitkan…" disabled={!props.declaration}>Konfirmasi & terbitkan resi</SubmitButton>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// UX-19 item 4: required checkbox naming the current text version, with the prohibited categories
+// in an expandable list. The database re-checks the version (content_declaration_required).
+function ContentDeclaration({ declaration, itemDescription }: { declaration: Declaration | null; itemDescription: string }) {
+  if (!declaration) {
+    return <p role="alert" className="mb-4 text-sm text-destructive">Teks pernyataan isi paket belum tersedia. Hubungi admin GeraiExpress.</p>;
+  }
+  return (
+    <fieldset className="mb-4 flex flex-col gap-2 rounded-md p-4 ring-1 ring-border">
+      <legend className="sr-only">Pernyataan isi paket</legend>
+      <p className="text-sm"><span className="text-muted-foreground">Isi paket:</span> {itemDescription || "belum diisi"}</p>
+      <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm">
+        <input type="checkbox" name="content_declaration" value={declaration.version} aria-required="true"
+          className="mt-0.5 size-5 shrink-0 accent-primary" aria-describedby="content-declaration-required content-declaration-body" />
+        <span className="font-medium">Pengirim menyatakan isi paket bukan barang terlarang</span>
+      </label>
+      <p id="content-declaration-required" className="text-sm text-muted-foreground">Wajib dicentang sebelum konfirmasi.</p>
+      <p id="content-declaration-body" className="text-sm text-muted-foreground">{declaration.body}</p>
+      <details className="text-sm">
+        <summary className="min-h-11 cursor-pointer py-2 font-medium text-primary">Lihat daftar barang terlarang</summary>
+        <ul className="list-disc pl-5 text-muted-foreground">
+          {declaration.prohibited_categories.map((c) => <li key={c}>{c}</li>)}
+        </ul>
+        <p className="mt-2 text-xs text-muted-foreground">Sumber: Permenkomdigi 8/2025 Pasal 22.{declaration.provisional ? " Teks pernyataan masih sementara." : ""}</p>
+      </details>
+    </fieldset>
+  );
+}
+
+function QuoteWeights({ quote: q }: { quote: QuoteOption }) {
+  return (
+    <span className="flex flex-col text-sm text-muted-foreground" data-testid="quote-weights">
+      <span>Berat aktual: {q.actual_weight_grams == null ? "Belum dihitung" : `${q.actual_weight_grams} g`}</span>
+      <span>Berat volume: {q.volumetric_weight_grams == null ? "Tidak dihitung" : `${q.volumetric_weight_grams} g`}</span>
+      <span className="font-semibold">Berat ditagih: {q.billable_weight_grams == null ? "Belum dihitung" : `${q.billable_weight_grams} g`}</span>
+      {q.volumetric_weight_grams == null ? <span>{!q.weight_formula_verified
+        ? "Aturan volume belum terverifikasi: berat volume tidak dihitung"
+        : "Tanpa ukuran: berat volume tidak dihitung"}</span> : null}
+      {q.weight_source ? <a href={q.weight_source.url} target="_blank" rel="noreferrer" className="underline">
+        Aturan Mengantar, diperbarui {q.weight_source.date}
+      </a> : null}
+    </span>
   );
 }

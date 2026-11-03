@@ -42,7 +42,7 @@ describe("simulated shipping flow", () => {
     const d = await newCompleteDraft();
     const { data: quotes } = await c.rpc("request_quotes", { p_shipment: d.id, p_expected_revision: d.revision });
     const reguler = quotes!.find((q: { service: string }) => q.service === "Reguler");
-    const args = { p_shipment: d.id, p_quote: reguler.id, p_expected_revision: d.revision, p_idempotency_key: `key-${d.id}` };
+    const args = { p_shipment: d.id, p_quote: reguler.id, p_expected_revision: d.revision, p_idempotency_key: `key-${d.id}`, p_declaration_version: 1 };
 
     const first = await c.rpc("confirm_shipment", args);
     expect(first.error).toBeNull();
@@ -67,8 +67,8 @@ describe("simulated shipping flow", () => {
     const d = await newCompleteDraft();
     const { data: quotes } = await c.rpc("request_quotes", { p_shipment: d.id, p_expected_revision: d.revision });
     const key = `diff-${d.id}`;
-    await c.rpc("confirm_shipment", { p_shipment: d.id, p_quote: quotes![0].id, p_expected_revision: d.revision, p_idempotency_key: key });
-    const { error } = await c.rpc("confirm_shipment", { p_shipment: d.id, p_quote: quotes![1].id, p_expected_revision: d.revision, p_idempotency_key: key });
+    await c.rpc("confirm_shipment", { p_shipment: d.id, p_quote: quotes![0].id, p_expected_revision: d.revision, p_idempotency_key: key, p_declaration_version: 1 });
+    const { error } = await c.rpc("confirm_shipment", { p_shipment: d.id, p_quote: quotes![1].id, p_expected_revision: d.revision, p_idempotency_key: key, p_declaration_version: 1 });
     expect(error?.message).toBe("idempotency_conflict");
   });
 
@@ -76,7 +76,7 @@ describe("simulated shipping flow", () => {
     const d = await newCompleteDraft();
     const { data: quotes } = await c.rpc("request_quotes", { p_shipment: d.id, p_expected_revision: d.revision });
     const results = await Promise.all(Array.from({ length: 6 }, (_, i) =>
-      c.rpc("confirm_shipment", { p_shipment: d.id, p_quote: quotes![0].id, p_expected_revision: d.revision, p_idempotency_key: `race-${i}-${d.id}` })));
+      c.rpc("confirm_shipment", { p_shipment: d.id, p_quote: quotes![0].id, p_expected_revision: d.revision, p_idempotency_key: `race-${i}-${d.id}`, p_declaration_version: 1 })));
     expect(results.filter((r) => r.data && r.data.replayed === false)).toHaveLength(1);
     const { data: ops } = await c.from("provider_operations").select("id").eq("shipment_id", d.id);
     expect(ops).toHaveLength(1);
@@ -85,10 +85,10 @@ describe("simulated shipping flow", () => {
   it("an idempotency key reused for another shipment is a conflict, not a silent reuse", async () => {
     const a = await newCompleteDraft();
     const { data: qa } = await c.rpc("request_quotes", { p_shipment: a.id, p_expected_revision: a.revision });
-    await c.rpc("confirm_shipment", { p_shipment: a.id, p_quote: qa![0].id, p_expected_revision: a.revision, p_idempotency_key: `shared-${a.id}` });
+    await c.rpc("confirm_shipment", { p_shipment: a.id, p_quote: qa![0].id, p_expected_revision: a.revision, p_idempotency_key: `shared-${a.id}`, p_declaration_version: 1 });
     const b = await newCompleteDraft();
     const { data: qb } = await c.rpc("request_quotes", { p_shipment: b.id, p_expected_revision: b.revision });
-    const { error } = await c.rpc("confirm_shipment", { p_shipment: b.id, p_quote: qb![0].id, p_expected_revision: b.revision, p_idempotency_key: `shared-${a.id}` });
+    const { error } = await c.rpc("confirm_shipment", { p_shipment: b.id, p_quote: qb![0].id, p_expected_revision: b.revision, p_idempotency_key: `shared-${a.id}`, p_declaration_version: 1 });
     expect(error?.message).toBe("idempotency_conflict");
   });
 
@@ -100,11 +100,11 @@ describe("simulated shipping flow", () => {
     expect(edited!.revision).toBe(d.revision + 1);
     expect(edited!.submission_state).toBe("draft");
 
-    const notEstimated = await c.rpc("confirm_shipment", { p_shipment: d.id, p_quote: quotes![0].id, p_expected_revision: edited!.revision, p_idempotency_key: `stale-${d.id}` });
+    const notEstimated = await c.rpc("confirm_shipment", { p_shipment: d.id, p_quote: quotes![0].id, p_expected_revision: edited!.revision, p_idempotency_key: `stale-${d.id}`, p_declaration_version: 1 });
     expect(notEstimated.error?.message).toBe("not_estimated");
 
     await c.rpc("request_quotes", { p_shipment: d.id, p_expected_revision: edited!.revision });
-    const oldQuote = await c.rpc("confirm_shipment", { p_shipment: d.id, p_quote: quotes![0].id, p_expected_revision: edited!.revision, p_idempotency_key: `stale2-${d.id}` });
+    const oldQuote = await c.rpc("confirm_shipment", { p_shipment: d.id, p_quote: quotes![0].id, p_expected_revision: edited!.revision, p_idempotency_key: `stale2-${d.id}`, p_declaration_version: 1 });
     expect(oldQuote.error?.message).toBe("stale_quote");
     const oldRevision = await c.rpc("request_quotes", { p_shipment: d.id, p_expected_revision: d.revision });
     expect(oldRevision.error?.message).toBe("stale_revision");

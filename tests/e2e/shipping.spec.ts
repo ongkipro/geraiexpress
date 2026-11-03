@@ -39,6 +39,8 @@ test("complete simulated counter flow with saved contacts", async ({ page }) => 
   await page.getByRole("button", { name: "Periksa & konfirmasi" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Ini simulasi")).toBeVisible();
+  // T-081: confirmation now requires the content declaration (PR-41).
+  await dialog.getByRole("checkbox", { name: "Pengirim menyatakan isi paket bukan barang terlarang" }).check();
   await dialog.getByRole("button", { name: "Konfirmasi & terbitkan resi" }).click();
 
   await expect(page.getByText(/Resi simulasi sudah terbit/)).toBeVisible();
@@ -184,10 +186,29 @@ test("choosing 'Jemput kurir' saves the slot with the draft and the review shows
   await expect(page.getByRole("dialog").getByText("Antar sendiri ke gerai kurir")).toBeVisible();
 });
 
+test("confirmation without the content declaration is refused with the missing item named (T-081)", async ({ page }) => {
+  await startDemo(page);
+  await quotedDraft(page);
+  await page.getByRole("button", { name: "Periksa & konfirmasi" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByText("Lihat daftar barang terlarang").click();
+  await expect(dialog.getByText("barang yang mudah meledak")).toBeVisible();
+  await dialog.getByRole("button", { name: "Konfirmasi & terbitkan resi" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Centang pernyataan isi paket");
+  await expectNoHorizontalOverflow(page);
+  await dialog.getByRole("checkbox", { name: "Pengirim menyatakan isi paket bukan barang terlarang" }).check();
+  await dialog.getByRole("button", { name: "Konfirmasi & terbitkan resi" }).click();
+  await expect(page.getByText(/Resi simulasi sudah terbit/)).toBeVisible();
+  await expect(page.getByTestId("content-declaration")).toContainText("versi 1");
+  await expect(page.getByTestId("content-declaration")).toContainText("dicatat oleh Anda");
+});
+
 test("double confirmation creates one operation", async ({ page }) => {
   await startDemo(page);
   await quotedDraft(page);
   await page.getByRole("button", { name: "Periksa & konfirmasi" }).click();
+  // T-081: confirmation now requires the content declaration (PR-41).
+  await page.getByRole("checkbox", { name: "Pengirim menyatakan isi paket bukan barang terlarang" }).check();
   await page.getByRole("button", { name: "Konfirmasi & terbitkan resi" }).dblclick();
   await expect(page.getByText(/Resi simulasi sudah terbit/)).toBeVisible();
   await expect(page.getByRole("listitem").filter({ hasText: /^Dikonfirmasi/ })).toHaveCount(1);
@@ -205,12 +226,16 @@ test("confirming from a second, stale tab returns the original order", async ({ 
 
   await first.bringToFront();
   await first.getByRole("button", { name: "Periksa & konfirmasi" }).click();
+  // T-081: confirmation now requires the content declaration (PR-41).
+  await first.getByRole("checkbox", { name: "Pengirim menyatakan isi paket bukan barang terlarang" }).check();
   await first.getByRole("button", { name: "Konfirmasi & terbitkan resi" }).click();
   await expect(first.getByText(/Resi simulasi sudah terbit/)).toBeVisible();
   const awb = (await first.getByText(/^SIM\d+ \(simulasi\)$/).textContent())!;
 
   await second.bringToFront();
   await second.getByRole("button", { name: "Periksa & konfirmasi" }).click();
+  // T-081: confirmation now requires the content declaration (PR-41).
+  await second.getByRole("checkbox", { name: "Pengirim menyatakan isi paket bukan barang terlarang" }).check();
   await second.getByRole("button", { name: "Konfirmasi & terbitkan resi" }).click();
   await expect(second.getByText(awb, { exact: true })).toBeVisible();
   await expect(second.getByRole("listitem").filter({ hasText: /^Dikonfirmasi/ })).toHaveCount(1);
@@ -318,6 +343,8 @@ test("simulated COD shipment flow computes COD fee, excludes unsupported courier
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("COD (Bayar di Tempat)")).toBeVisible();
   await expect(dialog.getByText("Tagihan COD ke penerima")).toBeVisible();
+  // T-081: confirmation now requires the content declaration (PR-41).
+  await dialog.getByRole("checkbox", { name: "Pengirim menyatakan isi paket bukan barang terlarang" }).check();
   await dialog.getByRole("button", { name: "Konfirmasi & terbitkan resi" }).click();
 
   await expect(page.getByText(/Resi simulasi sudah terbit/)).toBeVisible();
@@ -634,7 +661,8 @@ test("an unresolved payment attempt shows a reconcile-only panel with no 'Bayar 
 test("money and provider buttons go pending, announce it and swallow repeat clicks (T-053 / SUP-13)", async ({ page }) => {
   await signIn(page, "owner-a@geraiexpress.test");
   const cases = [
-    { state: "queued", button: "Kirim sekarang", pendingText: "Mengirim…" },
+    // T-089 F10: "Kirim sekarang" now opens a confirmation; its submit is "Ya, kirim ke Mengantar".
+    { state: "queued", button: "Ya, kirim ke Mengantar", pendingText: "Mengirim…", opener: "Kirim sekarang" },
     { state: "awaiting_payment", button: "Periksa pembayaran", pendingText: "Memeriksa…" },
     { state: "unknown", button: "Periksa status operasi asli", pendingText: "Memeriksa…" },
   ] as const;
@@ -642,6 +670,10 @@ test("money and provider buttons go pending, announce it and swallow repeat clic
     const { id, cleanup } = seedReal({ state: c.state });
     try {
       await page.goto(`/pengiriman/${id}`);
+      if ("opener" in c) {
+        await page.getByRole("button", { name: c.opener }).click();
+        await expect(page.getByRole("dialog")).toContainText("Tidak ada pesanan baru yang dibuat");
+      }
       const requests = await holdServerActions(page);
       // The accessible name changes to the pending label while submitting, so find the button by its text content.
       const button = page.locator("form button[type=submit]", { hasText: c.button });
@@ -927,6 +959,10 @@ test("keyboard only: from the last intake control to the label page (T-070, 1280
   await tabTo("Periksa & konfirmasi");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog")).toBeVisible();
+  // T-081: the declaration checkbox precedes the confirm button; Space ticks it (UX-19 item 7 order).
+  await tabTo("Lihat daftar barang terlarang");
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Space");
   await tabTo("Konfirmasi & terbitkan resi");
   await page.keyboard.press("Enter");
   await expect(page.getByText(/Resi simulasi sudah terbit/)).toBeVisible();
@@ -1007,4 +1043,72 @@ test("the recipient area combobox: Enter searches, arrows move, Enter picks, Esc
   await expect(box).toHaveAttribute("aria-expanded", "false");
   await box.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await evidence(page, "t072-area-error", false);
+});
+
+// T-080: the same operator path is exercised by the 390px and 1280px projects (also tablet).
+test("billable weights show sourced volume, survive confirmation, and re-quote after dimension changes", async ({ page }) => {
+  await startDemo(page);
+  await page.getByRole("main").getByRole("button", { name: "Buat pengiriman" }).first().click();
+  await expect(page).toHaveURL(/\/pengiriman\/[0-9a-f-]{36}$/);
+  await chooseOption(page, "Pilih pengirim tersimpan", { index: 1 });
+  await chooseOption(page, "Pilih penerima tersimpan", { index: 1 });
+  await page.getByLabel("Berat (gram)").fill("1000");
+  await page.getByLabel("Isi paket").fill("Buku dalam kardus");
+  await expect(page.getByText(/Kurir dapat menimbang ulang/)).toBeVisible();
+  await page.getByRole("button", { name: "Simpan & cek ongkir" }).click();
+  await expect(page.getByTestId("quote-weights").first()).toContainText("Tanpa ukuran: berat volume tidak dihitung");
+  await page.getByLabel("Panjang (cm)").fill("30");
+  await page.getByLabel("Lebar (cm)").fill("20");
+  await page.getByLabel("Tinggi (cm)").fill("20");
+  await expect(page.getByRole("button", { name: "Periksa & konfirmasi" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Simpan & cek ongkir" }).click();
+  const weights = page.getByTestId("quote-weights");
+  await expect(weights).toHaveCount(3);
+  for (const row of await weights.all()) {
+    await expect(row).toContainText("Berat aktual: 1000 g");
+    await expect(row).toContainText("Berat volume: 2000 g");
+    await expect(row).toContainText("Berat ditagih: 2000 g");
+    await expect(row.getByRole("link", { name: "Aturan Mengantar, diperbarui 2026-10-19" })).toHaveAttribute("href", /5387484/);
+  }
+  await expectNoHorizontalOverflow(page);
+  await evidence(page, "billable-weight-intake");
+  await page.getByRole("button", { name: "Periksa & konfirmasi" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("2000 g");
+  // T-081: confirmation now requires the content declaration (PR-41).
+  await dialog.getByRole("checkbox", { name: "Pengirim menyatakan isi paket bukan barang terlarang" }).check();
+  await dialog.getByRole("button", { name: "Konfirmasi & terbitkan resi" }).click();
+  await expect(page.getByText(/Resi simulasi sudah terbit/)).toBeVisible();
+  const facts = page.getByRole("region", { name: "Detail pengiriman" });
+  await expect(facts).toContainText("Berat aktual");
+  await expect(facts).toContainText("Berat volume");
+  await expect(facts).toContainText("Berat ditagih");
+  await expectNoHorizontalOverflow(page);
+  await evidence(page, "billable-weight-confirmed");
+});
+
+test("another member sees which staff member recorded the content declaration (T-081, PR-41)", async ({ page }) => {
+  const id = randomUUID(), quote = randomUUID();
+  const TENANT_A = "00000000-0000-4000-b000-00000000000a", OUTLET_A = "00000000-0000-4000-c000-00000000000a";
+  const OPERATOR_A = "00000000-0000-4000-a000-0000000000a2";
+  localSql(`insert into public.shipments (tenant_id, outlet_id, id, reference, submission_state, payment_state, recipient_name, recipient_phone,
+      recipient_address, item_description, weight_grams, goods_value_idr, is_simulated, created_by, submitted_at, issued_at, awb, customer_charge_idr,
+      content_declaration_version, content_declared_by, content_declared_at, content_declared_by_email)
+    values ('${TENANT_A}', '${OUTLET_A}', '${id}', 'DECL-${id.slice(0, 6).toUpperCase()}', 'issued', 'paid', 'Penerima Uji', '081234567890',
+      'Jl. Uji 1', 'Buku', 1000, 50000, false, '${OPERATOR_A}', now(), now(), 'JP9999000011', 9000,
+      1, '${OPERATOR_A}', now(), 'operator-a@geraiexpress.test');
+    insert into public.shipment_quotes (tenant_id, shipment_id, id, shipment_revision, courier, service, normal_tariff_idr, eta_days, is_simulated, expires_at)
+      values ('${TENANT_A}', '${id}', '${quote}', 1, 'JT', 'Reguler', 9000, '1-2', false, now() + interval '1 hour');
+    update public.shipments set selected_quote_id = '${quote}' where id = '${id}';`);
+  try {
+    await signIn(page, "owner-a@geraiexpress.test");
+    await page.goto(`/pengiriman/${id}`);
+    const declaration = page.getByTestId("content-declaration");
+    await expect(declaration).toContainText("versi 1");
+    await expect(declaration).toContainText("dicatat oleh operator-a@geraiexpress.test");
+    await expect(declaration).not.toContainText("Anda");
+    await expectNoHorizontalOverflow(page);
+  } finally {
+    localSql(`update public.shipments set selected_quote_id = null where id = '${id}'; delete from public.shipments where id = '${id}'`);
+  }
 });

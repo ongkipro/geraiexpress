@@ -52,7 +52,7 @@ async function quotedRealDraft(overrides: Record<string, unknown> = {}) {
 }
 
 const confirm = (c: Awaited<ReturnType<typeof signIn>>, id: string, quote: string, revision: number, key = randomUUID()) =>
-  c.rpc("confirm_shipment", { p_shipment: id, p_quote: quote, p_expected_revision: revision, p_idempotency_key: key });
+  c.rpc("confirm_shipment", { p_shipment: id, p_quote: quote, p_expected_revision: revision, p_idempotency_key: key, p_declaration_version: 1 });
 
 describe("confirming a real shipment (T-024)", () => {
   it("creates one real queued operation for the dispatcher; a replay never creates another", async () => {

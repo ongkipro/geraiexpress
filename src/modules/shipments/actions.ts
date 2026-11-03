@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { dbServer, machineClient } from "@/lib/db/server";
 import { friendlyError } from "@/lib/errors";
-import { estimateTwoPassCod, InvalidOrderRequest } from "@/lib/mengantar/public-api";
-import { couriersForHandover } from "./handover";
+import { InvalidOrderRequest } from "@/lib/mengantar/public-api";
+import { couriersForHandover, quoteServices } from "./handover";
+import type { BillableWeightRule } from "@/lib/billable-weight";
+import { estimateBillableQuotes } from "@/lib/mengantar/billable-quotes";
 import { mengantarFailure, tenantMengantar } from "@/lib/mengantar/tenant";
 import { config } from "@/lib/config";
 import { checkPayment, dispatchOperation, payUnpaidShipmentBatch, reconcileOperation, type DispatchSummary } from "@/lib/mengantar/dispatcher";
@@ -134,8 +136,9 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
           return { error: emptyMsg + contactNote, values };
         }
       } else {
-        const { error: qe } = await db.rpc("request_quotes", { p_shipment: id, p_expected_revision: revision });
+        const { data: simulatedQuotes, error: qe } = await db.rpc("request_quotes", { p_shipment: id, p_expected_revision: revision });
         if (qe) return { error: friendlyError(qe) + contactNote, values };
+        if (!simulatedQuotes?.length) return { error: "Tidak ada layanan simulasi untuk berat ini. Periksa batas berat kurir." + contactNote, values };
       }
     }
     return { ok: "Ongkir diperbarui. Pilih layanan lalu periksa ringkasan.", warning: contactNote.trim() || undefined };
@@ -161,29 +164,21 @@ async function liveQuotes(tenantId: string, origin: { mengantar_area_id: string 
   if (!mengantar.ok) return { error: friendlyError({ message: `mengantar_${mengantar.reason}` }) };
   const machine = await machineClient();
   if (!machine) return { error: friendlyError({ message: "mengantar_not_configured" }) };
-  const dims = {
-    ...(typeof update.length_cm === "number" ? { lengthCm: update.length_cm } : {}),
-    ...(typeof update.width_cm === "number" ? { widthCm: update.width_cm } : {}),
-    ...(typeof update.height_cm === "number" ? { heightCm: update.height_cm } : {}),
-  };
+  const { data: ruleRows, error: ruleError } = await (await dbServer()).rpc("billable_weight_rules", { p_tenant: tenantId });
+  if (ruleError) return { error: "Aturan berat belum dapat dibaca. Coba cek ongkir lagi." };
   let estimates;
   try {
-    if (isCod) {
-      estimates = await estimateTwoPassCod((input) => mengantar.client.estimate(input), {
-        originAreaId,
-        destinationAreaId: String(update.recipient_area_id),
-        weightGrams: Number(update.weight_grams),
-        goodsValueIdr,
-        ...dims,
-      });
-    } else {
-      estimates = await mengantar.client.estimate({
-        originAreaId,
-        destinationAreaId: String(update.recipient_area_id),
-        weightGrams: Number(update.weight_grams),
-        ...dims,
-      });
-    }
+    const quoted = await estimateBillableQuotes((input) => mengantar.client.estimate(input), {
+      originAreaId, destinationAreaId: String(update.recipient_area_id),
+      ...(isCod ? { goodsValueIdr } : {}),
+    }, {
+      actualWeightGrams: Number(update.weight_grams),
+      lengthCm: update.length_cm as number | null,
+      widthCm: update.width_cm as number | null,
+      heightCm: update.height_cm as number | null,
+    }, (ruleRows ?? []) as BillableWeightRule[],
+    couriersForHandover(quoteServices(isCod), update.handover));
+    estimates = quoted.rows;
   } catch (error) {
     if (error instanceof InvalidOrderRequest) {
       return { error: friendlyError({ message: error.reason }) };
@@ -194,12 +189,15 @@ async function liveQuotes(tenantId: string, origin: { mengantar_area_id: string 
   const rows = couriersForHandover(estimates, update.handover)
     .map((e) => ({
       courier: e.courier,
+      ...(e.service_class === "cargo" ? { service_class: "cargo", minimum_weight_grams: e.minimum_weight_grams } : {}),
+      billable_weight_grams: e.billable_weight_grams,
+      weight_rule_id: e.weight_rule_id,
       tariff: e.tariff,
       net: e.netShipping,
       // Provider discount in basis points; null (unknown) is stored as NULL, never 0.
       discount_bps: e.discountBps,
       cod_fee: isCod ? e.codFee : 0,
-      cod_supported: true,
+      cod_supported: e.service_class !== "cargo",
       eta: (e.etaText ?? "").slice(0, 40),
     }));
   if (isCod && rows.length === 0) {
@@ -268,6 +266,8 @@ export async function confirmShipmentAction(_: ConfirmState, form: FormData): Pr
     p_quote: String(form.get("quote_id")),
     p_expected_revision: Number(form.get("revision")),
     p_idempotency_key: String(form.get("idempotency_key")),
+    // PR-41: the checkbox carries the declaration text version shown; unchecked sends none.
+    p_declaration_version: form.get("content_declaration") === null ? null : Number(form.get("content_declaration")),
   });
   if (error) return { error: friendlyError(error) };
   revalidatePath("/pengiriman");

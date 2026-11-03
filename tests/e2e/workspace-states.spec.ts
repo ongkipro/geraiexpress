@@ -103,8 +103,8 @@ test("dialog and sheet close buttons are announced as Tutup", async ({ page }) =
   await expect(dialog).toHaveCount(0);
 });
 
-test("the intake form says whether dimensions affect the quote: live gerai yes-note, demo keeps its text", async ({ page }) => {
-  const NOTE = "Dimensi belum memengaruhi ongkir Mengantar";
+test("live and demo intake explain per-courier billable weight and reweigh settlement", async ({ page }) => {
+  const NOTE = "Berat ditagih mengikuti aturan tiap kurir.";
   await signIn(page, "operator-a@geraiexpress.test");
   await page.goto("/pengiriman/00000000-0000-4000-e000-00000000000a");
   await expect(page.getByText(NOTE)).toBeVisible();
@@ -116,7 +116,9 @@ test("the intake form says whether dimensions affect the quote: live gerai yes-n
   await page.goto("/pengiriman/baru");
   await page.getByRole("button", { name: "Mulai draf baru" }).click();
   await expect(page.getByLabel("Panjang (cm)")).toBeVisible();
-  await expect(page.getByText(NOTE)).toHaveCount(0);
+  await expect(page.getByText(NOTE)).toBeVisible();
+  await expect(page.getByText(/selisih ongkir didebit atau dikreditkan/)).toBeVisible();
+  await expect(page.getByLabel("Panjang (cm)")).toHaveAttribute("aria-describedby", /dims-note/);
 });
 
 test("the contact search keeps the draft form and puts the term in the address", async ({ page }) => {

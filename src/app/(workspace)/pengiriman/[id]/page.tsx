@@ -74,7 +74,7 @@ export default async function ShipmentPage({
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
         <div className="flex min-w-0 flex-col gap-6">
           <NextStepCard s={shipment} op={operation} hasLabel={!!label} isAdmin={isAdmin} batchReview={(batchReviewData ?? null) as BatchReview | null} />
-          <ShipmentFacts s={shipment} quote={quote} op={operation} pickup={pickup} isPickup={isPickup} reservationText={reservationText} geraiCost={geraiCost} />
+          <ShipmentFacts s={shipment} quote={quote} op={operation} pickup={pickup} isPickup={isPickup} reservationText={reservationText} geraiCost={geraiCost} viewerId={ws.userId} />
         </div>
         <ShipmentTimeline events={(events ?? []) as ShipmentEvent[]} className="xl:sticky xl:top-8" />
       </div>

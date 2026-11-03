@@ -61,6 +61,7 @@ export const DISPATCH_INFO: Record<string, string> = {
   duplicate_orders: "Ditemukan lebih dari satu pesanan Mengantar dengan referensi ini. Hubungi admin GeraiExpress sebelum melanjutkan.",
   lookup_failed: "Mengantar sedang tidak bisa dihubungi. Periksa lagi nanti.",
   incomplete_order: "Pesanan Mengantar ditemukan tetapi datanya belum lengkap. Periksa lagi nanti.",
+  service_mismatch: "Pesanan Mengantar ditemukan, tetapi jenis layanannya (Reguler/Kargo) berbeda dari yang dikonfirmasi. Hubungi admin GeraiExpress sebelum melanjutkan.",
   wrong_environment: "Pesanan ini dibuat di lingkungan Mengantar lain.",
   not_queued: "Pesanan ini sudah diproses.",
   shipment_not_ready: "Data pengiriman belum lengkap untuk dikirim.",

@@ -82,7 +82,7 @@ export default async function ShipmentsPage({
       href: "/pengiriman#perlu-tindakan", icon: AlertTriangle, tone: "text-warning", active: false,
     },
     {
-      label: "Menunggu pembayaran", hint: "Bayar di aplikasi Mengantar", count: awaiting.error ? null : (awaiting.count ?? 0),
+      label: "Menunggu pembayaran", hint: "Periksa pembayaran batch di detail", count: awaiting.error ? null : (awaiting.count ?? 0),
       href: "/pengiriman?status=awaiting_payment", icon: Wallet, tone: "text-warning",
       active: status === "awaiting_payment" && !q && !from && !to,
     },

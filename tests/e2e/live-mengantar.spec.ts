@@ -90,6 +90,8 @@ test("a connected gerai picks its Mengantar pickup, searches the recipient area 
     // T-024: issue for real on one viewport only (each run creates one sandbox order). The
     // sandbox seller has no balance, so the order is created unpaid: no resi yet.
     if (test.info().project.name !== "desktop-1280") return;
+    // T-081: confirmation now requires the content declaration (PR-41).
+    await page.getByRole("checkbox", { name: "Pengirim menyatakan isi paket bukan barang terlarang" }).check();
     await page.getByRole("button", { name: "Konfirmasi & terbitkan resi" }).click();
     await expect(page.getByTestId("dispatch-result")).toBeVisible({ timeout: 45_000 });
     const result = await page.getByTestId("dispatch-result").innerText();

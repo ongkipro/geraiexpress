@@ -103,7 +103,7 @@ describe("tenant scope", () => {
     for (const [fn, args] of [
       ["create_shipment_draft", { p_outlet: IDS.outletB }],
       ["request_quotes", { p_shipment: IDS.shipmentB, p_expected_revision: 1 }],
-      ["confirm_shipment", { p_shipment: IDS.shipmentB, p_quote: IDS.shipmentB, p_expected_revision: 1, p_idempotency_key: "foreign-key-1" }],
+      ["confirm_shipment", { p_shipment: IDS.shipmentB, p_quote: IDS.shipmentB, p_expected_revision: 1, p_idempotency_key: "foreign-key-1", p_declaration_version: 1 }],
       ["request_label", { p_shipment: IDS.shipmentB }],
       ["reconcile_shipment", { p_shipment: IDS.shipmentB }],
     ] as const) {

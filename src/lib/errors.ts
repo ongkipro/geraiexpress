@@ -52,6 +52,11 @@ const MESSAGES: Record<string, string> = {
   pickup_not_set: "Alamat pickup Mengantar outlet ini belum dipilih. Admin gerai bisa memilihnya di Pengaturan.",
   pickup_not_found: "Alamat pickup itu tidak ditemukan di akun Mengantar gerai ini. Muat ulang lalu pilih lagi.",
   // T-025 COD & T-026 batch payment recovery
+  // T-091 platform configuration
+  declaration_text_immutable: "Teks pernyataan tidak bisa diubah. Tambahkan versi baru.",
+  // T-081 content declaration (PR-41)
+  content_description_required: "Isi paket wajib diisi sebelum konfirmasi.",
+  content_declaration_required: "Centang pernyataan isi paket (bukan barang terlarang) sebelum konfirmasi. Jika teks pernyataan baru saja berubah, muat ulang halaman.",
   cod_not_supported: "Layanan kurir ini tidak mendukung pengiriman COD ke wilayah tujuan.",
   cod_goods_value_required: "Isi nilai barang minimal Rp1.000 untuk pengiriman COD.",
   batch_not_payable: "Batch pembayaran ini belum siap atau tidak memiliki pesanan yang menunggu pembayaran.",

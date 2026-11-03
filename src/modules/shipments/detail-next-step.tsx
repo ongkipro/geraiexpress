@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { FAILURE_REASON as BASE_FAILURE_REASON, courierName, formatIdr, formatWib } from "@/lib/format";
-import { checkPaymentAction, closeFailedAction, dispatchQueuedAction, reconcileAction, reopenAction } from "./actions";
+import { checkPaymentAction, closeFailedAction, reconcileAction, reopenAction } from "./actions";
+import { DispatchQueuedDialog } from "./dispatch-queued-dialog";
 import { AdminCloseDialog } from "./admin-close-dialog";
 import { BatchPayControl } from "./batch-actions";
 import { IssuedActions, IssuedResult } from "./detail-issued";
@@ -72,7 +73,7 @@ export function NextStepCard({ s, op, hasLabel, isAdmin, batchReview }: {
     body = (
       <>
         <p>Pesanan menunggu dikirim ke Mengantar. Sistem mengirimnya otomatis; Anda juga bisa mengirimnya sekarang.</p>
-        <div className="flex">{form(dispatchQueuedAction, "Kirim sekarang", "Mengirim…")}</div>
+        <div className="flex"><DispatchQueuedDialog shipmentId={s.id} reference={s.reference} /></div>
       </>
     );
   } else if (real && state === "awaiting_payment") {

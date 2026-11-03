@@ -35,7 +35,7 @@ async function draft() {
   });
   const quoteId = () => sql(`select id from public.shipment_quotes where shipment_id = '${f.shipment}' and expires_at > now() order by quoted_at desc limit 1`);
   const confirm = () => owner.rpc("confirm_shipment", {
-    p_shipment: f.shipment, p_quote: quoteId(), p_expected_revision: revision(), p_idempotency_key: randomUUID(),
+    p_shipment: f.shipment, p_quote: quoteId(), p_expected_revision: revision(), p_idempotency_key: randomUUID(), p_declaration_version: 1,
   });
   const cleanup = () => sql(`update public.shipments set selected_quote_id = null where tenant_id = '${f.tenant}';
     delete from public.shipments where tenant_id = '${f.tenant}'; delete from public.tenants where id = '${f.tenant}'`);
@@ -209,7 +209,7 @@ describe("confirmation freezes the handover (T-034 identity pattern)", () => {
       expect((await f.slot()).error).toBeNull();
       expect((await f.quote()).error).toBeNull();
       const key = randomUUID();
-      const args = { p_shipment: f.shipment, p_quote: f.quoteId(), p_expected_revision: f.revision(), p_idempotency_key: key };
+      const args = { p_shipment: f.shipment, p_quote: f.quoteId(), p_expected_revision: f.revision(), p_idempotency_key: key, p_declaration_version: 1 };
       const first = await f.owner.rpc("confirm_shipment", args);
       expect(first.error).toBeNull();
       const replay = await f.owner.rpc("confirm_shipment", args);

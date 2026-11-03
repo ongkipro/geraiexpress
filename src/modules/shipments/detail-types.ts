@@ -18,6 +18,13 @@ export type ShipmentRecord = {
   recipient_postal_code: string | null;
   item_description: string | null;
   weight_grams: number | null;
+  weight_snapshot?: { actual_weight_grams: number | null; volumetric_weight_grams: number | null; billable_weight_grams: number | null; weight_rule_id: string | null } | null;
+  provider_weight_grams?: number | null;
+  // PR-41: frozen at confirmation; null on shipments confirmed before the declaration existed.
+  content_declaration_version?: number | null;
+  content_declared_by?: string | null;
+  content_declared_by_email?: string | null;
+  content_declared_at?: string | null;
   submitted_at: string | null;
   selected_quote_id: string | null;
   pickup_snapshot: unknown;

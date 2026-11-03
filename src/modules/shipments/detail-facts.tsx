@@ -8,7 +8,7 @@ type Group = { title: string; facts: Fact[] };
 
 // C5: what was sent, frozen at confirmation, as one grouped list (Penerima, Pengirim, Layanan, Biaya,
 // Serah terima, Paket) inside a single frame. Rows stay <dt>/<dd> pairs.
-export function ShipmentFacts({ s, quote, op, pickup, isPickup, reservationText, geraiCost }: {
+export function ShipmentFacts({ s, quote, op, pickup, isPickup, reservationText, geraiCost, viewerId }: {
   s: ShipmentRecord;
   quote: { courier: string; service: string; eta_days: string | null } | null;
   op: OperationRecord | null;
@@ -17,6 +17,8 @@ export function ShipmentFacts({ s, quote, op, pickup, isPickup, reservationText,
   reservationText: string | null;
   // undefined = not shown; null = shown as "belum diketahui" (T-053).
   geraiCost: number | null | undefined;
+  // The signed-in member: the declaration says "Anda" when they confirmed it.
+  viewerId?: string;
 }) {
   const real = !s.is_simulated;
   const groups: Group[] = [
@@ -74,7 +76,16 @@ export function ShipmentFacts({ s, quote, op, pickup, isPickup, reservationText,
       title: "Paket",
       facts: [
         ["Isi", s.item_description ?? "—"],
-        ["Berat", <span className="tabular" key="w">{formatWeight(s.weight_grams)}</span>],
+        ["Pernyataan isi", s.content_declaration_version == null
+          ? "Tidak tercatat (dikonfirmasi sebelum pernyataan isi berlaku)"
+          : <span key="decl" data-testid="content-declaration">Pengirim menyatakan bukan barang terlarang · versi {s.content_declaration_version} · {s.content_declared_by === viewerId ? "dicatat oleh Anda" : `dicatat oleh ${s.content_declared_by_email ?? "anggota gerai (email tidak tersedia)"}`}{s.content_declared_at ? ` · ${formatWib(s.content_declared_at)}` : ""}</span>],
+        ["Berat aktual", <span className="tabular" key="w">{formatWeight(s.weight_grams)}</span>],
+        ["Berat volume", s.weight_snapshot?.volumetric_weight_grams == null ? "Tidak dihitung" : formatWeight(s.weight_snapshot.volumetric_weight_grams)],
+        ["Berat ditagih", s.weight_snapshot?.billable_weight_grams == null ? "Belum dihitung" : formatWeight(s.weight_snapshot.billable_weight_grams)],
+        ...(s.provider_weight_grams != null ? [
+          ["Berat kurir (penimbangan ulang)", formatWeight(s.provider_weight_grams)],
+          ["Selisih berat kurir − aktual", s.weight_grams == null ? "Belum dapat dibandingkan" : `${s.provider_weight_grams - s.weight_grams} g`],
+        ] as Fact[] : []),
       ],
     },
   ];

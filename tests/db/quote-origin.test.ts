@@ -26,7 +26,7 @@ async function draft() {
   };
   const quoteId = () => sql(`select id from public.shipment_quotes where shipment_id = '${f.shipment}' and expires_at > now() order by quoted_at desc limit 1`);
   const confirm = (id = quoteId()) => owner.rpc("confirm_shipment", {
-    p_shipment: f.shipment, p_quote: id, p_expected_revision: revision(), p_idempotency_key: randomUUID(),
+    p_shipment: f.shipment, p_quote: id, p_expected_revision: revision(), p_idempotency_key: randomUUID(), p_declaration_version: 1,
   });
   const change = (origin = B) => owner.rpc("set_outlet_mengantar_pickup", {
     p_outlet: outlet, p_address_id: origin.address, p_area_id: origin.area,
