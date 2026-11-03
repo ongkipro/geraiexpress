@@ -11,6 +11,7 @@ export { expect } from "@playwright/test";
 // from a client. Both headers go only to the app under test: real third-party endpoints (Turnstile,
 // T-016) must not receive them.
 export async function actAsVisitor(target: Page | BrowserContext, baseURL: string, ip: string) {
+  await stubTurnstile(target);
   const origin = new URL(baseURL).origin;
   await target.route((url) => url.origin === origin, (route) =>
     route.continue({ headers: { ...route.request().headers(), "x-real-ip": ip, "x-forwarded-for": ip } }));
@@ -23,6 +24,27 @@ export const randomVisitorIp = () => {
   const n = nextVisitor++ % (testNetworks.length * 254);
   return `${testNetworks[Math.floor(n / 254)]}.${n % 254 + 1}`;
 };
+
+// T-059 (2026-11-04): the server under test runs with AUTH_CAPTCHA_DISABLED=true, but the browser still
+// waited for a token from the live Cloudflare Turnstile script; when it was late the submit stayed
+// aria-disabled and the test timed out (three recorded flakes). Serve a local stand-in that renders
+// nothing and hands back a dummy token at once, so e2e never depends on that network. Production and
+// the server-side verification path are unchanged.
+// Like the real widget: render issues a token, reset (after each completed attempt) issues a fresh one
+// to the same widget, remove forgets it.
+const TURNSTILE_STUB = `(() => {
+  const widgets = new Map(); let next = 0;
+  const issue = (id) => setTimeout(() => { const o = widgets.get(id); if (o && o.callback) o.callback("e2e-local-turnstile-token-" + id); }, 0);
+  window.turnstile = {
+    render: (el, o) => { const id = "e2e-" + (++next); widgets.set(id, o); issue(id); return id; },
+    reset: (id) => issue(id),
+    remove: (id) => { widgets.delete(id); },
+  };
+})();`;
+export async function stubTurnstile(target: Page | BrowserContext) {
+  await target.route(/^https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/javascript", body: TURNSTILE_STUB }));
+}
 
 export const test = base.extend({
   page: async ({ page, baseURL }, use) => {

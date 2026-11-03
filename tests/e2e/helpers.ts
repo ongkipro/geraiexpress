@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 
 export const FIXTURE_PASSWORD: string = "geraiexpress-local-dev";
@@ -29,6 +29,8 @@ async function waitForAccountBudget(email: string) {
   const current = accountWindows.get(key);
   if (current && now - current.start < 61_000) {
     if (current.count >= 9) {
+      // The wait can exceed a 30 s test timeout: extend this test by the wait (it is the budget's, not the app's).
+      test.setTimeout(test.info().timeout + 65_000);
       const { promise, resolve } = Promise.withResolvers<void>();
       setTimeout(resolve, 61_000 - (now - current.start));
       await promise;
@@ -43,11 +45,25 @@ async function waitForAccountBudget(email: string) {
 
 export async function signIn(page: Page, email: string) {
   await waitForAccountBudget(email);
-  await page.goto("/masuk");
-  await page.getByRole("textbox", { name: "Email" }).fill(email);
-  await page.getByLabel("Kata sandi").fill(FIXTURE_PASSWORD);
-  await page.getByRole("button", { name: "Masuk", exact: true }).click();
-  await page.waitForURL((url) => !url.pathname.endsWith("/masuk"));
+  for (let attempt = 0; ; attempt++) {
+    await page.goto("/masuk");
+    await page.getByRole("textbox", { name: "Email" }).fill(email);
+    await page.getByLabel("Kata sandi").fill(FIXTURE_PASSWORD);
+    await page.getByRole("button", { name: "Masuk", exact: true }).click();
+    // The client-side window above starts before the server's (it opens at the POST), so a fast burst of
+    // specs can still meet the server's per-account 60 s budget. On that named refusal, wait out a full
+    // window once and retry; any other outcome is the test's to judge.
+    const throttled = page.getByRole("alert").filter({ hasText: "Terlalu banyak percobaan" });
+    const outcome = await Promise.race([
+      page.waitForURL((url) => !url.pathname.endsWith("/masuk")).then(() => "signed-in" as const),
+      throttled.waitFor().then(() => "throttled" as const),
+    ]);
+    if (outcome === "signed-in") return;
+    if (attempt > 0) throw new Error(`sign-in for ${email} still throttled after waiting a full window`);
+    test.setTimeout(test.info().timeout + 65_000);
+    await page.waitForTimeout(62_000);
+    accountWindows.set(email.trim().toLowerCase(), { start: Date.now(), count: 1 });
+  }
 }
 
 // UX-16: the gerai Dashboard is the home "/" (no query: the default period); every signed-in landing goes there.
