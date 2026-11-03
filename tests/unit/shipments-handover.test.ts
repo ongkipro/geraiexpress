@@ -90,3 +90,14 @@ describe("pickup failure copy over every phase and reopenable code (T-056 final 
     expect(pickupFailureReason("PICKUP_TIME_INVALID", "reserved", "x")).toBe("x");
   });
 });
+
+describe("quoteServices (T-080: non-COD cargo)", () => {
+  it("adds cargo for the four documented couriers only when the shipment is not COD", async () => {
+    const { quoteServices } = await import("../../src/modules/shipments/handover");
+    const cargo = (cod: boolean) => quoteServices(cod).filter((s) => s.service_class === "cargo").map((s) => s.courier).sort();
+    expect(cargo(false)).toEqual(["JNE", "Sap", "SiCepat", "iDexpress"]);
+    expect(cargo(true)).toEqual([]);
+    expect(quoteServices(true).every((s) => s.service_class === "regular")).toBe(true);
+    expect(quoteServices(false).filter((s) => s.service_class === "regular")).toEqual(quoteServices(true));
+  });
+});

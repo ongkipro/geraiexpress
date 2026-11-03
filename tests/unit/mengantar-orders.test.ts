@@ -178,7 +178,7 @@ describe("order reconciliation (T-021)", () => {
   it("finds one order by ORDER_ID and reads its reference and state", async () => {
     const { api, calls } = clientFor({ body: fixture("order-find-by-id.json") });
     expect(await api.findOrder("261014H0JAFR")).toEqual({
-      orderId: "261014H0JAFR", batch: "26101416827JYE", batchId: "6acf476a6b00a9b494ff04b8", price: 111600, reference: REF, trackingNumber: null, status: "active", paid: false, createdAt: "2026-10-14T09:12:10.231Z",
+      orderId: "261014H0JAFR", cargo: false, batch: "26101416827JYE", batchId: "6acf476a6b00a9b494ff04b8", price: 111600, reference: REF, trackingNumber: null, status: "active", paid: false, createdAt: "2026-10-14T09:12:10.231Z",
     });
     expect(new URL(calls[0].url).searchParams.get("order_id")).toBe("261014H0JAFR");
     expect(await clientFor({ body: fixture("order-find-unknown-id.json") }).api.findOrder("ZZZZZZZZZZZZ")).toBeNull();

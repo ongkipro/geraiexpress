@@ -14,11 +14,10 @@ export const MENGANTAR_ORIGINS = {
 } as const;
 export type MengantarEnvironment = keyof typeof MENGANTAR_ORIGINS;
 
-// Response key → courier code accepted by create-order. Only couriers the Public API documents as
-// `courier` values are offered. Ninja is discontinued (1 September 2026).
-// lazy: "*Cargo" variants and SAPLite are returned by courier=all but undocumented as courier values
-// and their price fields are inconsistent in captured responses; add them once Mengantar confirms
-// their order contract.
+// Regular response key → documented create-order courier. Ninja is discontinued (1 September 2026).
+// Cargo is a separate, explicit transport opt-in: base courier + orders[].cargo=true (official docs,
+// 2026-11-03). The shipment workflow still offers regular services only until seller/route/order
+// support is verified. SAPLite remains unsupported; its order contract is not established.
 const COURIERS: Record<string, string> = {
   JNE: "JNE",
   SiCepat: "SiCepat",
@@ -30,7 +29,11 @@ const COURIERS: Record<string, string> = {
   spx: "spx",
   pos: "pos",
 };
+const CARGO_COURIERS: Record<string, string> = {
+  JNECargo: "JNE", SiCepatCargo: "SiCepat", SapCargo: "Sap", iDexpressCargo: "iDexpress",
+};
 export const OFFERED_COURIERS = new Set(Object.values(COURIERS));
+export const CARGO_ORDER_COURIERS: readonly string[] = Object.values(CARGO_COURIERS);
 
 // Couriers seen refusing drop-off orders (sandbox, T-020: anteraja). They are not offered for a
 // drop-off shipment; a pickup shipment (T-043, scheduledPickup) keeps them.
@@ -92,10 +95,15 @@ export type EstimateRequest = {
   // sizes the COD fee). Not the create-order COD value, which also includes the COD fee. Omit for
   // non-COD.
   codAmount?: number;
+  // Local parsing opt-in only, never an invented provider query parameter. Defaults to regular.
+  includeCargo?: boolean;
 };
 
 export type CourierEstimate = {
   courier: string;
+  // Absent on legacy regular rows. Cargo must never share grouping identity with regular.
+  service_class?: "regular" | "cargo";
+  minimum_weight_grams?: number;
   // Normal (undiscounted) shipping tariff shown at the counter and on the resi.
   tariff: number;
   // COD service fee; 0 when COD was not requested.
@@ -107,6 +115,9 @@ export type CourierEstimate = {
   discountBps: number | null;
   etaText: string | null;
 };
+
+export const estimateServiceKey = (row: { courier: string; service_class?: "regular" | "cargo" }) =>
+  `${row.courier}:${row.service_class ?? "regular"}`;
 
 const AREA_ID = /^[a-f0-9]{24}$/;
 const TIMEOUT_MS = 10_000;
@@ -238,6 +249,7 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
 
     async estimate(request: EstimateRequest): Promise<CourierEstimate[]> {
       const { originAreaId, destinationAreaId, weightGrams, codAmount } = request;
+      if (request.includeCargo !== undefined && typeof request.includeCargo !== "boolean") throw new InvalidOrderRequest("invalid_cargo_flag");
       if (!AREA_ID.test(originAreaId) || !AREA_ID.test(destinationAreaId)) throw new Error("Invalid area id");
       if (!Number.isInteger(weightGrams) || weightGrams < 1 || weightGrams > 1_000_000) throw new Error("Invalid weight");
       if (codAmount !== undefined && (!Number.isInteger(codAmount) || codAmount < 1)) throw new Error("Invalid COD amount");
@@ -248,7 +260,7 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
         weight: String(weightGrams / 1000),
       };
       if (codAmount !== undefined) params.COD_AMOUNT = String(codAmount);
-      return parseEstimates(await getData("/order/estimate", params), codAmount !== undefined);
+      return parseEstimates(await getData("/order/estimate", params), codAmount !== undefined, request.includeCargo);
     },
 
     // Creates exactly one shipment. Every answer is judged on the order item, not the envelope:
@@ -273,7 +285,7 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
       if (status !== 200 || payload.success !== true || !Array.isArray(items) || items.length !== 1) {
         throw new MengantarError("unknown_outcome");
       }
-      return judgeCreatedItem(items[0], request.reference);
+      return judgeCreatedItem(items[0], request.reference, request.cargo === true);
     },
 
     // Reconciliation by ORDER_ID (exact, with history at the provider).
@@ -429,26 +441,33 @@ export function discountPercentToBps(value: unknown): number | null {
 // One row per documented courier the route supports. A row is dropped (not guessed) when the
 // courier is unsupported (route, origin or pickup), COD is requested but not covered, or its numbers do not add up:
 // estimatedPrice must equal price + codFee, and the discounted cost must stay within the tariff.
-export function parseEstimates(data: unknown, cod: boolean): CourierEstimate[] {
+export function parseEstimates(data: unknown, cod: boolean, includeCargo = false): CourierEstimate[] {
   if (!isRecord(data)) throw new MengantarError("malformed");
   const estimates: CourierEstimate[] = [];
-  for (const [key, courier] of Object.entries(COURIERS)) {
+  for (const [key, courier] of [...Object.entries(COURIERS), ...(includeCargo ? Object.entries(CARGO_COURIERS) : [])]) {
+    const cargo = Object.hasOwn(CARGO_COURIERS, key);
+    // Public samples disagree by Rp1 between generic COD fee and cargo totals. No tolerance or
+    // inferred fee is accepted: all cargo COD stays disabled pending seller/order verification.
+    if (cargo && cod) continue;
     const row = data[key];
     // SiCepat also reports origin/pickup coverage; either flag means the route cannot be booked.
     if (!isRecord(row) || row.unsupported === true || row.unsupportedPickup === true || row.unsupportedOriginSicepat === true) continue;
     if (cod && (row.unsupported_cod === true || row.coverage_cod === false)) continue;
-    const tariff = money(row.price);
+    const minimum = cargo && typeof row.minimumWeightCargo === "number" ? row.minimumWeightCargo * 1000 : null;
+    if (cargo && (minimum === null || !Number.isSafeInteger(minimum) || minimum < 1 || minimum > 1_000_000)) continue;
+    const tariff = money(cargo ? row.cargoPrice : row.price);
     const codFee = cod ? money(row.codFee) : 0;
-    const total = money(row.estimatedPrice);
-    const special = money(row.estimatedSpecialPrice);
+    const total = money(cargo ? row.cargoEstimatedPrice : row.estimatedPrice);
+    const special = money(cargo ? row.cargoEstimatedSpecialPrice : row.estimatedSpecialPrice);
     if (!tariff || codFee === null || total === null || special === null) continue;
     if (total !== tariff + codFee) continue;
     const netShipping = special - codFee;
     if (netShipping <= 0 || netShipping > tariff) continue;
-    const eta = text(row.estimate_delivery);
+    const eta = text(cargo ? row.estimate_delivery_cargo : row.estimate_delivery);
     estimates.push({
       courier, tariff, codFee, netShipping,
-      discountBps: discountPercentToBps(row.discountPercent),
+      ...(cargo ? { service_class: "cargo" as const, minimum_weight_grams: minimum! } : {}),
+      discountBps: discountPercentToBps(cargo ? row.cargoDiscountPercent : row.discountPercent),
       etaText: eta && eta !== "undefined" && eta !== "-" ? eta : null,
     });
   }
@@ -479,6 +498,7 @@ export type TwoPassCodEstimateInput = {
   destinationAreaId: string;
   weightGrams: number;
   goodsValueIdr: number;
+  includeCargo?: boolean;
   lengthCm?: number;
   widthCm?: number;
   heightCm?: number;
@@ -490,7 +510,7 @@ export type TwoPassCodEstimateInput = {
 // their normal shipping tariff. Because Mengantar calculates codFee as a percentage of the COD
 // parameter (which on POST /order/create must be goods + shipping + COD fee), Pass 2 calls
 // GET /estimate with codAmount = goodsValueIdr + tariff (grouped by distinct tariff across
-// couriers, at most 4 calls) and extracts each courier's codFee and netShipping from that second
+// services, bounded by their distinct tariffs) and extracts each service's codFee/netShipping from that second
 // pass. Customer charge = tariff + codFee; recipient COD collection = goodsValueIdr + tariff + codFee.
 export async function estimateTwoPassCod(
   estimateFn: (input: EstimateRequest) => Promise<CourierEstimate[]>,
@@ -503,6 +523,7 @@ export async function estimateTwoPassCod(
     originAreaId: input.originAreaId,
     destinationAreaId: input.destinationAreaId,
     weightGrams: input.weightGrams,
+    ...(input.includeCargo !== undefined ? { includeCargo: input.includeCargo } : {}),
     ...(input.lengthCm !== undefined ? { lengthCm: input.lengthCm } : {}),
     ...(input.widthCm !== undefined ? { widthCm: input.widthCm } : {}),
     ...(input.heightCm !== undefined ? { heightCm: input.heightCm } : {}),
@@ -516,16 +537,18 @@ export async function estimateTwoPassCod(
   await Promise.all(
     distinctTariffs.map(async (tariff) => {
       const rows = await estimateFn({ ...baseInput, codAmount: input.goodsValueIdr + tariff });
-      pass2ByTariff.set(tariff, new Map(rows.map((r) => [r.courier, r])));
+      pass2ByTariff.set(tariff, new Map(rows.map((r) => [estimateServiceKey(r), r])));
     }),
   );
 
   const resolved: CourierEstimate[] = [];
   for (const row of pass1) {
-    const pass2Row = pass2ByTariff.get(row.tariff)?.get(row.courier);
-    if (!pass2Row || pass2Row.tariff !== row.tariff || pass2Row.codFee < 0) continue;
+    const pass2Row = pass2ByTariff.get(row.tariff)?.get(estimateServiceKey(row));
+    if (!pass2Row || pass2Row.tariff !== row.tariff || pass2Row.codFee < 0
+      || pass2Row.minimum_weight_grams !== row.minimum_weight_grams) continue;
     resolved.push({
       courier: row.courier,
+      ...(row.service_class ? { service_class: row.service_class, minimum_weight_grams: row.minimum_weight_grams } : {}),
       tariff: row.tariff,
       codFee: pass2Row.codFee,
       netShipping: pass2Row.netShipping,
@@ -549,6 +572,8 @@ export const LIVE_RECIPIENT_ADDRESS_MAX = 300;
 
 export type CreateOrderRequest = {
   courier: string;
+  // Explicit non-COD transport only; callers must prove account/route support before activation.
+  cargo?: boolean;
   pickupAddressId: string;
   // Handover: absent = drop-off (`pickup.type: "dropOff"`). With `pickup`, the order is sent as
   // `scheduledPickup` carrying the reserved time record and the volume class (both documented as
@@ -580,6 +605,8 @@ export type CreateOrderResult =
 
 export type ProviderOrder = {
   orderId: string | null;
+  // Missing/unreadable is unknown, never proof that a cargo request became regular.
+  cargo?: boolean;
   // The provider batch CODE (GET /order filter, shown to people) and the batch OBJECT id
   // (`batch_id`, what POST /order/pay-unpaid takes) are separate fields; null when unreadable.
   batch: string | null;
@@ -597,6 +624,9 @@ function createOrderBody(r: CreateOrderRequest) {
   if (typeof r.courier === "string" && r.courier.trim().toLowerCase() === "ninja") {
     throw new InvalidOrderRequest("courier_discontinued");
   }
+  if (r.cargo !== undefined && typeof r.cargo !== "boolean") throw new InvalidOrderRequest("invalid_cargo_flag");
+  if (r.cargo === true && !Object.values(CARGO_COURIERS).includes(r.courier)) throw new InvalidOrderRequest("cargo_courier_unsupported");
+  if (r.cargo === true && r.codAmount !== undefined) throw new InvalidOrderRequest("cargo_cod_unverified");
   const courierOk = OFFERED_COURIERS.has(r.courier);
   const { areaId, address, name, phone } = r.recipient ?? ({} as CreateOrderRequest["recipient"]);
   const money = (v: unknown) => typeof v === "number" && Number.isSafeInteger(v) && v >= 1;
@@ -619,6 +649,7 @@ function createOrderBody(r: CreateOrderRequest) {
       ? { address_id: r.pickupAddressId, type: "dropOff" }
       : { address_id: r.pickupAddressId, type: "scheduledPickup", time_id: r.pickup.timeId, volume: r.pickup.volume },
     orders: [{
+      ...(r.cargo === true ? { cargo: true } : {}),
       ...(r.goodsValue !== undefined ? { goodsValue: r.goodsValue } : { COD: r.codAmount }),
       customerAddressDataId: areaId,
       customerAddress: address.trim(),
@@ -632,7 +663,7 @@ function createOrderBody(r: CreateOrderRequest) {
   };
 }
 
-function judgeCreatedItem(item: unknown, reference: string): CreateOrderResult {
+function judgeCreatedItem(item: unknown, reference: string, cargo: boolean): CreateOrderResult {
   if (!isRecord(item)) throw new MengantarError("unknown_outcome");
   if (item.status === "error") {
     // An error item must not carry a shipment identity; if it does, the outcome is unclear.
@@ -644,12 +675,16 @@ function judgeCreatedItem(item: unknown, reference: string): CreateOrderResult {
       providerRecordId: typeof item._id === "string" && AREA_ID.test(item._id) ? item._id : null,
     };
   }
+  if (cargo ? item.cargo !== true : item.cargo === true) throw new MengantarError("unknown_outcome");
   const orderId = typeof item.ORDER_ID === "string" && ORDER_ID.test(item.ORDER_ID) ? item.ORDER_ID : null;
   const batch = batchCode(item.batch);
   const batchId = batchObjectId(item.batch_id);
   if (!orderId || !batch || item.status !== "active" || item.destinationMark !== reference) throw new MengantarError("unknown_outcome");
   const tracking = typeof item.cnote_no === "string" && /^[A-Za-z0-9-]{6,40}$/.test(item.cnote_no) ? item.cnote_no : null;
   const price = typeof item.estimatedPrice === "number" && Number.isSafeInteger(item.estimatedPrice) && item.estimatedPrice > 0 ? item.estimatedPrice : null;
+  if (cargo && (price === null || (item.cargoEstimatedPrice !== undefined && item.cargoEstimatedPrice !== price))) {
+    throw new MengantarError("unknown_outcome");
+  }
   if (item.isPaid === true && tracking) return { outcome: "issued", orderId, trackingNumber: tracking, batch, batchId, tariffWithFees: price };
   if (item.isPaid === false && (item.cnote_no === null || item.cnote_no === undefined)) return { outcome: "unpaid", orderId, batch, batchId, tariffWithFees: price };
   throw new MengantarError("unknown_outcome");
@@ -665,7 +700,7 @@ function parseOrder(row: unknown): ProviderOrder {
   const batch = batchCode(row.batch);
   const batchId = batchObjectId(row.batch_id);
   const price = typeof row.estimatedPrice === "number" && Number.isSafeInteger(row.estimatedPrice) && row.estimatedPrice > 0 ? row.estimatedPrice : null;
-  return { orderId, batch, batchId, price, reference, trackingNumber, status: row.status.slice(0, 40), paid: row.isPaid === true, createdAt: row.createdAt };
+  return { orderId, ...(typeof row.cargo === "boolean" ? { cargo: row.cargo } : {}), batch, batchId, price, reference, trackingNumber, status: row.status.slice(0, 40), paid: row.isPaid === true, createdAt: row.createdAt };
 }
 
 // A pickup time record (`POST /time` answer or a `GET /time` row). The id shape is unverified (the

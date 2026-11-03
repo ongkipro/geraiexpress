@@ -561,3 +561,67 @@ describe("COD dispatch and payUnpaidShipmentBatch (T-025 / T-026)", () => {
   });
 });
 
+
+describe("non-COD cargo through the dispatcher (T-080)", () => {
+  const cargoIssued = () => { const b = issuedBody(); b.data[0].cargo = true; return b; };
+
+  it("sends the frozen cargo mode as orders[].cargo on the base courier and records the issued resi", async () => {
+    const r = fakeRpc({ data: await payload({ courier: "JNE", cargo: true, billable_weight_grams: 12000 }) });
+    let body: { courier: string; orders: Record<string, unknown>[] } | null = null;
+    const impl = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (new URL(String(url)).pathname.endsWith("/address")) return Response.json(fixture("address-list-sandbox.json"));
+      body = JSON.parse(String(init?.body));
+      return Response.json(cargoIssued());
+    }) as typeof fetch;
+    expect(await dispatchOperation("op-1", deps(r.rpc, impl))).toEqual({ status: "recorded", outcome: "issued" });
+    expect(body!.courier).toBe("JNE");
+    expect(body!.orders[0]).toMatchObject({ cargo: true, weight: 12, goodsValue: 50000 });
+    expect(r.recorded()[0]).toMatchObject({ p_outcome: "issued" });
+  });
+
+  it("records UNKNOWN, never issued, when a cargo create answer lacks the cargo echo", async () => {
+    const r = fakeRpc({ data: await payload({ courier: "JNE", cargo: true }) });
+    const f = fakeFetch({ body: issuedBody() });
+    expect(await dispatchOperation("op-1", deps(r.rpc, f.impl))).toEqual({ status: "recorded", outcome: "unknown" });
+    expect(f.urls).toHaveLength(1);
+  });
+
+  it("refuses a cargo COD payload locally, sending nothing", async () => {
+    const r = fakeRpc({ data: await payload({ courier: "JNE", cargo: true, is_cod: true, cod_amount_idr: 80000 }) });
+    const f = fakeFetch({ body: cargoIssued() });
+    expect(await dispatchOperation("op-1", deps(r.rpc, f.impl))).toMatchObject({ status: "recorded", outcome: "rejected" });
+    expect(f.urls).toEqual([]);
+  });
+
+  it("legacy payloads without the field stay regular", async () => {
+    const r = fakeRpc({ data: await payload() });
+    let order: Record<string, unknown> | null = null;
+    const impl = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (new URL(String(url)).pathname.endsWith("/address")) return Response.json(fixture("address-list-sandbox.json"));
+      order = JSON.parse(String(init?.body)).orders[0];
+      return Response.json(issuedBody());
+    }) as typeof fetch;
+    await dispatchOperation("op-1", deps(r.rpc, impl));
+    expect(order).not.toHaveProperty("cargo");
+  });
+
+  it("does not settle a cargo operation with a found order of the other service, or the reverse", async () => {
+    const found = (cargo: unknown) => ({ ORDER_ID: "261014LKLL3E", batch: "26101416OJ04NF", destinationMark: REF, status: "active",
+      isPaid: true, cnote_no: "JO6948371799", createdAt: "2026-10-14T09:01:00Z", ...(cargo === undefined ? {} : { cargo }) });
+    const run = async (payloadCargo: boolean | undefined, rowCargo: unknown) => {
+      const r = fakeRpc({ data: await payload({ courier: "JNE", ...(payloadCargo === undefined ? {} : { cargo: payloadCargo }) }) });
+      // An older row ends the newest-first scan (the attempt window is complete).
+      const older = { ORDER_ID: "261014OLDOLD", destinationMark: "", status: "active", isPaid: true, cnote_no: "JO1", createdAt: "2026-10-14T08:00:00Z" };
+      const f = fakeFetch({ body: { success: true, data: [found(rowCargo), older] } });
+      return { summary: await reconcileOperation("op-1", deps(r.rpc, f.impl)), recorded: r.recorded() };
+    };
+    for (const [p, row] of [[true, false], [false, true], [undefined, true]] as const) {
+      const res = await run(p, row);
+      expect(res.summary, `${p}/${row}`).toEqual({ status: "inconclusive", reason: "service_mismatch" });
+      expect(res.recorded).toEqual([]);
+    }
+    expect((await run(true, true)).recorded[0]).toMatchObject({ p_outcome: "issued" });
+    // Mode absent on the read: unknown, not a contradiction; the reference and courier still match.
+    expect((await run(true, undefined)).recorded[0]).toMatchObject({ p_outcome: "issued" });
+  });
+});

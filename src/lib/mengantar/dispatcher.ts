@@ -26,10 +26,13 @@ type Payload = {
   dispatched_at: string | null;
   reference: string;
   courier: string | null;
+  // Frozen from the selected quote's service class; absent on payloads before cargo existed.
+  cargo?: boolean;
   pickup_address_id: string | null;
   pickup_area_id: string | null;
   recipient: { area_id: string | null; address: string | null; name: string | null; phone: string | null };
   weight_grams: number | null;
+  billable_weight_grams?: number | null; // Frozen at confirmation; null only for legacy quotes.
   item_description: string | null;
   goods_value_idr: number | null;
   is_cod?: boolean;
@@ -103,9 +106,10 @@ function orderRequest(p: Payload): CreateOrderRequest | null {
     pickupAddressId: p.pickup_address_id,
     reference: p.reference,
     recipient: { areaId: p.recipient.area_id, address: p.recipient.address, name: p.recipient.name, phone },
-    weightGrams: p.weight_grams,
+    weightGrams: p.billable_weight_grams ?? p.weight_grams,
     quantity: 1,
     parcelContent: p.item_description.slice(0, 100),
+    ...(p.cargo === true ? { cargo: true } : {}),
   };
   if (p.is_cod) {
     if (!p.cod_amount_idr || p.cod_amount_idr < 1000 || p.goods_value_idr < 1000) return null;
@@ -287,6 +291,8 @@ export async function reconcileOperation(operationId: string, deps: DispatcherDe
   if (live.length === 1) {
     const m = live[0];
     if (!m.orderId || !m.batch) return { status: "inconclusive", reason: "incomplete_order" };
+    // The found order must be the confirmed service: a regular order never settles a cargo quote.
+    if (m.cargo !== undefined && m.cargo !== (p.cargo === true)) return { status: "inconclusive", reason: "service_mismatch" };
     if (m.paid && m.trackingNumber) return record("issued", { p_order_id: m.orderId, p_tracking: m.trackingNumber, p_batch: m.batch, p_code: "RECONCILED", p_price: m.price, ...batchIdArg(m.batchId) });
     if (!m.paid && !m.trackingNumber) return record("unpaid", { p_order_id: m.orderId, p_batch: m.batch, p_code: "RECONCILED", p_price: m.price, ...batchIdArg(m.batchId) });
     return { status: "inconclusive", reason: "incomplete_order" };
