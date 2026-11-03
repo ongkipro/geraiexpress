@@ -40,6 +40,8 @@ Response (Observed, example only): `success`, `data` with `isSunday` (boolean), 
 
 Constraint (Observed): "The pickup schedule (`date` + `time`) must be at least **90 minutes** from the current time. A request with a pickup time less than 90 minutes ahead will return an `invalid pickup time` error." The page does not give the HTTP status for that error, the error body shape, or the clock/time zone the 90 minutes is measured in.
 
+Contradiction (Observed 2026-11-02, lane D, `docs/research/evidence/2026-11-02/lane-d-mengantar-current.md`): the web UI's earliest selectable pickup is "2 jam dari waktu saat kamu membuka halaman buat pesanan" (help 14715371). Until Mengantar clarifies, GeraiExpress uses the stricter 2 hours as a configurable lead time (T-043 amendment).
+
 ### 2.2 `GET {BASE_URL}/api/public/{API_KEY}/time` — "Get Time"
 
 Response (Observed, example only): `data` is an array of `{_id, date, time}`. In the example `date` is epoch milliseconds (`1677240000000`, `1703239200000`) with `time` `"12:00"` / `"10:00"`. Arithmetic on the examples (Evidence, computed here): those epoch values are `2023-02-24T12:00:00Z` and `2023-12-22T10:00:00Z`, i.e. the UTC clock reading equals the `time` string. Whether the stored instant is Jakarta local time written as UTC is **Unknown**; the POST example instead returns a midnight `00:00:00.000Z` date for a `13:00` slot, so the two examples do not share one representation. The page has no query parameters, no description, and does not say what the list contains.
@@ -64,7 +66,7 @@ Documented per-courier constraints:
 |---|---|
 | `spx` | `dropOff` is accepted only when SPX Drop Off is enabled for the account, otherwise the request is rejected ("use `scheduledPickup` or contact admin"). For `scheduledPickup`, the date/time that `time_id` resolves to is checked against SPX's own live pickup slots for that day before the order is created; a date/time outside every open slot "is rejected with the slots that are actually available that day". Slots change per day. |
 | `pos` | For a scheduled pickup "the selected pickup address must contain valid `pinpointData.lat` and `pinpointData.lng`"; pinpoint is set through Add address (`pinpointData`, latitude −90..90, longitude −180..180) or sent as `null`/omitted when unavailable. |
-| Others | Only the generic rules above are documented. The page states no courier cut-off times, no per-courier slot lists, no maximum days ahead, no per-slot capacity, and no restriction on Sundays beyond the `isSunday` response flag whose meaning is not explained. |
+| Others | The API page states only the generic rules above: no per-courier slot lists, no maximum days ahead, no per-slot capacity, and no restriction on Sundays beyond the unexplained `isSunday` flag. Update 2026-11-02 (lane D, `docs/research/evidence/2026-11-02/lane-d-mengantar-current.md`): per-courier pickup cut-off times come from help 5502313 (updated 2026-09-24), not the API page: JNE 15:00, SiCepat 12:00, SAP 15:00, iDexpress 11:00, J&T 12:00, Lion 15:00, Anteraja 15:00 (pickup only), Pos 16:00, SPX 15:00; pickup SLA 7 days for most couriers, SAP up to 3 failed pickups, iDexpress and SPX 14 days. Whether a cut-off bounds the same-day slot or the order-creation time, and whether the API enforces it, is Unknown. Pickup minimum volume: Unknown. |
 
 Order item response fields touching pickup (Observed, example): `PICKUP_DATE` (`"2026-06-01"`), `PICKUP_TIME` (`"12:00:00"`), `PICKUP_NAME`, `PICKUP_ADDRESS`, `PICKUP_CITY`, `PICKUP_REGION`, `PICKUP_DISTRICT`, `PICKUP_PIC_PHONE`.
 
@@ -104,13 +106,15 @@ Eligibility (Observed): an order can be deleted only while its status is `active
 
 Courier timing (Observed): Anteraja orders "can only be deleted **after 5 minutes** from order created"; earlier deletion "returns an error asking you to wait". For every other courier "there is no fixed waiting time on Mengantar's side once the order already has a tracking number"; the request is forwarded to the courier's API and "succeeds or fails based on that courier's own status/timing rules". If the courier refuses, the order is not deleted and the courier's error message is returned. The page therefore makes cancellation a courier-owned, possibly asynchronous-looking outcome without saying whether the call blocks until the courier answers or what HTTP code a refusal has.
 
-Not documented (Unknown): money effect (refund of the shipping fee or COD fee to the seller balance), whether a deleted order's tracking number is invalidated at the courier, behavior for an unpaid order (`isPaid: false`, no `cnote_no`), the error body shape, partial success (some ids deleted, some refused) semantics beyond the count, idempotency of a repeated delete, and whether a deleted order appears afterwards in `GET /order` (the list example carries `isDeleted`, and Get orders has no filter for it; the label request refers to "non-deleted" orders).
+Not documented (Unknown): money effect (refund of the shipping fee or COD fee to the seller balance), whether a deleted order's tracking number is invalidated at the courier, behavior for an unpaid order (`isPaid: false`, no `cnote_no`), the error body shape, partial success (some ids deleted, some refused) semantics beyond the count, idempotency of a repeated delete, and whether a deleted order appears afterwards in `GET /order` (the list example carries `isDeleted`, and Get orders has no filter for it; the label request refers to "non-deleted" orders). Lane D (2026-11-02) found no change for `DELETE /order`: its refund remains Unknown.
 
 ### 3.2 `DELETE {BASE_URL}/api/public/{API_KEY}/batch`
 
 Request (Observed): `{courier, id}` where `id` is "Batch id" (the curl example reuses the same `6332f9dfdeff6b0cae5e6c11` string used for an order id in the delete-orders example). Response (Observed): `{success: true, deletedCount: 1}`.
 
-Unknown: whether `id` is the batch `_id` or the batch code, which orders a batch delete covers, whether paid or picked-up members block it, whether the eligibility and courier forwarding rules of §3.1 apply to each member, refund behavior, and error shapes.
+Update 2026-11-02 (CHANGED, lane D, `docs/research/evidence/2026-11-02/lane-d-mengantar-current.md`): the documented response is now `{success, deletedCount, unDeletedCount, totalCount, message}`; deleting a draft batch returns 0 counts plus `isBatchDraft: true`; for couriers `lion`, `anteraja`, `pos` and `spx` only, the response also carries `ordersCount`, `totalBalanceRefund` ("the balance returned") and `errorMessages` (orders the courier refused to cancel).
+
+Unknown: whether `id` is the batch `_id` or the batch code, which orders a batch delete covers, whether paid or picked-up members block it, whether the eligibility and courier forwarding rules of §3.1 apply to each member, refund behavior and refused-order reporting for `JNE`, `SiCepat`, `Sap`, `iDexpress` and `JT` (not documented), and error shapes.
 
 ### 3.3 Consequences
 
@@ -173,6 +177,7 @@ Note: the Partner request signature is a plain SHA-256 over a colon-joined strin
 Observed:
 
 - The Webhook Secret belongs to a seller's Webhook configuration. It can be regenerated on its own in the seller's settings, and "regenerating the **API key** also replaces the Webhook Secret — your Webhook URL is kept, but you will need to update the secret in your system" (Public). Partner `sellers/api-key/regenerate` has the same effect and returns `data.callbackSecret` (a new secret when the seller has a Webhook URL, else `null`) (Partner `#content-regenerate-api-key`).
+- Update 2026-11-02 (NEW, help 14715369 updated 2026-10-17, lane D, `docs/research/evidence/2026-11-02/lane-d-mengantar-current.md`): a seller can generate or regenerate their own Public API key in the Mengantar web app after an email OTP, which also replaces the Webhook Secret. The secret can therefore change without any Partner call; signature failures after such a change are expected until the new secret is stored, and polling stays the fallback.
 - Partner `sellers/api-key` (retrieve) does not return a callback secret; the only documented Partner route that returns one is regenerate (Observed; matches `geraiexpress-mengantar-partner-api.md` §6–7).
 - Common signature failure causes include "using the wrong secret ... regenerating your API key also replaces the Webhook Secret" (Public).
 
@@ -203,6 +208,7 @@ Anchors: `#content-orders` (including the "Order Status" and "Tracking History" 
 | `DELIVERY COURIER` | stored `status` or `statusCategory` for some couriers (table below) | Observed |
 | `PICKUP_FAILED_API` | appears only in the delete eligibility rule | Observed |
 | `DELIVERED_PENDING`, `DELIVERED_COMPLETED`, `RTS` | example keys of the `status` filter of Get orders | Observed (example) |
+| `LOST` (assumed spelling) | Help 14715371 (updated 2026-08-02) adds "Lost (Paket Hilang)" as a **web-UI** final status for JNE, SiCepat, SAP, ID Express, J&T and Ninja (lane D, `docs/research/evidence/2026-11-02/lane-d-mengantar-current.md`). Whether webhook `status_category` or `GET /order` emits it, and with which spelling, is Unknown; the default branch must handle it | Observed (web) / Unknown (API) |
 | Full per-courier status code list | an external Google Sheet "Order Status Reference Sheet" linked from the page; not opened for this note | Unknown |
 
 Simplification offered by the page: "you can only know the status of **DELIVERED**, **RTS**, and other than that is **ON GOING**" (Observed). The page states that the list is open-ended and couriers add states (Observed).
@@ -351,7 +357,7 @@ Arithmetic checks on the documentation's examples (Evidence, computed for this n
 
 ### 8.5 Other limits stated on the estimate page (Observed)
 
-SPX Express: maximum weight 50 kg, maximum COD Rp5,000,000, maximum non-COD goods value Rp10,000,000. Pos Indonesia COD requires a delivered rate of at least 82 percent over a rolling 21–60 day window, with a three-day grace period; non-COD is unaffected; on create, a blocked COD answers 403 with `status` (`new_seller`, `insufficient`, `blocked`) and `deliveredRate`. Dangerous goods: supported regular couriers are SiCepat, SAP, iDexpress and J&T for estimate; create-order DG supports JT, SiCepat and iDexpress, and cannot be combined with cargo.
+SPX Express: maximum weight 50 kg, maximum COD Rp5,000,000, maximum non-COD goods value Rp10,000,000. Update 2026-11-02 (help 5387484 and 5502313, lane D, `docs/research/evidence/2026-11-02/lane-d-mengantar-current.md`): regular-service maximum weight 50 kg (Lion 100 kg, Anteraja 30 kg); cargo minimums JTR 10–30 kg, Gokil 10–50 kg, IDX Kargo 10–70 kg, SAP Kargo 5–100 kg by region; per-courier COD maxima JNE, IDX, J&T, Lion and SPX Rp5,000,000, SiCepat Rp2,500,000, SAP Rp2,000,000, Anteraja Rp3,000,000, Pos COD Rp2,000,000 and non-COD Rp5,000,000; a weight difference found by the courier is debited from or credited to the seller's "saldo tersedia"; an iDexpress parcel under 0.5 kg pays up to half the fare. Pos Indonesia COD requires a delivered rate of at least 82 percent over a rolling 21–60 day window, with a three-day grace period; non-COD is unaffected; on create, a blocked COD answers 403 with `status` (`new_seller`, `insufficient`, `blocked`) and `deliveredRate`. Dangerous goods: supported regular couriers are SiCepat, SAP, iDexpress and J&T for estimate; create-order DG supports JT, SiCepat and iDexpress, and cannot be combined with cargo.
 
 ## 9. (h) Dropshipper endpoints — NOT used under DEC-017
 
@@ -364,6 +370,8 @@ Observed contract:
 - Implication for sender identity (Observed): "The canonical name and phone from the saved master become the shipment and label sender identity. The pickup address remains the seller address selected in the request." Orders without `dropShipper` "continue to use the seller identity". Get orders returns `dropShipperId` and `dropShipper` only for dropship orders.
 
 Decision status: DEC-017 states the masked label is local, the operator-entered sender is never mapped to a provider dropshipper, and the Mengantar pickup name is never the default sender; DEC-013 keeps PR-3 customer-sender/dropshipper deferred. **GeraiExpress therefore does not call, store, or depend on these endpoints or on the `orders[].dropShipper` field.** The provider-side seller identity on a created order (pickup address `PICKUP_NAME`, `SHIPPER_NAME`) remains whatever the tenant's pickup address master holds; masking happens only on the locally printed label. A courier-side or provider-side printed label (not used) would show that provider identity. Whether provider-side sender identity ever reaches the recipient through courier SMS/WhatsApp is Unknown from the page.
+
+Return destination (Observed 2026-11-02, help 14715369 updated 2026-10-17, lane D, `docs/research/evidence/2026-11-02/lane-d-mengantar-current.md`): a seller return address is used only when origin and destination are both on Java, and only for JNE, SiCepat and SAP; otherwise "sistem akan menggunakan alamat pickup sebagai pengganti alamat retur". Create Order has no return-address field. Inference: an RTS parcel from an API order returns to the provider pickup address, never to a masked sender. Whether a return address saved in the seller's web settings applies to API orders is Unknown.
 
 ## 10. (i) Rate limits and egress allowed-IP statements
 
@@ -435,12 +443,12 @@ Each is **Unknown** from the documentation read on 2026-10-28. Ask in this order
 4. Does Mengantar pay the partner a rebate or commission, and if so how is it computed, reported and settled?
 5. What do `discountExtraPercent`, `discountExtra`, `cargoDiscountExtraPercent` and `cargoDiscountExtra` mean, which endpoints and accounts return non-zero values, and are they included in `estimatedSpecialPrice`? Why does the Create Order example show `estimatedSpecialPrice` 5600 for `estimatedPrice` 8000 and `discount` 1600 (a reduction of 2400, not 1600)? What exactly is `estimatedSpecialPrice` made of?
 6. Which `price` basis does the 3PL estimate use (with or without Mengantar markup), does it equal the seller estimate `price`, and is Partner enablement needed for the unauthenticated estimate routes?
-7. Rounding: COD fee (order response shows a decimal `COD_FEE`), billable weight and volumetric weight.
+7. Rounding: COD fee (order response shows a decimal `COD_FEE`); whether the estimate endpoint applies the help-page weight rounding (help 5387484) to a decimal `weight` by itself.
 
 ### 12.2 Pickup
 
 8. Time zone and clock for `POST /time` (`date`, `time`) and for the 90-minute rule; the epoch representation in `GET /time` versus the ISO date in `POST /time`.
-9. What `GET /time` returns, whether `status: "empty"` and `isSunday` change behavior, how far ahead a slot can be, per-courier cut-offs and slot windows, and capacity per slot.
+9. What `GET /time` returns, whether `status: "empty"` and `isSunday` change behavior, how far ahead a slot can be, whether the help-page cut-offs (help 5502313) are enforced by `POST /time` or order create, whether the API lead time is 90 minutes or the web's 2 hours, and capacity per slot.
 10. Whether a `time_id` may be reused across orders or batches, whether it expires, whether the same `POST /time` input is idempotent, and whether deleting an order releases the reservation.
 11. Which couriers support `scheduledPickup` and which support `dropOff` per account (anteraja refuses drop-off in the sandbox but the documentation does not list the rule), and what the HTTP statuses and bodies of the `invalid pickup time`, SPX slot and SPX drop-off refusals are.
 12. Whether sandbox pickup slots can be made available to a Partner-registered seller (T-020 saw an empty list).
@@ -448,10 +456,10 @@ Each is **Unknown** from the documentation read on 2026-10-28. Ask in this order
 ### 12.3 Cancel, batch and payment
 
 13. `DELETE /order`: does `ids` take object ids or `ORDER_ID`, which of `ids` and `orderIds` wins, the per-order result for a skipped or courier-refused order, whether the call is synchronous with the courier, whether a refund is credited to balance, and whether an unpaid or paid order differs.
-14. `DELETE /batch`: which batch identifier, which members are deleted, constraints, refund.
+14. `DELETE /batch`: which batch identifier, which members are deleted, constraints; refund and refused-order reporting for JNE, SiCepat, SAP, iDexpress and JT (documented only for lion, anteraja, pos and spx); refund for `DELETE /order`.
 15. `pay-unpaid`: confirm `batch_id` takes the `_id` (and not the code), the error shape for insufficient balance, idempotency on repeat, partial payment of a mixed batch, and the order of `cnote_no` relative to the batch members.
 16. Which identifier does `GET /order?batch=` take (the page says `_id`; the sandbox accepted the code)? Does `dateRange` filter, and are `count`/`total` meant to be populated?
-17. Is Get orders expected to return `statusCategory`, `isPaid`, `estimatedPrice`, `SERVICE_CODE`, `WEIGHT` and `courier` per item, and where is the complete status code list (the linked sheet is external)?
+17. Is "Lost" emitted as a `status_category` value, and with what spelling? Is Get orders expected to return `statusCategory`, `isPaid`, `estimatedPrice`, `SERVICE_CODE`, `WEIGHT` and `courier` per item, and where is the complete status code list (the linked sheet is external)?
 
 ### 12.4 Webhook and credentials
 
@@ -472,3 +480,21 @@ Each is **Unknown** from the documentation read on 2026-10-28. Ask in this order
 - `TASKS.md`: add work items for pickup (address `pinpointData`, `POST /time`, `scheduledPickup` order body), cancel (`DELETE /order` with read-back reconciliation), webhook (separate host, per-seller secret lookup, signature verify, ordering by `x-timestamp`, polling fallback), and the pay-unpaid `batch_id` correction (code vs `_id`, P0-2) citing §7.
 - `DECISIONS.md` / `CONTEXT-RECORD.md`: no new owner decision is implied. Open provider questions in §12 (discount, pooling, rebate, `discountExtra*`) bear on DEC-016 and should be recorded as the provider-verification dependency.
 - Changelog: this note is the first documentation-only contract record for pickup, cancel, webhook, label and dropshipper; it supersedes nothing in `geraiexpress-mengantar-public-api.md` and corrects none of its observations. It adds one new cross-check: the Create Order example in the documentation is internally inconsistent about `estimatedSpecialPrice` (§8.3).
+
+## 14. Claims (added 2026-11-02)
+
+Observed (help 5207011, 5596208, 8140017 updated 2026-09-18, 6046101; lane D, `docs/research/evidence/2026-11-02/lane-d-mengantar-current.md`): there is no claims API; claims go through Live Chat (08:00–20:00 WIB).
+
+- Claim types: return; full value (the COD amount or the insured value); other. A stuck-parcel claim pays "(Nilai COD/NON COD - estimated fee)".
+- Processing: at most 14 days, paid to "Saldo Tersedia" (information, not a promise to a gerai).
+- Filing windows, each with a unit and an anchor event:
+  - JNE: 45 working days (Java, Sumatra, Bali, NTB) or 60 working days (other regions);
+  - SiCepat, IDX, Anteraja, Pos: 14 days from the last status;
+  - SPX: 14 days from RTS;
+  - SAP: 60 days;
+  - J&T, Lion: 30 days;
+  - lost-claim within 3×24 h for IDX and J&T;
+  - disputes after Delivered: 7–15 days.
+- Exclusions: damage reported more than 3 days after receipt, a missing unboxing video, liquids over 100 ml, live plants.
+- Lost status: see §5.1.
+

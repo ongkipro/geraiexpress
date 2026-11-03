@@ -7,6 +7,42 @@
 - Evidence: Unauthenticated documentation retrieval and offline checks only. No seller, credential, order, charge, or cloud resource was created.
 - Product owner: [GeraiExpress PRD](../spec/02-PRD.md). This research explains the vendor contract; the numbered specification pack owns proposed product requirements.
 
+## Current-runtime and contract recheck (2026-11-03)
+
+The owner-supplied official sandbox Partner documentation was retrieved again without
+credentials. Its four POST routes, exact-byte plain SHA-256 signing, empty TYPE, per-seller
+Public API keys, ownership restrictions and disabled-key behavior agree with the existing
+`src/lib/mengantar/partner-api.ts` contract and corresponding unit coverage.
+Registration/onboarding, BYOK, encrypted bindings and API-key rotation already exist;
+this recheck does not justify another client, central seller, secret store or automatic
+provisioning path. Current execution results belong to STATUS.md and the delivery run,
+not this source-comparison statement. No signed call, seller/key lookup or mutation was made.
+
+**Known implementation difference:** the current rotation client intentionally returns the
+seller API key only and discards `callbackSecret` under PR-19; it does not implement section7's
+proposed callback-secret persistence. Provider rotation can still replace that webhook
+secret. No webhook-signature readiness or atomic key-plus-callback-secret recovery is claimed;
+that requires the separately accepted T-045/webhook/privacy contract and verification.
+Do not widen this cargo slice by changing rotation or silently enabling webhook ingestion.
+
+**Current runtime:** DEC-020/021/022 supersede the historical Worker/Supabase hosting and
+egress proposals in section2 below. GeraiExpress now uses self-hosted Node.js, PostgreSQL
+and PostgREST, with Vultr/Coolify as the accepted hosting direction. Dedicated/approved
+provider egress and the production Partner origin still require proof; this document does
+not authorize installing another hosting stack to bypass them. Partner Secret belongs in
+the server environment/private configuration, not a Worker binding on the current runtime.
+
+**Account gate:** an env-variable name, matching secret or another application's preview
+URL does not prove GeraiExpress ownership or authorize credential reuse. Partner ID/Secret
+and seller API key remain distinct, environment/account-bound credentials. The owner's
+99ribu attribution correction must be resolved before authenticated GeraiExpress testing;
+no email, identifier, secret or cross-project credential is recorded here.
+
+Cargo is a Public API service mode, not a new Partner endpoint or a separate seller type.
+The reviewed cargo contract and staged non-COD transport work are in
+`geraiexpress-mengantar-public-api.md`. New seller registration, key retrieval (which may
+provision a key), rotation and cargo orders remain separate approval boundaries.
+
 ## 1. Integration scope and account ownership
 
 There are two integrations with different authority:

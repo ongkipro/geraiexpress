@@ -1,0 +1,34 @@
+{
+  "files": [
+    {
+      "file": "3pl-10kg.json",
+      "bytes": 1602,
+      "sha256": "e2ea2c61ed788780a3204eb532103eb3d4c0f2809ffa942a1a710099da9472cd"
+    },
+    {
+      "file": "3pl-1kg.json",
+      "bytes": 1592,
+      "sha256": "41520f3a69ec6008fedfc70d434eeac694ad275e3ec26d964bcfa92489ddc293"
+    },
+    {
+      "file": "official-excerpts.md",
+      "bytes": 6456,
+      "sha256": "334d2d24136feeb8604cdcee5a77938f0276a477a95f6a69147698f3478c7ba5"
+    },
+    {
+      "file": "public-10kg.json",
+      "bytes": 8798,
+      "sha256": "db3365f25b484937954eca1595d7282c66477600ba5309c51bff7c94ff6ad22a"
+    },
+    {
+      "file": "public-cod-10kg.json",
+      "bytes": 8849,
+      "sha256": "bf179bf8cde9af17c6b787d69c0af28aa9a1fc1024a89533d575d5e079e2487e"
+    },
+    {
+      "file": "sources.json",
+      "bytes": 2722,
+      "sha256": "c4dddae2641efdb2c65232ce4e1655c978ae1758db8610c629cf446dc1414ddc"
+    }
+  ]
+}

@@ -35,9 +35,14 @@
 
 - Create order, pay-unpaid, label generation, delete, webhook: write operations; sandbox access first
   (ask Mengantar to enable the sandbox for the development and Worker egress addresses).
-- Weight rounding: the request sends kilograms with decimals (`weight=1.5` was accepted and echoed); the
-  provider's billable-weight rule (rounding, volumetric) is not established.
-- COD fee formula: observed only for one amount.
+- Weight rounding: the request sends kilograms with decimals (`weight=1.5` was accepted and echoed).
+  Update 2026-11-02 (help 5387484 updated 2026-10-19, lane D, `docs/research/evidence/2026-11-02/lane-d-mengantar-current.md`): volumetric weight is (L×W×H)/6000
+  for regular service, JNE regular /4000, cargo /6000 except IDX Kargo /4000; the courier bills the
+  heavier of actual and volumetric; a decimal part up to 0.30 kg rounds down (1.30 kg → 1 kg, 1.31 kg
+  → 2 kg; Lion 0.31 kg). The API accepts only `weight` in kg, so the billable weight is computed
+  locally (T-080). Unknown: whether the estimate applies the rounding to a decimal `weight` itself.
+- COD fee formula: Update 2026-11-02 (help 5109167, lane D): 3% of the COD amount with no minimum,
+  plus 11% VAT on the fee; 150,000 × 3% × 1.11 = 4,995 matches the observed `COD_FEE 4995`.
 
 ## Sandbox write-path evidence (T-020, 2026-10-14)
 
@@ -80,4 +85,72 @@ fixtures `order-*.json` (sandbox, phones/emails/user records removed).
 
 Sandbox residue on the sandbox seller: one paid JT order (simulated DELIVERED), one paid COD JT order, two unpaid JT orders, and one JNE error item that carries `isPaid: true`.
 
-Not established: provider billable-weight rounding (weight is sent in kg with decimals, e.g. 1.2 echoed); whether an error item can later be completed.
+Not established: whether the live estimate applies the published billable-weight rounding to a decimal `weight` (rule: help 5387484, see above); whether an error item can later be completed.
+
+## Cargo follow-up — public contract and read-only probes (2026-11-03, T-080)
+
+Owner requested cargo analysis, external research, API study, then implementation. This section supersedes the **cargo-specific interpretation** in the older findings table; it does not rewrite the historical T-019 observations or authorize account/secret access. The regular-service integration remains verified separately.
+
+### Sources and method
+
+- Fresh official production and sandbox Public API documentation: `https://api-public.mengantar.com/docs/` and `https://sandbox.mengantar.com/docs/`. Their extracted text matched on this retrieval. This is documentation retrieval, not authenticated sandbox execution.
+- Official courier help `5502313`, updated **2026-09-24**, explicitly distinguishes cargo minima and maxima; SAP alone has the detailed regional minimum table.
+- Secondary cross-check: `ongkipro/mengantar-documentation` at `d97821c112e60661f0fdf01780fa0e1b4d37884c`. Its cargo order mapping agrees with official docs. Its generic 100 kg cargo maximum and universal 1 kg clamp are **not** adopted: current primary sources are more specific and the regular sub-kg contract must not regress.
+- Four unauthenticated, read-only GETs against the documented public tariff endpoints, using the provider documentation's example area pair: 3PL at 1 and 10 kg; public tariff at 10 kg without COD and with `COD_AMOUNT=100000`. All four JSON envelopes reported `success: true`. The fetch tool did not expose a numeric HTTP status, so none is asserted. No credentials, seller/account records, orders, payment, customer data or provider write was used.
+- Exact URLs, raw JSON, quoted official passages and limitations: [cargo evidence](evidence/2026-11-03/mengantar-cargo/sources.json), with file hashes in that directory's `manifest.json`.
+
+### Confirmed cargo identity and constraints
+
+Cargo is **not** a different create-order courier code. The official body table documents `orders[].cargo: true` while the top-level courier stays the base courier:
+
+| Estimate response key | Create courier | Order flag | Sampled route API minimum | Help-page package maximum |
+|---|---|---|---|---|
+| `JNECargo` | `JNE` | `orders[].cargo: true` | 10 kg | 30 kg |
+| `SiCepatCargo` | `SiCepat` | same | 10 kg | 50 kg |
+| `SapCargo` | `Sap` | same | 5 kg for the sampled route | Not established by this help section |
+| `iDexpressCargo` | `iDexpress` | same | 10 kg | 70 kg |
+
+The older cargo range arrays `[10,30]`, `[10,50]` and `[10,70]` must **not** be treated as regional minimum ranges: the freshly quoted help text calls these minimum/maximum pairs. Preserve the earlier migration as history and correct configuration through a new version/forward migration, not by rewriting it. SAP minima do vary by route (5/10/50/100 kg in the help table); a universal SAP minimum or maximum is not justified.
+
+The 3PL response exposes route-specific `minimumWeightCargo`. For the sampled route, 1 kg and 10 kg requests both returned JNE cargo Rp45,000, SiCepat cargo Rp35,000 and IDX cargo Rp30,000; SAP returned Rp30,000 then Rp60,000 with a 5 kg minimum. This demonstrates tariff-floor behavior in these public responses, **not** a general create-order acceptance rule below a minimum. Do not reject or silently inflate measured weight based on an unverified interpretation. Any cargo billing-floor implementation must preserve measured values and freeze the actual quote/order weight with the sourced route minimum.
+
+Official help says SAP Cargo is **Non-COD only**, and the sampled API also returned `unsupported_cod: true`. It also limits IDX cargo geography to Java/Bali/Sumatra and intra-Kalimantan shipments; do not infer broader coverage from a courier name or one sampled route. Official API docs prohibit combining cargo with Dangerous Goods. Route coverage, pickup capability and seller entitlement still require their own checks; a price or a null/missing coverage flag is not proof of successful cargo dispatch.
+
+### Price-field findings: regular parsing cannot be reused unchanged
+
+Use cargo-specific fields only after validating them for the seller contract; never import the public endpoint's discount as account policy.
+
+- In the sampled non-COD SiCepatCargo row, `cargoPrice`/`cargoEstimatedPrice` were **35000**, `cargoEstimatedSpecialPrice` **33250**, but the generic `estimatedPrice` was **85000**. The generic total belongs to another pricing path. The existing regular parser is right not to accept this as a regular-consistent quote.
+- JNECargo's generic special price was **36000**, while its cargo-specific special price was **42750**. IDX similarly returned **24000** versus **27000**. Reusing regular net/discount fields would misstate private seller cost.
+- In the COD sample, the generic `codFee` was **3329**, but each cargo total minus cargo price was **3330**. This is an observed inconsistency, not permission to invent a one-rupiah tolerance, a percentage default, or silently choose one side. Seller-specific estimate plus sandbox order/read-back evidence is needed before accepting cargo COD accounting. SAP remains excluded from COD regardless.
+- Public/3PL responses are **not** the authenticated seller estimate contract and cannot replace normal customer tariffs or private account terms.
+
+### Implementation impact and next gate
+
+The existing adapter deliberately excludes cargo while its order mapping and price consistency remain unverified; that defensive exclusion is not itself a defect. The official `cargo` boolean now documents the response-key-to-base-courier-plus-mode mapping, but safe integration is cross-layer:
+
+1. Preserve **courier + service class** as estimate/COD grouping identity so regular and cargo from the same courier cannot overwrite or cross-price each other.
+2. Discover and validate a route minimum from the corresponding provider response, then re-quote at the final billable weight with the cargo divisor and hard maximum. Unknown minimum/pricing remains excluded; no island-name guessing, generic 100 kg ceiling or historical range shortcut.
+3. Freeze service class/cargo flag, rule version, route-minimum evidence and quote weight through server-side confirmation; dispatch must send the base courier with `orders[].cargo: true`. Validate cargo echo during creation/read-back/reconciliation rather than accepting a regular order for a cargo quote.
+4. Enforce the same invariants at direct Data API/RPC boundaries; preserve legacy regular quotes/operations and the existing 1–50,000 g measured-intake ceiling unless the owner separately accepts a wider counter scope.
+5. Show unambiguous cargo service/weight/minimum/COD states, with DB/transport/COD-collision/unknown-outcome regressions and rendered narrow/wide evidence before activation.
+
+**Awaiting explicit sandbox approval:** use the existing sandbox seller credential through `secrets-env` (never print or read an env file); perform bounded read-only seller estimates/pickup-reference validation and, if a supported cargo service is available, at most **one synthetic non-COD cargo order** plus read-back. No production key/call, top-up, payment, deletion or blind replay is authorized by this research. That gate still applies to authenticated testing and activation; the owner's subsequent offline implementation authorization is recorded below.
+
+## Staged cargo transport implementation (2026-11-03)
+
+Owner renewed the request to review the Mengantar docs and implement them in GeraiExpress.
+Run `RUN-20261103T114322Z-9ac39bc7` therefore owns a bounded offline transport slice:
+
+- `includeCargo: true` explicitly parses documented cargo keys; defaults and existing shipment actions remain regular-only. No invented `cargo` estimate query is sent.
+- Non-COD cargo uses only `cargoPrice`, `cargoEstimatedPrice`, `cargoEstimatedSpecialPrice`, `cargoDiscountPercent` and `estimate_delivery_cargo`; missing/inconsistent amounts or route minimum exclude the row. Public snapshots test field semantics, never activate their prices/discounts as tenant policy.
+- Courier plus service class is the grouping identity for weight groups and supplied-estimator COD passes. Cargo route-minimum metadata must equal the supplied verified rule. This does not yet discover/verify a tenant route or implement a billing-floor policy.
+- Explicit non-COD creation uses the base courier plus per-item Boolean `cargo`. Unsupported courier/flag/COD inputs are refused before sending. A missing/wrong cargo echo or unreadable/contradictory selected-service price leaves creation UNKNOWN without automatic retry. Order reads preserve known Boolean mode and leave absent/malformed mode unknown; cargo dispatcher/reconciliation wiring remains unimplemented.
+- All cargo COD parsing and creation remain disabled. Class-safe synthetic COD tests are algorithm regressions, not proof that cargo COD is accepted by the live adapter.
+
+The historical migration and active regular workflow are unchanged. Source/test verification
+and independent acceptance belong to STATUS.md and the exact final delivery digest. Full
+T-080 remains open: GeraiExpress credential/account attribution, authenticated sandbox
+route/order support, forward cargo-limit correction, DB confirmation snapshots and full
+UI/dispatch/reconciliation must be proved before activation. No cross-project secret is
+reused based on its variable name; no authenticated provider operation is part of this slice.

@@ -1,0 +1,57 @@
+{
+  "retrievedDate": "2026-11-03",
+  "researchScope": "Public documentation plus four unauthenticated read-only tariff GETs; one provider-documented example route; no credentials, account records, order creation or production mutations.",
+  "publicApi": "https://api-public.mengantar.com/docs/",
+  "sandboxApiDocs": "https://sandbox.mengantar.com/docs/",
+  "help": "https://help.mengantar.com/id/articles/5502313-jne-sicepat-sap-idexpress-jandt-lion-parcel-anteraja-pos-ind-dan-spx",
+  "helpUpdatedDate": "2026-09-24",
+  "curatedReference": {
+    "url": "https://github.com/ongkipro/mengantar-documentation",
+    "commit": "d97821c112e60661f0fdf01780fa0e1b4d37884c",
+    "authority": "Secondary reference; official sources and observed provider replies prevail."
+  },
+  "responses": [
+    {
+      "file": "3pl-1kg.json",
+      "method": "GET",
+      "url": "https://api-public.mengantar.com/api/order/allEstimate3PL?origin_id=5fc62de8f8f44b34aa4bdc49&destination_id=5fc64922f8f44b34aa4ce896&weight=1",
+      "authentication": "none",
+      "responseSuccess": true,
+      "transport": "functions.fetch_content mode=raw",
+      "httpStatus": "not exposed by tool; not asserted"
+    },
+    {
+      "file": "3pl-10kg.json",
+      "method": "GET",
+      "url": "https://api-public.mengantar.com/api/order/allEstimate3PL?origin_id=5fc62de8f8f44b34aa4bdc49&destination_id=5fc64922f8f44b34aa4ce896&weight=10",
+      "authentication": "none",
+      "responseSuccess": true,
+      "transport": "functions.fetch_content mode=raw",
+      "httpStatus": "not exposed by tool; not asserted"
+    },
+    {
+      "file": "public-10kg.json",
+      "method": "GET",
+      "url": "https://api-public.mengantar.com/api/order/allEstimatePublic?origin_id=5fc62de8f8f44b34aa4bdc49&destination_id=5fc64922f8f44b34aa4ce896&weight=10",
+      "authentication": "none",
+      "responseSuccess": true,
+      "transport": "functions.fetch_content mode=raw",
+      "httpStatus": "not exposed by tool; not asserted"
+    },
+    {
+      "file": "public-cod-10kg.json",
+      "method": "GET",
+      "url": "https://api-public.mengantar.com/api/order/allEstimatePublic?origin_id=5fc62de8f8f44b34aa4bdc49&destination_id=5fc64922f8f44b34aa4ce896&weight=10&COD_AMOUNT=100000",
+      "authentication": "none",
+      "responseSuccess": true,
+      "transport": "functions.fetch_content mode=raw",
+      "httpStatus": "not exposed by tool; not asserted"
+    }
+  ],
+  "limitations": [
+    "Not seller-account estimates or entitlement proof",
+    "No sandbox cargo create-order/read-back yet",
+    "No universal cargo maximum or sub-kg minimum inferred from curated reference",
+    "Public COD field inconsistency is unresolved; no guessed one-rupiah tolerance"
+  ]
+}
