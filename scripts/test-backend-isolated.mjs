@@ -36,8 +36,9 @@ let browserDir;
 let upgradeDir;
 try {
   docker("network", "create", name); networkCreated = true;
+  // Init reaps killed exec descendants; postmaster as PID 1 mistakes them for crashed backends.
   // Match production password authentication; neither database nor SQL port is published.
-  run("docker", ["run", "-d", "--name", container, "--network", name, "-e", "POSTGRES_PASSWORD",
+  run("docker", ["run", "--init", "-d", "--name", container, "--network", name, "-e", "POSTGRES_PASSWORD",
     "-e", "POSTGRES_DB=gx_audit", "-e", "PGDATABASE=gx_audit", pgImage, "postgres", "-c", "app.gx_local=on"], { stdio: "ignore" }); pgCreated = true;
   let ready = false;
   for (let i = 0; i < 60; i++) {
