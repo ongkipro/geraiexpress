@@ -7,7 +7,13 @@ import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { friendlyError } from "@/lib/errors";
-import { CLOSE_ERROR, DISPATCH_INFO as BASE_DISPATCH_INFO } from "@/lib/format";
+import { CLOSE_ERROR as BASE_CLOSE_ERROR, DISPATCH_INFO as BASE_DISPATCH_INFO } from "@/lib/format";
+
+// T-082: reopen_shipment refuses while an active counter payment exists (void it first).
+const CLOSE_ERROR: Record<string, string> = {
+  ...BASE_CLOSE_ERROR,
+  payment_recorded: "Pembayaran pelanggan sudah dicatat untuk pengiriman ini. Admin gerai perlu membatalkan catatan itu sebelum draf dibuka lagi.",
+};
 
 // T-043: dispatch messages of the pickup flow, kept beside the shared table.
 const DISPATCH_INFO: Record<string, string> = {

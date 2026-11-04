@@ -135,9 +135,9 @@ source presence alone does not accept an optional feature.
 | Print and reprint the right label | Authoritative AWB, local label 10x15 cm (10x10 cm option) with a Code128 barcode, immutable snapshot and append-only print history | Requested; PR-6, PR-7, PR-34; printer/media fit is pilot evidence |
 | Find a shipment while helping a customer | Search/filter queue and inspect status/history/next valid action | Initial recommendation; PR-9, PR-12; no broad cross-tenant provider search |
 | Work with more than one staff member | Explicit memberships/roles, current authority, conflict handling and actor audit | Requested multi-user direction; PR-1, PR-10; roles per DEC-008, outlet-level assignment deferred |
-| Operate under the gerai's identity | Validated app name/logo and visible outlet context | Requested; PR-13; the identity on the printed label is PR-34; customer receipt and invoice content need separate acceptance |
+| Operate under the gerai's identity | Validated app name/logo and visible outlet context | Requested; PR-13; the identity on the printed label is PR-34; customer receipt content/identity accepted by DEC-026; invoice content remains a separate decision |
 | See what needs attention during the day | Unknown/unpaid/label-failure worklist first; scoped count/time basis and refresh | Queue PR-9; first overview form built as the gerai Dashboard (PR-14, T-078, UX-16) |
-| Keep a record of customer charges and receipts | Separate selected normal customer tariff, gerai discount configuration, fee/insurance and payment status | PR-22/PR-23 select pricing; receipt/cashier/extra markup/ledger remain conditional; no platform ledger in the first release (DEC-016) |
+| Keep a record of customer charges and receipts | Separate selected normal customer tariff, gerai discount configuration, fee/insurance and payment status | PR-22/PR-23 select pricing; receipt content/identity accepted by DEC-026; cashier/extra markup/ledger remain conditional; no platform ledger in the first release (DEC-016) |
 | Pass parcels to a courier and handle cancellations | Verified courier events and state-valid cancellation; explicit local custody/handover | Cancellation and tracking scheduled as PR-12 (T-045, DEC-014); custody/handover remains a candidate under TD-1 |
 | Process larger repeat batches | CSV preview, selected-row confirmation, scoped export and batch-print behavior | CSV export scheduled as PR-16 (T-047); CSV intake PR-11 and batch print remain later candidates under TD-1; volume/limits not inherited automatically |
 | Try the application on first delivery | Working demo access, synthetic contacts/shipments and simulated labels | Requested; PR-21, IAM-4, UX-3 |
@@ -147,7 +147,7 @@ source presence alone does not accept an optional feature.
 | Concept | Authority / unresolved policy |
 |---|---|
 | Mengantar quote and order funding | Seller-specific provider amounts/account; confirm the actual payable operation and balance path in sandbox |
-| Price charged to the customer | The sender pays the selected normal Mengantar tariff before any seller discount, plus applicable verified fee/insurance exactly once (CTX-28, DEC-016, PR-22). Extra markup/payment/receipt workflows need separate acceptance. |
+| Price charged to the customer | The sender pays the selected normal Mengantar tariff before any seller discount, plus applicable verified fee/insurance exactly once (CTX-28, DEC-016, PR-22). Extra markup and broader payment workflows need separate acceptance; customer receipt content/identity follows DEC-026. |
 | Gerai discount and platform remainder | Decision (DEC-016): the gerai discount is Super Admin configuration (PR-23); the platform remainder is derived, an estimate until provider-verified, and not collected in the first release. How the remainder would reach the platform is Unknown (CTX-42) |
 | COD value and settlement | Money collected under provider rules; it is not automatically gerai revenue or proof of customer payment to the counter |
 | Gerai revenue or profit | Requires accepted price/cost/fee/tax/refund definitions; do not derive a profit KPI from provider balance or shipment count |
@@ -177,7 +177,8 @@ self-service portal, a second shipping aggregator, a custom public API, custom
 domains, subscription billing, full cashier/accounting/COD settlement, automated
 old-data migration, and direct printer/scale/scanner hardware integrations.
 Cancellation (PR-12, T-045), the invoice snapshot and CSV export (PR-16, T-047) are
-now scheduled under DEC-014. Customer-receipt content, scan handover and batch
+now scheduled under DEC-014. Customer-receipt content/identity is accepted by
+DEC-026 (T-082 behavioral verification remains pending). Scan handover and batch
 printing remain LegacyReference candidates under TD-1, with their own
 policy/acceptance before exposure.
 
@@ -193,7 +194,7 @@ policy/acceptance before exposure.
 | Recipient | Destination party and provider-resolved destination area. |
 | Provider account | Mengantar seller owns orders, balance, rates and provider masters. Decision (DEC-006): one seller per tenant business, Partner-created or BYOK for an existing seller the verified owner proves they control; several outlets map to it. |
 | Shipping label | The AWB and routing are provider-authoritative. The printed label is a local GeraiExpress document carrying the AWB as a Code128 barcode (DEC-017); the provider PDF is an optional, whitelist-gated later source. |
-| Customer receipt | Outlet-branded proof of the customer transaction; need and content remain an owner decision. |
+| Customer receipt | Gerai/outlet-branded customer transaction record; receipt content/identity accepted by DEC-026, with payment-time non-COD identity and first-print COD identity. |
 | Tenant slug | Immutable, unique, lower-case identifier for display, reference prefixes and support lookups; never authorization (CTX-41, PR-37). |
 | Gerai discount | Super Admin-assigned configuration in basis points with effective date, source reference, status and audit (DEC-016, PR-23). |
 
@@ -595,7 +596,7 @@ tasks are table rows there and are written here as bare numbers (for example 003
 | PR-35 · Public marketing claims | Implemented | T-036 (pages built by T-029, T-031) | approved-claims copy, derived couriers, noindex on non-apex hosts (tests/unit marketing-rebrand and proxy); the pages do not yet describe pickup or the local label |
 | PR-36 · Host topology | Partial | T-042, T-055, T-062, T-066 | `src/lib/hosts.ts`, `src/proxy.ts`, `src/lib/db/cookies.ts` (`gx_at`/`gx_rt`) and Caddy templates built; DNS/TLS, cross-host Server Actions and production host cutover remain unproved |
 | PR-37 · Tenant slug and reference | Implemented | T-049 | slug, prefix and counter built and tested locally; the prefix is assigned at approval by a trigger |
-| PR-38 · Counter payment and receipt | Not implemented | Proposed; contract UX-17, DATA-11; T-082 | gap analysis J5; `invoice-content.ts` states the invoice is not a receipt |
+| PR-38 · Counter payment and receipt | Implemented locally; behavioral verification pending | Receipt content/identity accepted by DEC-026; contract UX-17, DATA-11; T-082 | gap analysis J5; `invoice-content.ts` states the invoice is not a receipt |
 | PR-39 · Shift and day close | Not implemented | Proposed; contract UX-17, DATA-11; T-083 | gap analysis J6 |
 | PR-40 · Resi message and tracking link | Not implemented | Proposed; contract UX-18, DATA-12, SEC-8; T-085 (needs T-045) | gap analysis J9/J10; only `wa.me` link is marketing |
 | PR-41 · Content declaration | Not implemented | Proposed; contract UX-19, DATA-13; T-081 | gap analysis J3; Permenkomdigi 8/2025 Art 22 |
@@ -746,7 +747,7 @@ tasks are table rows there and are written here as bare numbers (for example 003
 - Source: CTX-2.
 - Statement: When a user operates in an authorized workspace, the system shall show the current tenant/outlet identity and its approved application branding without changing provider routing authority.
 - Acceptance: Given two tenants, When workspace scope changes, Then the visible brand and scoped data change together; old-tenant requests/results do not appear in the new workspace and provider-generated labels retain authoritative routing information.
-- Constraints: UI-1, TEN-1. Custom logos on official labels, custom domains, and a branded customer receipt require separate decisions; the gerai identity on the printed label is governed by PR-34.
+- Constraints: UI-1, TEN-1. Custom logos on official labels and custom domains require separate decisions; customer receipt content/identity follows DEC-026 (no logo decision); the gerai identity on the printed label is governed by PR-34.
 - Evidence: Observed: the workspace shows the current gerai and outlet names (tests/e2e auth-demo); there is no logo or branding setting. TASKS T-029 lists this requirement for the public marketing pages, which belong to PR-35.
 
 ### PR-14 — Daily operational overview
@@ -773,7 +774,7 @@ tasks are table rows there and are written here as bare numbers (for example 003
 - Source: CTX-11.
 - Statement: When a permitted user requests an operational export, the system shall apply the same scope and accepted filters as its corresponding list and encode cells safely for spreadsheets.
 - Acceptance: Given tenant A filters and a formula-prefixed text value, When exported, Then tenant B rows are absent, the chosen event/date basis is preserved, and the value cannot execute as a spreadsheet formula.
-- Constraints: TD-5, PRIV-1, TEN-1. Contact/PII export permissions and retention remain unresolved; no public download URL. T-047 sets the first form: tenant-admin only, a row cap and a formula-injection guard. An immutable invoice snapshot and a combined "Cetak resi + invoice" print are also listed in T-047 without a requirement of their own; receipt and invoice content remains an owner decision.
+- Constraints: TD-5, PRIV-1, TEN-1. Contact/PII export permissions and retention remain unresolved; no public download URL. T-047 sets the first form: tenant-admin only, a row cap and a formula-injection guard. An immutable invoice snapshot and a combined "Cetak resi + invoice" print are also listed in T-047 without a requirement of their own; invoice content remains an owner decision; customer receipt content/identity is accepted by DEC-026, not an invoice approval.
 - Evidence: Observed (2026-10-28): `/pengiriman/export.csv` is tenant-admin only through the user's own session and RLS, capped at 10000 rows with `X-Export-*` headers, 15 sender-facing columns, a formula-injection guard, BOM, `no-store`, and audited by `record_export` before any byte is sent; `invoice_snapshots` are append-only with a `<PREFIX>-INV-<yymmdd>-<seq>` counter (T-047; tests/unit csv, tests/db invoice-export, tests/e2e invoice-export on 390, 768 and 1280). Not met: the wilayah reference is not imported (deferred, owner decision); the date basis is creation time; invoice content and retention are owner decisions.
 
 ### PR-17 — Partner-created tenant seller onboarding
@@ -1003,14 +1004,15 @@ T-080 to T-087, and none is accepted product behavior until the owner accepts it
 are proposals in that note's section 7.
 
 ### PR-38 — Counter payment record and customer receipt
-- Status: Proposed (gap analysis, 2026-11-02); receipt content is an existing open owner decision
+- Status: Receipt content/identity accepted 2026-11-05 (DEC-026); T-082 implemented locally, behavioral verification pending.
 - Owner: Paduka Ongki
-- Source: Gap analysis J5; DJP N10 (retail receipts such as bon kontan or kuitansi may serve PKP retailers); BI QRIS MDR rule (gap analysis N8); INDOPAKET "counter charged more than app quote" reviews (gap analysis section 3.3); PR-22.
+- Source: Gap analysis J5; DJP N10 (retail receipts such as bon kontan or kuitansi may serve PKP retailers); BI QRIS MDR rule (gap analysis N8); INDOPAKET "counter charged more than app quote" reviews (gap analysis section 3.3); PR-22; owner receipt approval 2026-11-05 (DEC-026).
 - Statement: When an operator records that the customer paid for a confirmed shipment, the system shall store the payment method (cash, QRIS, transfer or other), the amount in whole rupiah, the collecting staff member and the time, and shall offer a printable customer receipt that states the normal customer charge and the payment record without exposing net cost, the gerai discount or the platform remainder.
-- Acceptance: Given a confirmed shipment, When an operator records cash payment, Then the shipment shows "Lunas" with method, amount, staff and time and the receipt prints them; given an amount different from the customer charge, Then the difference is recorded and visible to the tenant administrator, never silently corrected; given a second payment record for the same shipment, Then it is refused unless the first is voided with a reason by a tenant administrator; given a member of another tenant, Then neither the record nor the receipt is reachable; given QRIS as the method, Then no surcharge is added to the customer charge (BI: MDR is borne by the merchant); given a COD shipment, Then the shipping charge is shown as collected by the courier and is never prefilled or counted as counter cash (DEC-003, counted once); given a counter payment marked paid, Then the Mengantar order payment state stays visible and unchanged; given the receipt, Then every amount on it comes from the accepted quote and confirmation snapshot, and any later provider weight or fee correction is shown as a separate line rather than rewriting the original.
+- Acceptance: Given a confirmed shipment, When an operator records cash payment, Then the shipment shows "Lunas" with method, amount, staff and time internally; customer print/WhatsApp show method, amount and time but omit staff; given an amount different from the customer charge, Then the difference is recorded and visible to the tenant administrator, never silently corrected; given a second payment record for the same shipment, Then it is refused unless the first is voided with a reason by a tenant administrator; given a member of another tenant, Then neither the record nor the receipt is reachable; given QRIS as the method, Then no surcharge is added to the customer charge (BI: MDR is borne by the merchant); given a COD shipment, Then the shipping charge is shown as collected by the courier and is never prefilled or counted as counter cash (DEC-003, counted once); given a counter payment marked paid, Then the Mengantar order payment state stays visible and unchanged; given the receipt, Then every amount on it comes from the accepted quote and confirmation snapshot, and any later provider weight or fee correction is shown as a separate line rather than rewriting the original.
 - Constraints: PR-22, TEN-1, IAM-1, DATA-2, BILL-1, NFR-3. GeraiExpress records payments taken by the gerai; this requirement adds no payment processing and does not hold or move customer money; licensing remains a counsel item (market research L6). Unknown payment is distinct from unpaid. Tax wording on the receipt is a tax-owner decision; no PPN amount is hardcoded.
-- Evidence: Not implemented (gap analysis section 2).
-- Change history: 2026-11-02 — Added from the market gap analysis.
+- Receipt content/identity (DEC-026): Both print and WhatsApp show gerai name/available WhatsApp, frozen outlet name prefixed `Outlet` when present and different from gerai name, shipment reference, AWB, courier/service, customer charge, and the COD collection instruction when COD. Non-COD also shows payment method, amount, time and `No. pembayaran: PAY-` plus the first eight uppercase payment UUID hex characters; cash includes received money/change. Non-COD gerai identity freezes at payment time. COD previews current tenant identity until first application print, which freezes it for reprints; the print command checks preview against current identity under lock on first print or frozen identity on reprint. A stale preview returns a Bahasa reload error, appends no print event and never invokes `window.print`. Internal collecting-member identity/audit and void summaries remain unchanged.
+- Evidence: T-082 source and authored DB/unit/e2e tests; typecheck only in this continuation, not behavioral acceptance.
+- Change history: 2026-11-02 — Added from the market gap analysis. 2026-11-05 — Owner accepted receipt content/identity (DEC-026); no tax, invoice, refund or settlement decision implied.
 
 ### PR-39 — Outlet shift and day close
 - Status: Proposed (gap analysis, 2026-11-02)
@@ -1194,7 +1196,7 @@ deployment or live provider calls (DECISIONS.md).
 | Supabase SMTP implicit-TLS compatibility | Native-SMTP and Worker Send Email Hook candidates are both superseded by DEC-020 and DEC-021 (ADR-0002, T-066): the Node app renders and sends code mail directly through `src/lib/mail-transport.ts` (local Mailpit Observed; production transport/provider remains Proposal, unbuilt, T-063) | Decision DEC-009, DEC-020, DEC-021 (owner) |
 | Which intended accounts have Dropshipper enabled | Moot for the first release: no provider dropshipper is used (PR-3) | Decision DEC-017, DEC-013 |
 | Whether the provider PDF meets the selected customer-document policy | Moot for the first release: the printed label is local and the provider PDF is optional and whitelist-gated | Decision DEC-017 |
-| Which tenant branding must appear on the official label | The label shows the gerai identity chosen by the masking switch (PR-34); logo and customer-receipt branding remain open | Decision DEC-017 |
+| Which tenant branding must appear on the official label | The label shows the gerai identity chosen by the masking switch (PR-34); logo remains open; customer receipt identity follows DEC-026 | Decision DEC-017; receipt DEC-026 |
 | GeraiExpress free versus paid or commission model | First release: no separate platform fee is collected from the gerai; revisit only if the written Mengantar answer requires it | Decision DEC-016, CTX-42 |
 | Which domains apply (part of the cloud accounts, region, domains and volume question) | `owner.geraiexpress.com`, `app.geraiexpress.com`, apex for the public site | Decision DEC-015 |
 | CTX-41 proposals 11 to 17: slug format and reserved names, shipment-reference format, entry points, identities, environment matrix, per-host pages, mail sender | Accepted by the owner on 2026-10-28 ("setuju"); stated in PR-36, PR-37, ARCH-6, DATA-8 and UX-11 | Decision CTX-41 |
@@ -1230,7 +1232,7 @@ claims; they do not gate development of PR-38 to PR-46.
 | Owner transfer, factor recovery, and rejection/resubmission policy for applications | Paduka Ongki | Before those flows are built (PR-30, PR-32) |
 | Production mail provider/domain/quotas (T-063) and production Turnstile keys; former Worker mail binding no longer applies | Engineering owner | Before public real-account registration (DEC-009, DEC-020, PR-33) |
 | Which support investigations may expose customer data or authorize money or credential actions beyond the default platform projection | Paduka Ongki | Before support access or exceptional recovery |
-| Customer receipt and invoice content and branding (the UX-17 receipt field list is the Proposal to decide); cashier, deposits, settlement, refunds (including refund after a voided payment or a failed provider order) and finance scope | Paduka Ongki | Before monetary workflows; before the invoice part of T-047 |
+| Invoice content/branding; cashier, deposits, settlement, refunds (including refund after a voided payment or a failed provider order) and remaining finance scope | Paduka Ongki | Before those monetary workflows; before the invoice part of T-047. Customer receipt content/identity is accepted by DEC-026, not a decision on these remaining items. |
 | COD Ongkir uses normal retail shipping under CTX-28; the actual collection, fee and insurance rule, and who receives COD goods proceeds under Full COD | Paduka Ongki | Before enabling that collection mode |
 | Per-account fee base and inclusion, minimums, rounding, insurance and goods-value semantics, and the billable-weight rule (provider-configured and dated per PR-43; confirm before the supervised production order) | Integration owner | Before real charge calculation and before the supervised production order |
 | Internal cost, discount and payout visibility per role | Paduka Ongki | Before pricing DTO and document acceptance |

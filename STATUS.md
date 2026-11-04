@@ -95,6 +95,23 @@ by the separate handoff run; that run's executed evidence records their outcome 
 closed source-run surface. Pi runtime artifacts are retained untracked and excluded only through a
 temporary Git exclusion file during handoff verification; no user ignore configuration was changed.
 
+## T-082 Counter payment and receipts (implementation verified; final gates and integration pending)
+
+Run `RUN-20261104T132645Z-49fd8a7a` (R3), worktree `.gx-wt/T-082b`; not merged, committed or deployed.
+Implemented record/void, one active payment, auto-open cash period, COD refusal, admin-only difference
+reads, 58/80 mm receipts, WhatsApp text and append-only print history (`label_print_events.kind`).
+Owner decision 2026-11-05 ("ya boleh kau sempurnakan", DEC-026): customer receipts and WhatsApp text
+show no staff line (internal staff/audit unchanged), add `No. pembayaran` (PAY- + 8 hex) and the frozen
+outlet; non-COD identity is frozen at payment, COD identity at the first receipt print. The 5-argument
+`record_receipt_print` compares the preview identity and refuses a stale preview (Bahasa reload message,
+no `window.print`); reprints copy the first identity. Evidence after DEC-026: typecheck, 1,046 unit,
+491 full DB and 24 browser tests at 390/768/1280 PASS (`/data/tmp/t082/receipt-decision-*.log`); review
+bbea32fe code PASS and visual PASS on six receipt captures. Combined-migration review 24472b96 found the
+T-094 -> T-082 -> T-096 sequence compatible; its P2 (closed cash period accepted a NULL variance) is
+fixed in this unmerged migration with a DB regression. Final surface-bound ledger gates and integration
+follow; preserve T-094's 7-argument label-snapshot RPC, the `kind = 'label'` history filter and T-099's
+cancellable test helpers. Window printing is stubbed; no physical-printer proof exists.
+
 ## T-093 Super Admin customer-data review (2026-11-04, PASS, local only)
 
 Run `RUN-20261104T061201Z-1b6e7ebc` (R3). Owner instruction: everything stays local — no commit, no

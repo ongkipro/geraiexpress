@@ -33,7 +33,7 @@ export default async function LabelPage({ params }: { params: Promise<{ id: stri
       db.from("tenants").select("name, contact_whatsapp, masking_allowed").eq("id", ws.tenant.id).maybeSingle(),
       db.from("label_snapshots").select(SNAPSHOT_COLUMNS).eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id)
         .order("version", { ascending: false }).limit(20),
-      db.from("label_print_events").select("id, snapshot_id, size, created_at").eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id)
+      db.from("label_print_events").select("id, snapshot_id, size, created_at").eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id).eq("kind", "label")
         .order("id", { ascending: false }).limit(20),
     ]);
     if (!tenant) notFound();

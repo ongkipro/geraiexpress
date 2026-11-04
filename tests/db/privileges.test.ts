@@ -42,6 +42,8 @@ const AUTHENTICATED_EXECUTE = [
   "public.close_failed_operation(uuid,text)",
   "public.close_unknown_batch_payment(uuid,uuid,text)",
   "public.confirm_shipment(uuid,uuid,integer,text,integer)",
+  // Per-record charge/void administrative details (T-082); current tenant administrator only.
+  "public.counter_payment_admin_details(uuid)",
   "public.create_invoice_snapshot(uuid)",
   "public.create_label_snapshot(uuid,boolean,text,text,text,text,text)",
   "public.create_shipment_draft(uuid)",
@@ -81,8 +83,12 @@ const AUTHENTICATED_EXECUTE = [
   "public.platform_tenant_summary(uuid)",
   "public.platform_tenants()",
   "public.reconcile_shipment(uuid)",
+  // Counter payment record (T-082); member, derived outlet/period, one active record per shipment.
+  "public.record_counter_payment(uuid,text,bigint,bigint,text)",
   "public.record_export(uuid,text,jsonb,integer,boolean)",
   "public.record_label_print(uuid)",
+  // Receipt print request (T-082); member, active payment or COD with preview-checked frozen identity.
+  "public.record_receipt_print(uuid,uuid,text,text,text)",
   "public.registration_open()",
   "public.remove_seller_credential(uuid,integer)",
   "public.reopen_shipment(uuid)",
@@ -102,6 +108,8 @@ const AUTHENTICATED_EXECUTE = [
   "public.tenant_gerai_discount(uuid)",
   "public.tenant_invitations_list(uuid)",
   "public.tenant_members(uuid)",
+  // Counter payment void (T-082); tenant administrator only, reason required, row kept.
+  "public.void_counter_payment(uuid,text)",
   "public.withdraw_application(uuid,integer)",
 ];
 
@@ -336,6 +344,7 @@ describe("table sweep (DIL-12)", () => {
 
   it("covers the whole public schema", () => {
     expect(tables().length).toBeGreaterThanOrEqual(14);
+    expect(tables().map((table) => table.name)).toEqual(expect.arrayContaining(["cash_periods", "counter_payments"]));
   });
 
   it("anon holds no privilege on any public table, view, materialized view, foreign table or column", () => {
@@ -359,6 +368,17 @@ describe("table sweep (DIL-12)", () => {
 
   it("authenticated has no table-level write privilege anywhere", () => {
     expect(tables().filter((t) => t.authenticated_write).map((t) => t.name)).toEqual([]);
+  });
+
+  it("counter payment SELECT is column-scoped and excludes the administrative difference payload", () => {
+    expect(sql("select has_table_privilege('authenticated', 'public.counter_payments', 'select')")).toBe("f");
+    const columns = rows<{ column: string }>(`select a.attname as "column" from pg_attribute a
+      where a.attrelid = 'public.counter_payments'::regclass and a.attnum > 0 and not a.attisdropped
+        and has_column_privilege('authenticated', a.attrelid, a.attnum, 'select') order by a.attname`);
+    expect(columns.map((column) => column.column)).toEqual([
+      "amount_idr", "cash_received_idr", "id", "method", "outlet_id", "period_id", "receipt_gerai_name",
+      "receipt_gerai_whatsapp", "recorded_at", "recorded_by", "recorded_by_label", "shipment_id", "tenant_id", "voided_at", "voided_by",
+    ]);
   });
 
   it("authenticated writes only the column-scoped grants recorded above", () => {
