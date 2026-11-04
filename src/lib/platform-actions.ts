@@ -167,3 +167,51 @@ export async function addWeightRuleAction(_: FormState, form: FormData): Promise
   revalidatePath("/admin/konfigurasi");
   return { ok: `Versi aturan ${rule.courier} ${rule.service_class === "cargo" ? "Kargo" : "Reguler"} disimpan.` };
 }
+
+// T-093 / DEC-024 (a): customer-data reads. POST only (a Server Action): the phone and the reason never
+// enter a URL or a server log, and a reload does not repeat an audited read. The RPC re-checks
+// `customer_data_review`, requires the reason and writes one audit row per call.
+export type CustomerGerai = {
+  tenant_id: string; tenant_name: string; outlet_name: string; shipments: number; issued: number;
+  as_recipient: number; as_sender: number; first_at: string; last_at: string;
+};
+export type CustomerProfile = {
+  phone: string; shipments: number; issued: number; as_recipient: number; as_sender: number; gerai_count: number; gerai: CustomerGerai[];
+};
+export type CustomerLookupState = { error?: string; result?: CustomerProfile };
+
+export async function customerLookupAction(_: CustomerLookupState, form: FormData): Promise<CustomerLookupState> {
+  const scope = await requestScope();
+  if (scope !== "platform" && scope !== "shared") return { error: "Tidak ditemukan." };
+  const db = await dbServer();
+  const { data, error } = await db.rpc("platform_customer_lookup", {
+    p_phone: String(form.get("phone") ?? ""),
+    p_reason: String(form.get("reason") ?? ""),
+  });
+  if (error) return { error: error.message === "invalid_input" ? "Nomor HP tidak valid. Contoh 081234567890." : friendlyError(error) };
+  return { result: data as CustomerProfile };
+}
+
+export type TenantCustomerRow = {
+  id: string; reference: string; created_at: string; issued_at: string | null; submission_state: string; awb: string | null;
+  outlet_name: string; sender_name: string | null; sender_phone: string | null; recipient_name: string | null;
+  recipient_phone: string | null; recipient_address: string | null; recipient_area: string | null; recipient_postal_code: string | null;
+};
+export type TenantCustomersState = { error?: string; reason?: string; tenantName?: string; total?: number; rows?: TenantCustomerRow[] };
+const TENANT_CUSTOMERS_PAGE = 20;
+
+// Each page is its own audited read with the same reason; earlier pages stay on screen.
+export async function tenantCustomersAction(prev: TenantCustomersState, form: FormData): Promise<TenantCustomersState> {
+  const scope = await requestScope();
+  if (scope !== "platform" && scope !== "shared") return { error: "Tidak ditemukan." };
+  const more = form.get("more") === "1";
+  const reason = more ? prev.reason ?? "" : String(form.get("reason") ?? "");
+  const offset = more ? prev.rows?.length ?? 0 : 0;
+  const db = await dbServer();
+  const { data, error } = await db.rpc("platform_tenant_customers", {
+    p_tenant: String(form.get("tenant_id") ?? ""), p_reason: reason, p_limit: TENANT_CUSTOMERS_PAGE, p_offset: offset,
+  });
+  if (error) return { ...(more ? prev : {}), error: friendlyError(error) };
+  const page = data as { tenant_name: string; total: number; rows: TenantCustomerRow[] };
+  return { reason, tenantName: page.tenant_name, total: page.total, rows: more ? [...(prev.rows ?? []), ...page.rows] : page.rows };
+}

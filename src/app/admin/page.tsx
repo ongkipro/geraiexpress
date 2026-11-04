@@ -75,6 +75,7 @@ export default async function PlatformTenantsPage({ searchParams }: { searchPara
   if (!governance && !session.capabilities.includes("platform_monitoring")) {
     // F4: every capability with a page lands on it (menu order: Operasional before Keamanan).
     if (session.capabilities.includes("integration_operations")) redirect("/admin/integrasi");
+    if (session.capabilities.includes("customer_data_review")) redirect("/admin/pelanggan");
     if (session.capabilities.includes("access_governance")) redirect("/admin/akses");
     if (session.capabilities.includes("audit_review")) redirect("/admin/audit");
     return (

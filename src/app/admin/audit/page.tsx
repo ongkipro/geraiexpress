@@ -45,6 +45,9 @@ const ACTIONS: Record<string, string> = {
   // T-081 / T-080 (G2): append-only provider configuration versions.
   "declaration_text.append": "Versi teks pernyataan isi paket",
   "billable_weight_rule.append": "Versi aturan berat Mengantar",
+  // T-093: customer-data reads (phone kept masked plus a SHA-256 in the detail).
+  "customer_data.lookup": "Pencarian data pelanggan",
+  "customer_data.tenant_view": "Data pelanggan gerai dibuka",
 };
 
 // Category tabs group the decision types; every type belongs to exactly one category.
@@ -57,6 +60,7 @@ const CATEGORIES: Record<string, { label: string; actions: string[] }> = {
     actions: ["credential.store", "credential.remove", "integration.partner_id", "partner.onboarding_begin", "partner.onboarding_complete", "partner.onboarding_outcome", "outlet.mengantar_pickup", "billable_weight_rule.append"],
   },
   diskon: { label: "Diskon", actions: ["discount.terms", "discount.template"] },
+  pelanggan: { label: "Data pelanggan", actions: ["customer_data.lookup", "customer_data.tenant_view"] },
   pengiriman: { label: "Pengiriman", actions: ["shipment.batch_pay", "shipment.close_failed", "label.snapshot", "invoice.snapshot", "export.shipments"] },
 };
 
@@ -84,6 +88,8 @@ const OUTCOME: Record<string, string> = {
   // partner.onboarding_*
   registration_pending: "Menunggu pendaftaran", connected: "Terhubung", not_connected: "Belum terhubung",
   consent_recorded: "Persetujuan dicatat", registered_key_pending: "Kunci API menunggu", existing_account_required: "Perlu akun Mengantar yang sudah ada",
+  // customer_data.*
+  found: "Ditemukan", none: "Tidak ada kiriman", viewed: "Dibuka",
   quota_wait: "Menunggu kuota", provider_restricted: "Dibatasi Mengantar", configuration_blocked: "Konfigurasi belum siap",
 };
 
@@ -107,6 +113,7 @@ function describe(detail: Detail): string | null {
 
 const DETAIL_LABEL: Record<string, string> = {
   from: "Sebelum", to: "Sesudah", capabilities: "Kemampuan", old_bps: "Diskon lama", new_bps: "Diskon baru", new_version: "Versi baru",
+  phone_hint: "Nomor (disamarkan)", phone_sha256: "SHA-256 nomor", shipments: "Kiriman", gerai_count: "Jumlah gerai", rows: "Baris dibuka", total: "Total kiriman",
 };
 
 // One readable value per recorded key: percentages from basis points, known codes in Bahasa (with

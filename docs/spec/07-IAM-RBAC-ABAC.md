@@ -185,6 +185,7 @@ a public shortcut around privileged authorization.
 | Safe recovery | Reconcile original operation or resume a proven safe recorded handoff | No blind order/payment replay, balance withdrawal, financial status edit or new spending authority |
 | Platform access governance | Approved grant/revoke and recovery administration | No public self-promotion; atomically preserve a usable access-governance administrator and approved recovery path |
 | Audit review | Filtered decision/investigation history | Append-only; no edit/delete permission |
+| Customer data review (T-093; assistant-proposed, DEC-024) | Read a gerai's shipment customer fields and one phone's cross-gerai count per gerai/cabang | Held by no grant by default; reason + audit row per read (phone masked + SHA-256); read-only, no export; demo and simulated rows excluded; counsel gate T-048 before production |
 
 Initial bootstrap and emergency recovery require an owner-selected verified
 identity/process, separately from public signup. No account is provisioned by

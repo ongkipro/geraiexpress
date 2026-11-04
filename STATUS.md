@@ -9,6 +9,51 @@ Independent-Review: Regular baseline approval belongs to RUN-20261103T085327Z-57
 Independent-Reviewer: d264fdd1-6723-4373-8d56-67733f212566 (separate reviewer; latest repair review 2957899e-9617-4acf-90f0-5ce0656fe7b7; same retained session)
 Independent-Review-Head: Uncommitted worktree; approval must bind to the delivery boundary digest, not HEAD alone.
 
+## T-093 Super Admin customer-data review (2026-11-04, PASS, local only)
+
+Run `RUN-20261104T061201Z-1b6e7ebc` (R3). Owner instruction: everything stays local — no commit, no
+push, no deploy; the T-093 work is in the working tree only. Capability `customer_data_review`
+(assistant-proposed safeguard, DEC-024) is held by no grant by default and is granted only through
+`platform_set_grant` (access_governance, reason, audit). Owner hard conditions, held by DB and e2e
+tests: without the capability every page is a plain 404 identical (status, title, body) to an unknown
+path and every RPC is refused before validation; without a valid reason no row is read or returned and
+nothing is audited; the phone never enters a URL (Server Actions; every requested/navigated URL checked
+for both phone forms). Each read writes one audit row (phone masked + SHA-256 of the normalized key).
+Demo gerai and simulated shipments are excluded. Production use waits for counsel (T-048).
+
+Findings during verification: the e2e caught a 404 title leak (a static `metadata` export renders even
+after `notFound()`); `/admin/pelanggan` now checks the capability in `generateMetadata`. Review 1
+(CHANGES REQUIRED): P1 a capability-only admin could not open per-gerai data (the gerai page needs
+monitoring) → new `/admin/pelanggan/[tenant]` without monitoring RPCs; P2 audit baseline taken too late,
+pagination untested, SHA-256 checked by shape only, demo exclusion conditional → all strengthened, no
+assertion weakened. Review 2 APPROVE (digest 10810c88). Known limit (accepted by the reviewer): the
+"Muat berikutnya" reason is client form state; every page is re-validated and audited by the RPC, so it
+is per-read evidence, not tamper-resistant session continuity. Reports: `/data/tmp/t093/review/`.
+
+Migration integrity (explicit): `20261104100000_customer_data_review.sql` was **edited after** its first
+apply to the disposable local DB `gxdb` (06:17:58Z) — not before. The first version lacked
+`grant execute on function private.customer_phone_key(text) to authenticated`, which
+`tests/db/privileges.test.ts` exposed (gerai shipment writes failed because the new expression indexes
+evaluate the function). The file gained that grant (line 25), and `gxdb` was adjusted **by hand** with
+exactly two statements: the same grant, and `update private.schema_migrations set sha256 = <new sha>
+where version = '20261104100000'`. Nothing else was hand-written; the file was never committed or applied
+elsewhere. Proof: a fresh database `gx_t093_verify` migrated from zero (`scripts/db-migrate.sh --reset`,
+51 migrations) recorded sha256 `76bc2400e751d7fe5a3f7db4ffa47ed183eb52e161452e8c80adc5a5969705f9` for this
+version, equal to the file and to `gxdb`, with the grant and the extended capability check present; it was
+dropped afterwards. Ledger check `migration-integrity` (declared); note `/data/tmp/t093/migration-integrity.md`.
+
+Run conditions: suites ran strictly one at a time, each only at a one-minute load <= 4 and with no other
+browser/integration suite on the machine (`/data/tmp/t093/gate-wait.log`). A power outage interrupted
+the first DB gate; its leftover disposable containers/networks were removed after confirming their
+runner was gone. Git integrity: right after the reboot this session observed `git fsck --no-dangling`
+exit 2 with `missing tree 4b825dc6…` (the empty tree), referenced only by `refs/pi-rewind/store`
+(session-reported; no artifact was saved at that time). The implementer performed no repair and ran no
+command that writes into `.git` (owner instruction). A later read-only check (15:18 WIB,
+`/data/tmp/t093/review/git-integrity-readonly.txt`) shows `git fsck` exit 0, the object present and every
+ref, including `refs/pi-rewind/store`, passing; which process restored the object is not established.
+Branch commits and worktrees are intact.
+Next queue: T-094 → T-096 → T-095 → legacy native `<select>` to shadcn.
+
 ## T-097 Super Admin controls on shadcn primitives (2026-11-04, PASS)
 
 Queue item 1 after the pause. Run `RUN-20261103T200404Z-5913b3ec` (declared R2, boundary R3):

@@ -26,6 +26,8 @@ const ANON_EXECUTE = [
 // Every public.* entry authorizes inside its body (private.require_member, require_tenant_admin_locked,
 // require_platform, caller identity), so execute alone never grants data access.
 const AUTHENTICATED_EXECUTE = [
+  // Pure phone normalization used by the shipments expression indexes (T-093); reads no table.
+  "private.customer_phone_key(text)",
   "private.is_member(uuid)",
   "private.member_role(uuid)",
   "private.platform_capable(text)",
@@ -55,6 +57,7 @@ const AUTHENTICATED_EXECUTE = [
   "public.platform_audit(text,integer)",
   "public.platform_billable_weight_rules()",
   "public.platform_clear_partner_stop(uuid,text)",
+  "public.platform_customer_lookup(text,text)",
   "public.platform_discount_history(uuid)",
   "public.platform_discount_observations(uuid)",
   "public.platform_discount_overview()",
@@ -71,6 +74,7 @@ const AUTHENTICATED_EXECUTE = [
   "public.platform_set_partner_id(text,text)",
   "public.platform_set_registration(boolean,text)",
   "public.platform_set_tenant_lifecycle(uuid,text,text,text)",
+  "public.platform_tenant_customers(uuid,text,integer,integer)",
   "public.platform_tenant_directory(text,text,integer,integer,text)",
   "public.platform_tenant_masking(uuid)",
   "public.platform_tenant_slugs()",

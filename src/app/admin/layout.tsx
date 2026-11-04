@@ -15,6 +15,8 @@ const ITEMS: (NavItem & { capability: Capability | Capability[] })[] = [
   { href: "/admin/diskon", label: "Diskon gerai", icon: "discount", group: "Operasional", capability: "integration_operations" },
   // T-091: declaration text (tenant_governance) and weight rules (integration_operations) share one page.
   { href: "/admin/konfigurasi", label: "Konfigurasi", icon: "settings", group: "Operasional", capability: ["tenant_governance", "integration_operations"] },
+  // T-093: customer-data review (DEC-024 a), only with the separate customer_data_review capability.
+  { href: "/admin/pelanggan", label: "Data pelanggan", icon: "contacts", group: "Gerai", capability: "customer_data_review" },
   { href: "/admin/akses", label: "Akses Super Admin", icon: "access", group: "Keamanan", capability: "access_governance" },
   { href: "/admin/audit", label: "Audit", icon: "audit", group: "Keamanan", capability: "audit_review" },
 ];

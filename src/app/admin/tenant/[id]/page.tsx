@@ -8,6 +8,7 @@ import { LoadError } from "@/components/notice";
 import { requirePlatform } from "@/lib/platform";
 import { dbServer } from "@/lib/db/server";
 import { MaskingForm } from "@/modules/tenants/masking-form";
+import { TenantCustomersPanel } from "../../pelanggan/customer-forms";
 import { LifecycleBadge, PageHeader } from "../../ui";
 
 export const metadata: Metadata = { title: "Detail gerai · Super Admin" };
@@ -75,7 +76,7 @@ export default async function PlatformTenantPage({ params }: { params: Promise<{
         crumbs={[{ href: "/admin", label: "Gerai" }]}
         current={summary.name}
         title={summary.name}
-        description="Satu gerai = satu cabang. Ringkasan pemantauan; transaksi tetap urusan gerai. Data pelanggan tidak terlihat di sini."
+        description={session.capabilities.includes("customer_data_review") ? "Satu gerai = satu cabang. Ringkasan pemantauan; transaksi tetap urusan gerai. Data pelanggan hanya dibuka dengan alasan." : "Satu gerai = satu cabang. Ringkasan pemantauan; transaksi tetap urusan gerai. Data pelanggan tidak terlihat di sini."}
       />
 
       <section aria-labelledby="activity-heading" className="flex flex-col gap-3">
@@ -153,6 +154,16 @@ export default async function PlatformTenantPage({ params }: { params: Promise<{
           <p className="text-sm text-muted-foreground">Setiap perubahan tercatat di audit dan bisa ditinjau oleh admin dengan kemampuan Tinjau audit.</p>
         )}
       </section>
+      ) : null}
+
+      {session.capabilities.includes("customer_data_review") ? (
+        <section aria-labelledby="customers-heading" className="flex flex-col gap-4 rounded-lg bg-card p-5 ring-1 ring-border md:p-6">
+          <h2 id="customers-heading" className="text-xl font-semibold tracking-tight">Data pelanggan gerai ini</h2>
+          <p className="text-sm text-muted-foreground">
+            Nama, nomor dan alamat pengirim/penerima per kiriman. Data pribadi: setiap halaman yang dibuka tercatat di audit dengan alasan Anda.
+          </p>
+          <TenantCustomersPanel tenantId={id} />
+        </section>
       ) : null}
 
       {session.capabilities.includes("integration_operations") ? (

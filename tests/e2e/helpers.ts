@@ -193,7 +193,7 @@ export function localSql(statement: string): string {
 // sign in the same fixture administrator within one 30-second step: pick the oldest step in the accepted
 // window (previous, current, next) that is newer than the last accepted one, and wait if none is left.
 import { FIXTURE_TOTP, totp } from "../totp";
-async function freshAdminCode(email: keyof typeof FIXTURE_TOTP): Promise<string> {
+export async function freshAdminCode(email: keyof typeof FIXTURE_TOTP): Promise<string> {
   let extended = false;
   for (;;) {
     const last = Number(localSql(`select coalesce(max(f.last_used_step), -1) from auth.mfa_factors f join auth.users u on u.id = f.user_id where u.email = '${email}'`));

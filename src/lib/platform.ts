@@ -10,7 +10,9 @@ export type Capability =
   | "platform_monitoring"
   | "integration_operations"
   | "access_governance"
-  | "audit_review";
+  | "audit_review"
+  // T-093 / DEC-024: assistant-proposed safeguard; no grant holds it by default.
+  | "customer_data_review";
 
 export const CAPABILITY_LABELS: Record<Capability, string> = {
   tenant_governance: "Tata kelola gerai",
@@ -18,6 +20,7 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
   integration_operations: "Operasi integrasi",
   access_governance: "Tata kelola akses admin",
   audit_review: "Tinjau audit",
+  customer_data_review: "Tinjau data pelanggan",
 };
 
 export type PlatformSession = {
