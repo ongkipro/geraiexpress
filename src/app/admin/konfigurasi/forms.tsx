@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -64,10 +65,11 @@ export function DeclarationForm({ current }: { current: { body: string; prohibit
                 <FieldLabel htmlFor="decl-source">Sumber (URL https)</FieldLabel>
                 <Input id="decl-source" name="source_url" type="url" required pattern="https://.*" defaultValue={current?.source_url ?? ""} />
               </Field>
-              <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
-                <input type="checkbox" name="provisional" defaultChecked className="size-5 accent-primary" />
+              {/* The whole 44px label row is the click target (UI-1 target size). */}
+              <FieldLabel htmlFor="decl-provisional" className="min-h-11 cursor-pointer items-center gap-3 font-normal has-data-checked:bg-transparent">
+                <Checkbox id="decl-provisional" name="provisional" defaultChecked />
                 <span>Teks masih sementara (belum disetujui Mengantar/counsel)</span>
-              </label>
+              </FieldLabel>
               <Reason id="decl-reason" />
             </FieldGroup>
             <DialogFooter className="gap-3">

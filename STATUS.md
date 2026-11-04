@@ -1,6 +1,6 @@
 # GeraiExpress — Status
 
-Updated: 2026-11-03
+Updated: 2026-11-04
 Status: Active
 State: INTEGRATING
 Review-Risk: R3
@@ -8,6 +8,25 @@ Primary-Worker: 01a19c76-b807-7288-ba09-fbeb00ac5f06
 Independent-Review: Regular baseline approval belongs to RUN-20261103T085327Z-57f4e09f. The separate cargo-transport source review and exact digest acceptance belong to RUN-20261103T114322Z-9ac39bc7; this summary is not review evidence. Neither slice closes full T-080, cargo activation or release gates.
 Independent-Reviewer: d264fdd1-6723-4373-8d56-67733f212566 (separate reviewer; latest repair review 2957899e-9617-4acf-90f0-5ce0656fe7b7; same retained session)
 Independent-Review-Head: Uncommitted worktree; approval must bind to the delivery boundary digest, not HEAD alone.
+
+## T-097 Super Admin controls on shadcn primitives (2026-11-04, PASS)
+
+Queue item 1 after the pause. Run `RUN-20261103T200404Z-5913b3ec` (declared R2, boundary R3):
+Konfigurasi "Teks masih sementara" uses the shared `Checkbox` inside a 44px label; the Direktori
+search uses `Input`/`Label`; the Audit "Jenis keputusan" filter uses the shared Radix select
+(`src/app/admin/audit/action-select.tsx`, hidden `jenis` so "all" stays empty). Review 1 found a P1:
+the select kept an unsubmitted or cleared choice across soft navigation (Next keeps client state on
+query changes) and re-applied it on submit; review 2 found the first key repair partial. The search
+form is now keyed by category, action and query; e2e covers clear-filter, query-only clear, category
+tab and Back. Review 3 APPROVE with P2 (36px checkbox target), repaired; review 4 APPROVE. Reports in
+`.pi/tasks/t097/review/`.
+Evidence lesson: `scripts/test-backend-isolated.mjs --browser` tests the prebuilt image
+`geraiexpress:audit-local` and does not build it. The first "48 passed" ran a pre-T-097 image and was
+withdrawn in the ledger; the image must be rebuilt after every `src/` change before browser evidence
+counts (`.pi/tasks/t097/*stale-image*` logs are not evidence). Test-harness fix: `freshAdminCode`
+extends the test once by its TOTP-step wait, like the sign-in budget wait.
+Known, not changed: the Konfigurasi page has pre-existing sub-44px links (source/date) from T-091.
+Next queue: T-093 → T-094 → T-096 → T-095 → legacy native `<select>` to shadcn.
 
 ## Handoff — paused by owner (2026-11-04)
 

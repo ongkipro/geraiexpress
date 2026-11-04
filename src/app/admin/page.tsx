@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, Building2, CheckCircle2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { config } from "@/lib/config";
 import { keyMaterialFromReader } from "@/lib/credential-crypto";
@@ -198,9 +200,8 @@ export default async function PlatformTenantsPage({ searchParams }: { searchPara
           {filter ? <input type="hidden" name="status" value={filter} /> : null}
           {attentionFilter ? <input type="hidden" name="perhatian" value={attentionFilter} /> : null}
           <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <label htmlFor="tenant-q" className="text-sm font-semibold">Cari gerai (nama atau slug)</label>
-            <input id="tenant-q" name="q" type="search" defaultValue={query} maxLength={80}
-              className="min-h-11 w-full rounded-full border border-input bg-card px-4 text-base" />
+            <Label htmlFor="tenant-q">Cari gerai (nama atau slug)</Label>
+            <Input id="tenant-q" name="q" type="search" defaultValue={query} maxLength={80} className="rounded-full px-4" />
           </div>
           <Button type="submit" variant="outline">Cari</Button>
         </form>

@@ -744,6 +744,15 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** T-091
 - **Done when:** platform_monitoring (or tenant_governance) users get an overview of active gerai, today's shipments, stuck/unknown/awaiting-payment operations and pending applications, each linking to a filtered list; the tenant directory has search, status filter and pagination; a per-gerai page shows lifecycle, outlet/pickup readiness, seller mode, discount, masking and activity summaries (by status, 7/30 days, open problems) with links to existing actions; no write actions; RPCs security-definer with capability checks, privilege allowlist updated; DB tests for capability denial; e2e at 390 and 1280.
 
+### [x] T-097 — Super Admin controls on shadcn primitives (owner queue item 1, 2026-11-04)
+- **Result (2026-11-04):** `RUN-20261103T200404Z-5913b3ec` PASS; fourth review APPROVE (P1 stale audit filter after soft navigation fixed by keying the search form by every URL filter; P2 44px checkbox label). Unit 1017, browser 50/0 (6 admin specs, 390/1280) on an image rebuilt from the final source.
+- **Primary requirement:** UI-7
+- **Constraints:** UI-7, UX-15; behavior, field names, labels and query parameters unchanged; no new dependency
+- **Risk Level:** R2
+- **Allowed Paths:** `src/app/admin/**`, `tests/**`, `TASKS.md`, `STATUS.md`
+- **Depends On:** T-092
+- **Done when:** the remaining hand-written controls in `src/app/admin/**` (Konfigurasi "Teks masih sementara" checkbox, Direktori search input, Audit "Jenis keputusan" select) use the shared `Checkbox`, `Input` and Radix `Select`; FormData still carries `provisional=on`, `q` and `jenis` (empty choice = all); e2e for the checkbox and the audit filter at 390 and 1280 pass; typecheck and unit pass.
+
 ### [ ] T-093 — Super Admin customer-data review and cross-gerai customer profile (DEC-024 a)
 - **Primary requirement:** IAM-7
 - **Constraints:** DEC-024 owner selection (customer-data visibility, cross-gerai history); assistant-proposed safeguards from DEC-024: capability `customer_data_review`, reason + audit per read; normalized phone as the cross-gerai key; read-only; proposed counsel gate T-048 before production (controller status unconfirmed)

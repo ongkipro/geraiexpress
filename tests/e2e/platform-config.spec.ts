@@ -20,12 +20,22 @@ test("shows the current declaration and weight rules and appends a new declarati
     await page.getByRole("button", { name: "Tambah versi teks pernyataan…" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("Versi lama tetap tersimpan");
+    // T-097: the shared Checkbox still posts `provisional`; unchecking it saves a final text.
+    const provisional = dialog.getByRole("checkbox", { name: /Teks masih sementara/ });
+    await expect(provisional).toBeChecked();
+    // UI-1 target size: the label row that toggles the checkbox is at least 44px high.
+    // Layout height, not boundingBox: the dialog's open animation scales it for a moment.
+    const target = await dialog.locator('label[for="decl-provisional"]').evaluate((el: HTMLElement) => el.offsetHeight);
+    expect(target).toBeGreaterThanOrEqual(44);
+    await provisional.click();
+    await expect(provisional).not.toBeChecked();
     await dialog.getByLabel("Alasan (dicatat di audit)").fill("Uji e2e versi teks");
     await dialog.getByRole("button", { name: "Simpan versi baru" }).click();
     // Server action under a busy suite: allow more than the 5 s default.
     await expect(page.getByRole("status").filter({ hasText: `Versi ${before + 1} teks pernyataan berlaku sekarang.` })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("declaration-current")).toContainText(`Versi ${before + 1} berlaku`);
     expect(localSql(`select count(*) from public.audit_events where action = 'declaration_text.append'`)).not.toBe("0");
+    expect(localSql(`select provisional from public.declaration_texts where version = ${before + 1}`)).toBe("f");
   } finally {
     localSql(`alter table public.declaration_texts disable trigger declaration_texts_append_only;
       delete from public.declaration_texts where version > ${before};

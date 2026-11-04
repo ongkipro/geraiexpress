@@ -194,11 +194,15 @@ export function localSql(statement: string): string {
 // window (previous, current, next) that is newer than the last accepted one, and wait if none is left.
 import { FIXTURE_TOTP, totp } from "../totp";
 async function freshAdminCode(email: keyof typeof FIXTURE_TOTP): Promise<string> {
+  let extended = false;
   for (;;) {
     const last = Number(localSql(`select coalesce(max(f.last_used_step), -1) from auth.mfa_factors f join auth.users u on u.id = f.user_id where u.email = '${email}'`));
     const step = Math.floor(Date.now() / 30_000);
     const usable = [step - 1, step, step + 1].filter((candidate) => candidate > last);
     if (usable.length) return totp(FIXTURE_TOTP[email], usable[0] * 30_000);
+    // The wait for the next step (up to 30 s) is the replay guard's, not the app's: extend the test once
+    // by it, as the sign-in budget wait does (T-097: a 30 s test timed out right after this wait).
+    if (!extended) { test.setTimeout(test.info().timeout + 35_000); extended = true; }
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
 }

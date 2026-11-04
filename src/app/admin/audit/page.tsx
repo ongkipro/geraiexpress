@@ -10,6 +10,7 @@ import { CAPABILITY_LABELS, requirePlatform } from "@/lib/platform";
 import { formatPercentBps, STATUS_LABEL } from "@/modules/pricing/percent";
 import { dbServer } from "@/lib/db/server";
 import { cn } from "@/lib/utils";
+import { AuditActionSelect } from "./action-select";
 import { CardLabel, EmptyState, LoadError, PageHeader, RT, SegmentedNav } from "../ui";
 
 export const metadata: Metadata = { title: "Audit · Super Admin" };
@@ -195,14 +196,15 @@ export default async function PlatformAuditPage({ searchParams }: { searchParams
       <PageHeader title="Audit" description="100 keputusan terakhir. Catatan audit tidak bisa diubah atau dihapus lewat aplikasi maupun API." />
       <SegmentedNav label="Kategori keputusan" items={tabs} />
 
-      <form role="search" className="flex flex-col gap-3 rounded-lg bg-card p-4 ring-1 ring-border md:flex-row md:items-end">
+      {/* Keyed by every URL filter: soft navigation keeps client state, so an unsubmitted choice or search
+          text would otherwise survive a tab, "Hapus filter" or back/forward and be re-applied by Terapkan. */}
+      <form key={JSON.stringify([category, action, query])} role="search" className="flex flex-col gap-3 rounded-lg bg-card p-4 ring-1 ring-border md:flex-row md:items-end">
         {category ? <input type="hidden" name="kategori" value={category} /> : null}
         <div className="flex min-w-0 flex-col gap-2 md:w-[280px]">
           <Label htmlFor="audit-jenis">Jenis keputusan</Label>
-          <select id="audit-jenis" name="jenis" defaultValue={action ?? ""} className="min-h-11 w-full rounded-sm border border-input bg-card px-3 text-base">
-            <option value="">{category ? `Semua di ${CATEGORIES[category].label}` : "Semua jenis"}</option>
-            {options.map((key) => <option key={key} value={key}>{ACTIONS[key]}</option>)}
-          </select>
+          <AuditActionSelect id="audit-jenis" defaultValue={action ?? ""}
+            allLabel={category ? `Semua di ${CATEGORIES[category].label}` : "Semua jenis"}
+            options={options.map((key) => ({ value: key, label: ACTIONS[key] }))} />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <Label htmlFor="audit-q">Cari</Label>
