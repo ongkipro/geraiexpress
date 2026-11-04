@@ -4,10 +4,10 @@ Updated: 2026-11-04
 Status: Active
 State: INTEGRATING
 Review-Risk: R3
-Primary-Worker: 01a19c76-b807-7288-ba09-fbeb00ac5f06
-Independent-Review: Regular baseline approval belongs to RUN-20261103T085327Z-57f4e09f. The separate cargo-transport source review and exact digest acceptance belong to RUN-20261103T114322Z-9ac39bc7; this summary is not review evidence. Neither slice closes full T-080, cargo activation or release gates.
-Independent-Reviewer: d264fdd1-6723-4373-8d56-67733f212566 (separate reviewer; latest repair review 2957899e-9617-4acf-90f0-5ce0656fe7b7; same retained session)
-Independent-Review-Head: Uncommitted worktree; approval must bind to the delivery boundary digest, not HEAD alone.
+Primary-Worker: pi-parent-01a1a300
+Independent-Review: T-099 source run RUN-20261104T132445Z-6016ac5f closed PASS after independent R3 approval of digest f73c23dfa0b6a6a95138d303ea129aa9fcc66aab0457b16cd27c9ce4cdbef257. This does not close other product, provider, legal or release gates.
+Independent-Reviewer: reviewer-185798e0 (separate reviewer; retained session 615c5c30-a61c-475a-850a-58feab6d7907)
+Independent-Review-Head: Source commit 8b092c5; merge 209c1c5 preserves its five source blobs. This documentation handoff has its own integration gates under RUN-20261104T174014Z-efb3143a.
 
 ## T-094 Sender address and masked-label sender (2026-11-04, PASS; pushed, not deployed)
 
@@ -33,11 +33,16 @@ issues (stale sender address after switching contacts, missing PostgREST schema 
 address silently dropped, one weakened unit assertion); all repaired, review 2 APPROVE. RELEASE.md step 11
 now requires a schema reload after server migrations (the committed T-093 migration has no notify of its
 own; the T-094 migration's notify covers both). Reports: `/data/tmp/t094/review/`.
-Next: T-096 logo → T-095 resi formats; T-084 after T-094 (same label RPCs); T-082 (in progress), T-099.
+Next: T-096 logo → T-095 resi formats; T-084 after T-094 (same label RPCs). T-082 and T-096 are verified local worktree implementations, not merged: owner receipt-content and masked-label branding decisions remain open. T-099 source is integrated; handoff verification follows.
 
-## T-099 DB test lifecycle (implementation verified; final source-bound gates and review pending)
+## T-099 DB test lifecycle (source PASS, integrated; not deployed)
 
-Run `RUN-20261104T132445Z-6016ac5f`, worktree `.gx-wt/T-099`; not merged or committed.
+Run `RUN-20261104T132445Z-6016ac5f` closed PASS and verified; implementation `8b092c5`, merged as
+`209c1c5` into `feat/counter-ops-2026-11`. Both parents' 51 existing run/release paths were preserved,
+and delivery-ledger verify passed after conflict resolution. Only STATUS.md and the generated current
+projection conflicted; no source conflict or modification occurred. Separate documentation/integration
+handoff: `RUN-20261104T174014Z-efb3143a`. Push target is `origin/feat/counter-ops-2026-11`; no deployment
+or existing development database recreation is part of this work.
 The initial normal-test-only patch was rejected by independent review: blocking fixture SQL, late fixture
 continuations and lost container-session ownership remained reachable. The repaired implementation uses
 asynchronous optional helper I/O, cancellation-bound fetch, per-test ownership, a durable closed startup
@@ -47,7 +52,7 @@ HTTP transport regression passed 2 tests, proving pre/post-fetch cancellation an
 not server transaction completion. Executed logs and probe instrumentation: `/data/tmp/t099/`.
 Forced startup-delay, late-encryption and host-delay probes observed no late backend/fixture; stronger
 pre-admission proof additionally observed container resumption and closed-gate exit 125.
-BLOCKER: admitted-process proof v2/v3 fails real teardown: initial cleanup psql exits 0, final cleanup psql
+Resolved failure evidence: admitted-process proof v2/v3 failed real teardown: initial cleanup psql exits 0, final cleanup psql
 exits 2, first observer connection also exits 2 then recovers, and one fixture remains. Process ownership
 was verified and the delayed connection did not resume. A single quiet-host diagnostic v4 reproduced
 failure and captured an actual signal-9 return receipt for owned group 150, followed at the same time by
@@ -78,9 +83,17 @@ have NOT been recreated: configuration validation is not current-stack runtime a
 fails safely on the known unsafe topology until the user recreates it with init.
 Reviewer 2b471b29 accepted the final preflight and its regression without findings. This guard rejects
 known-unsafe topology; it does not certify every possible PID 1 reaper, nor suppress all afterEach SQL.
-Final executed typecheck/full DB, current-source admitted proof, compose validation and independent
-digest-bound review remain due before source-run closure. Keep task unchecked until the verified
-implementation is integrated and its separate documentation handoff records completion.
+Final source-bound ledger checks all PASS: typecheck, 6 cancellation/preflight unit tests, 470 full DB
+tests, compose validation without environment resolution, diff hygiene, and the guarded-source admitted
+proof v6. The latter retains the original intentional 15-second test timeout, successful group kill and
+both cleanup exits 0, zero-leak observation for 25 seconds, no delayed resumption, and no PostgreSQL
+recovery from the matching kill-request timestamp onward. Evidence: `/data/tmp/t099/final-{unit,db}.log`
+and `admitted-connect18-v6-guard-{events.jsonl,driver.log}`. Reviewer 185798e0 independently APPROVED
+boundary event e0f4cd7e845648778444a3c6c2185e03 / digest f73c23dfa0b6a6a95138d303ea129aa9fcc66aab0457b16cd27c9ce4cdbef257.
+T-099 implementation acceptance is complete. Post-merge typecheck, unit and full DB gates are required
+by the separate handoff run; that run's executed evidence records their outcome without changing the
+closed source-run surface. Pi runtime artifacts are retained untracked and excluded only through a
+temporary Git exclusion file during handoff verification; no user ignore configuration was changed.
 
 ## T-093 Super Admin customer-data review (2026-11-04, PASS, local only)
 
