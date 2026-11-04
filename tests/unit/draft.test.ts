@@ -7,6 +7,28 @@ const form = (entries: Record<string, string>) => {
   return f;
 };
 
+describe("sender address (T-094)", () => {
+  const base = { sender_name: "Budi", sender_phone: "081234567890" };
+  it("is optional and stored as null when empty", () => {
+    const { update, errors } = parseDraft(form(base));
+    expect(errors).toEqual({});
+    expect(update).toMatchObject({ sender_address: null, sender_area: null, sender_postal_code: null });
+  });
+  it("collapses whitespace and keeps the printed limits: street 5-120, area 3-40, postal 5 digits", () => {
+    const ok = parseDraft(form({ ...base, sender_address: "  Jl. Kenanga\n  No. 3 ", sender_area: "Kec. Coblong", sender_postal_code: "40132" }));
+    expect(ok.errors).toEqual({});
+    expect(ok.update).toMatchObject({ sender_address: "Jl. Kenanga No. 3", sender_area: "Kec. Coblong", sender_postal_code: "40132" });
+    const bad = parseDraft(form({ ...base, sender_address: "x".repeat(121), sender_area: "AB", sender_postal_code: "4013" }));
+    expect(Object.keys(bad.errors).sort()).toEqual(["sender_address", "sender_area", "sender_postal_code"]);
+    expect(parseDraft(form({ ...base, sender_address: "Jl" })).errors.sender_address).toContain("5–120");
+  });
+  it("is not required for a quote (missingForQuote is unchanged)", () => {
+    const { update } = parseDraft(form({ ...base, recipient_name: "Sari", recipient_phone: "081299998888", recipient_address: "Jl. Mawar No. 1",
+      recipient_area: "Kota Bandung", item_description: "Buku", weight_grams: "1500" }));
+    expect(missingForQuote(update)).toEqual([]);
+  });
+});
+
 describe("draft parsing", () => {
   it("normalizes Indonesian phone formats", () => {
     expect(normalizePhone("+62 812-3456-7890")).toBe("081234567890");

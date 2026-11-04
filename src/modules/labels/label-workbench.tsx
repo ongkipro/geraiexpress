@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatWib } from "@/lib/format";
 import {
-  DEFAULT_LABEL_SIZE, EMPTY_SENDER, LABEL_SIZES, buildLabelContent, contentFromSnapshot, isLabelSize, sameChoice, senderErrors,
+  DEFAULT_LABEL_SIZE, LABEL_SIZES, SENDER_LIMITS, buildLabelContent, contentFromSnapshot, isLabelSize, sameChoice, senderErrors,
   type LabelChoice, type LabelFacts, type LabelSize, type LabelSnapshot, type SenderErrors, type SenderInput,
 } from "@/lib/label-content";
 import { printLabelAction } from "./actions";
@@ -45,12 +45,12 @@ function writePreference(key: string, value: Preference) {
   }
 }
 
-// UX-9 print view of a real issued shipment: the size, the masking switch with the three sender fields when
+// UX-9 print view of a real issued shipment: the size, the masking switch with the sender fields when
 // it is on, the print button, and a preview that is the print output. Preview before print is built from the
 // same facts the snapshot command reads; once printed, the sheet is rendered from the stored snapshot the
 // command returned, and a reprint of an unchanged choice is another print event on that same snapshot.
 export function LabelWorkbench({
-  shipmentId, facts, role, maskingAllowed, snapshots, history, preferenceKey,
+  shipmentId, facts, role, maskingAllowed, snapshots, history, preferenceKey, initialSender,
 }: {
   shipmentId: string;
   facts: LabelFacts;
@@ -59,19 +59,24 @@ export function LabelWorkbench({
   snapshots: LabelSnapshot[];
   history: PrintHistoryEntry[];
   preferenceKey: string;
+  // T-094: the masked sender starts from the shipment's own sender and stays editable.
+  initialSender: SenderInput;
 }) {
   const router = useRouter();
   const [mask, setMask] = useState(false);
   const [size, setSize] = useState<LabelSize>(DEFAULT_LABEL_SIZE);
   const [zoom, setZoom] = useState<Zoom>("fit");
-  const [sender, setSender] = useState<SenderInput>(EMPTY_SENDER);
+  const [sender, setSender] = useState<SenderInput>(initialSender);
   const [errors, setErrors] = useState<SenderErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [printed, setPrinted] = useState<LabelSnapshot | null>(null);
   const [printNonce, setPrintNonce] = useState(0);
   const [pending, startTransition] = useTransition();
-  const fieldRefs = { name: useRef<HTMLInputElement>(null), phone: useRef<HTMLInputElement>(null), city: useRef<HTMLInputElement>(null) };
+  const fieldRefs = {
+    name: useRef<HTMLInputElement>(null), phone: useRef<HTMLInputElement>(null),
+    address: useRef<HTMLInputElement>(null), city: useRef<HTMLInputElement>(null),
+  };
 
   // A tenant whose masking was disabled by the platform always prints the gerai identity.
   const effectiveMask = maskingAllowed && mask;
@@ -125,7 +130,7 @@ export function LabelWorkbench({
     if (effectiveMask) {
       const found = senderErrors(sender);
       setErrors(found);
-      const first = (["name", "phone", "city"] as const).find((key) => found[key]);
+      const first = (["name", "phone", "address", "city"] as const).find((key) => found[key]);
       if (first) {
         fieldRefs[first].current?.focus();
         return;
@@ -144,10 +149,13 @@ export function LabelWorkbench({
     });
   };
 
-  const fields: { key: keyof SenderInput; label: string; autoComplete: string; inputMode?: "tel" }[] = [
-    { key: "name", label: "Nama pengirim", autoComplete: "off" },
-    { key: "phone", label: "No. HP pengirim", autoComplete: "off", inputMode: "tel" },
-    { key: "city", label: "Kota pengirim", autoComplete: "off" },
+  // Structured fields with the printed limits (owner, 2026-11-04: tidy label). The street is optional.
+  const fields: { key: keyof SenderInput; label: string; autoComplete: string; inputMode?: "tel"; maxLength?: number; required: boolean; hint?: string }[] = [
+    { key: "name", label: "Nama pengirim", autoComplete: "off", maxLength: SENDER_LIMITS.nameMax, required: true },
+    { key: "phone", label: "No. HP pengirim", autoComplete: "off", inputMode: "tel", maxLength: 20, required: true },
+    { key: "address", label: "Alamat pengirim (opsional)", autoComplete: "off", maxLength: SENDER_LIMITS.addressMax, required: false,
+      hint: `Jalan dan nomor, maks. ${SENDER_LIMITS.addressMax} karakter.` },
+    { key: "city", label: "Kecamatan / kota pengirim", autoComplete: "off", maxLength: SENDER_LIMITS.cityMax, required: true },
   ];
 
   return (
@@ -176,14 +184,14 @@ export function LabelWorkbench({
             />
           </label>
           <p id="mask-help" className="text-sm text-muted-foreground">
-            Mati: label memakai nama, WhatsApp dan alamat pickup gerai. Hidup: label memakai nama, nomor HP dan kota yang Anda isi. Pilihan ini diingat selama tab ini terbuka; isian pengirim tidak disimpan.
+            Mati: label memakai nama, WhatsApp dan alamat pickup gerai. Hidup: label memakai pengirim kiriman ini (nama, nomor HP, alamat, kecamatan/kota), yang masih bisa Anda ubah. Pilihan ini diingat selama tab ini terbuka; perubahan isian hanya untuk label ini.
           </p>
           {!maskingAllowed ? (
             <p id="mask-disabled" data-testid="mask-disabled-reason" className="rounded-md bg-muted p-3 text-sm">{MASKING_DISABLED}</p>
           ) : null}
           {effectiveMask ? (
             <div className="flex flex-col gap-3" data-testid="sender-fields">
-              {fields.map(({ key, label, autoComplete, inputMode }) => (
+              {fields.map(({ key, label, autoComplete, inputMode, maxLength, required, hint }) => (
                 <div key={key} className="flex flex-col gap-1.5">
                   <Label htmlFor={`sender-${key}`}>{label}</Label>
                   <Input
@@ -191,12 +199,14 @@ export function LabelWorkbench({
                     ref={fieldRefs[key]}
                     value={sender[key]}
                     onChange={(event) => edit({ [key]: event.target.value })}
-                    required
+                    required={required}
+                    maxLength={maxLength}
                     autoComplete={autoComplete}
                     inputMode={inputMode}
                     aria-invalid={errors[key] ? true : undefined}
-                    aria-describedby={errors[key] ? `sender-${key}-error` : undefined}
+                    aria-describedby={[hint ? `sender-${key}-hint` : "", errors[key] ? `sender-${key}-error` : ""].filter(Boolean).join(" ") || undefined}
                   />
+                  {hint ? <p id={`sender-${key}-hint`} className="text-sm text-muted-foreground">{hint}</p> : null}
                   {errors[key] ? (
                     <p id={`sender-${key}-error`} role="alert" className="flex items-center gap-1.5 text-sm text-danger">
                       <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />{errors[key]}

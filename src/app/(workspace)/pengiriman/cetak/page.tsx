@@ -15,7 +15,7 @@ export default async function BatchLabelPage({ searchParams }: { searchParams: P
   if (!ids) notFound();
   const db = await dbServer();
   const [{ data: rows, error }, { data: tenant }, { data: snapshotRows }] = await Promise.all([
-    db.from("shipments").select("id, reference, submission_state, awb, is_simulated, sender_name, sender_phone, recipient_name, recipient_phone, recipient_address, recipient_area, recipient_postal_code, item_description, weight_grams, is_cod, cod_amount_idr, pickup_snapshot, quote:shipment_quotes!shipments_tenant_id_selected_quote_id_fkey(courier, service)").eq("tenant_id", ws.tenant.id).in("id", ids),
+    db.from("shipments").select("id, reference, submission_state, awb, is_simulated, sender_name, sender_phone, sender_address, sender_area, recipient_name, recipient_phone, recipient_address, recipient_area, recipient_postal_code, item_description, weight_grams, is_cod, cod_amount_idr, pickup_snapshot, quote:shipment_quotes!shipments_tenant_id_selected_quote_id_fkey(courier, service)").eq("tenant_id", ws.tenant.id).in("id", ids),
     db.from("tenants").select("name, contact_whatsapp, masking_allowed").eq("id", ws.tenant.id).maybeSingle(),
     // Newest first: the first row per shipment is the one create_label_snapshot compares against.
     db.from("label_snapshots").select(`shipment_id, ${SNAPSHOT_COLUMNS}`).eq("tenant_id", ws.tenant.id).in("shipment_id", ids)

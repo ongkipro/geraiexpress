@@ -2,7 +2,7 @@
 // Each test names its finding; all run on the local stack and the demo or seeded fixtures only.
 import { randomUUID } from "node:crypto";
 import { expect, test } from "./fixtures";
-import { chooseOption, expectNoHorizontalOverflow, localSql, signIn, signInAdmin, startDemo } from "./helpers";
+import { chooseOption, expectNoHorizontalOverflow, freshAdminCode, localSql, signIn, signInAdmin, startDemo } from "./helpers";
 
 async function quotedDemoDraft(page: import("@playwright/test").Page) {
   await startDemo(page);
@@ -64,17 +64,7 @@ test("F4: an integration-only Super Admin lands on Integrasi Mengantar", async (
   try {
     await signIn(page, "admin-2@geraiexpress.test");
     await expect(page).toHaveURL(/\/verifikasi-2fa$/);
-    const { FIXTURE_TOTP, totp } = await import("../totp");
-    // Accepted window is previous/current/next step; pick the oldest unused one (same rule as signInAdmin).
-    const last = Number(localSql(`select coalesce(max(f.last_used_step), -1) from auth.mfa_factors f where f.user_id = '${ADMIN2}'`));
-    let usable: number[] = [];
-    for (;;) {
-      const now = Math.floor(Date.now() / 30_000);
-      usable = [now - 1, now, now + 1].filter((c) => c > last);
-      if (usable.length) break;
-      await page.waitForTimeout(1000);
-    }
-    await page.getByLabel("Kode 6 digit").fill(totp(FIXTURE_TOTP["admin-2@geraiexpress.test"], usable[0] * 30_000));
+    await page.getByLabel("Kode 6 digit").fill(await freshAdminCode("admin-2@geraiexpress.test"));
     await page.getByRole("button", { name: "Verifikasi" }).click();
     await expect(page).toHaveURL(/\/admin\/integrasi$/);
     await expect(page.getByText("Kemampuan Anda belum memiliki halaman")).toHaveCount(0);

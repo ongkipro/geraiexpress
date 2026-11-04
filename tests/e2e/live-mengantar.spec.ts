@@ -61,7 +61,7 @@ test("a connected gerai picks its Mengantar pickup, searches the recipient area 
     await expect(option).toBeVisible();
     await option.click();
     await expect(page.getByTestId("area-chosen")).toContainText("SUKATANI, TAPOS, DEPOK");
-    await expect(page.getByLabel("Kode pos")).toHaveValue("16454");
+    await expect(page.getByLabel("Kode pos penerima")).toHaveValue("16454");
     await shot(page, "area-picked");
     await page.getByLabel("Isi paket").fill("Dokumen uji");
     await page.getByLabel("Berat (gram)").fill("1000");

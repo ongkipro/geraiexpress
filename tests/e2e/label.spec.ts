@@ -213,12 +213,18 @@ test("masking on needs all three sender fields, previews them, keeps the true id
   // Operators do not see the administrators' retention note.
   await expect(page.getByTestId("retention-note")).toHaveCount(0);
 
-  // Blocked with a field error next to each input until all three are entered; nothing is stored.
+  // T-094: the fields start from the shipment's own sender (this one has no address or area yet).
+  await expect(page.getByLabel("Nama pengirim")).toHaveValue("Pengirim Asli");
+  await expect(page.getByLabel("No. HP pengirim")).toHaveValue("081200000099");
+  await expect(page.getByLabel("Alamat pengirim (opsional)")).toHaveValue("");
+  // Blocked with a field error next to each input until the required ones are entered; nothing is stored.
+  await page.getByLabel("Nama pengirim").fill("");
+  await page.getByLabel("No. HP pengirim").fill("");
   await printButton(page).click();
   await expect(page.getByLabel("Nama pengirim")).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByText("Isi nama pengirim.")).toBeVisible();
   await expect(page.getByText("Isi nomor HP pengirim.")).toBeVisible();
-  await expect(page.getByText("Isi kota pengirim.")).toBeVisible();
+  await expect(page.getByText("Isi kecamatan / kota pengirim.")).toBeVisible();
   await expect(page.getByLabel("Nama pengirim")).toBeFocused();
   expect(await prints(page)).toBe(0);
   expect(count("label_snapshots", id)).toBe(0);
@@ -226,7 +232,7 @@ test("masking on needs all three sender fields, previews them, keeps the true id
   await page.getByLabel("Nama pengirim").fill("Toko Pelanggan");
   await page.getByLabel("No. HP pengirim").fill("0813-1111-2222");
   await expect(page.getByText("Isi nama pengirim.")).toHaveCount(0);
-  await page.getByLabel("Kota pengirim").fill("Bandung");
+  await page.getByLabel("Kecamatan / kota pengirim").fill("Bandung");
   // The preview changes with the entered sender and no longer shows the gerai pickup address.
   await expect(page.getByTestId("label-sender-name")).toHaveText("Toko Pelanggan");
   await expect(page.getByTestId("label-sender-phone")).toHaveText("081311112222");
@@ -479,8 +485,8 @@ test("batch queue prints selected labels and excludes unavailable shipments", as
   expect(geometry.heightMm).toBeCloseTo(150, 0);
   await page.emulateMedia({ media: "screen" });
   await page.getByRole("switch", { name: "Gunakan masking pengirim" }).check();
-  await expect(page.getByText("Isi kota pengirim.").first()).toBeVisible();
-  await page.getByLabel("Kota pengirim untuk semua label").fill("Bandung");
+  await expect(page.getByText("Isi kecamatan / kota pengirim.").first()).toBeVisible();
+  await page.getByLabel("Kecamatan / kota pengirim untuk kiriman yang belum mengisinya").fill("Bandung");
   await page.getByRole("radio", { name: "10 × 10 cm" }).click();
   await page.getByRole("button", { name: "Cetak 2 label" }).click();
   await expect.poll(() => prints(page)).toBe(2);

@@ -8,6 +8,8 @@ export const DRAFT_FIELDS = [
   "sender_name", "sender_phone", "recipient_name", "recipient_phone", "recipient_address",
   "recipient_area", "recipient_area_id", "recipient_postal_code", "item_description", "weight_grams", "length_cm",
   "width_cm", "height_cm", "goods_value_idr", "is_cod",
+  // T-094: optional sender address (street, area, postal code). Never sent to Mengantar (PR-3).
+  "sender_address", "sender_area", "sender_postal_code",
   // T-043: handover choice ("dropoff" | "pickup") and, for pickup, the slot (WIB date and start hour),
   // vehicle volume class and a local note.
   "handover", "pickup_date", "pickup_slot_hour", "pickup_volume", "pickup_note",
@@ -18,6 +20,9 @@ export type DraftValues = Record<DraftField, string>;
 export type DraftUpdate = Partial<Record<DraftField, string | number | boolean | null>>;
 
 const PHONE = /^\+?[0-9]{8,15}$/;
+// The sender address limits are the printed masked-label limits (src/lib/label-content.ts SENDER_LIMITS).
+export const SENDER_ADDRESS_MAX = 120;
+export const SENDER_AREA_MAX = 40;
 const POSTAL = /^[0-9]{5}$/;
 
 export function normalizePhone(raw: string): string {
@@ -44,6 +49,14 @@ export function parseDraft(form: FormData, live = false, now: Date = new Date())
     else update[field] = v;
   };
   text("sender_name", 120, 2);
+  // Same limits as the printed masked sender (owner, 2026-11-04: tidy label). The street's whitespace
+  // runs collapse to one space, as the label snapshot does.
+  values.sender_address = values.sender_address.replace(/\s+/g, " ");
+  text("sender_address", SENDER_ADDRESS_MAX, 5);
+  text("sender_area", SENDER_AREA_MAX, 3);
+  if (values.sender_postal_code === "") update.sender_postal_code = null;
+  else if (!POSTAL.test(values.sender_postal_code)) errors.sender_postal_code = "Kode pos 5 digit.";
+  else update.sender_postal_code = values.sender_postal_code;
   text("recipient_name", 120, 2);
   text("recipient_address", 500, 5);
   text("recipient_area", 160, 3);

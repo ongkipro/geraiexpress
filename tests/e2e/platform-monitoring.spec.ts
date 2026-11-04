@@ -2,7 +2,7 @@
 // Monitoring-only administrators read everything here but get no write control.
 import { randomUUID } from "node:crypto";
 import { expect, test } from "./fixtures";
-import { expectNoHorizontalOverflow, localSql, signIn, signInAdmin } from "./helpers";
+import { expectNoHorizontalOverflow, freshAdminCode, localSql, signIn, signInAdmin } from "./helpers";
 
 test("the overview and directory show aggregates, search and filter; the per-gerai page shows activity without customer data", async ({ page }) => {
   await signInAdmin(page);
@@ -57,17 +57,7 @@ test("a monitoring-only Super Admin reads overview and summary but gets no lifec
   try {
     await signIn(page, "admin-2@geraiexpress.test");
     await expect(page).toHaveURL(/\/verifikasi-2fa$/);
-    const { FIXTURE_TOTP, totp } = await import("../totp");
-    // Accepted window is previous/current/next step; pick the oldest unused one (same rule as signInAdmin).
-    const last = Number(localSql(`select coalesce(max(f.last_used_step), -1) from auth.mfa_factors f where f.user_id = '${ADMIN2}'`));
-    let usable: number[] = [];
-    for (;;) {
-      const now = Math.floor(Date.now() / 30_000);
-      usable = [now - 1, now, now + 1].filter((c) => c > last);
-      if (usable.length) break;
-      await page.waitForTimeout(1000);
-    }
-    await page.getByLabel("Kode 6 digit").fill(totp(FIXTURE_TOTP["admin-2@geraiexpress.test"], usable[0] * 30_000));
+    await page.getByLabel("Kode 6 digit").fill(await freshAdminCode("admin-2@geraiexpress.test"));
     await page.getByRole("button", { name: "Verifikasi" }).click();
     await expect(page).toHaveURL(/\/admin$/);
     await expect(page.getByTestId("platform-overview")).toBeVisible();

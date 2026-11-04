@@ -6,6 +6,12 @@ export const FIXTURE_TOTP = {
   "admin-2@geraiexpress.test": "KRSXG5DTMVZXIZLSKRSXG5DTMVZXIZLS",
 } as const;
 
+// Never select the previous step: it can expire during browser submission at rollover.
+export function freshTotpStep(lastUsed: number, at = Date.now()): number | undefined {
+  const current = Math.floor(at / 30_000);
+  return [current, current + 1].find((step) => step > lastUsed);
+}
+
 export function totp(secret: string, at = Date.now()): string {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   let bits = "";

@@ -1,7 +1,8 @@
 // What the local masked label prints (PR-34, PR-6, DATA-10, UX-9, UI-6), as pure functions so the preview,
 // the stored snapshot and the tests share one definition. The printed sender comes from the masking switch
-// only: the gerai identity (name, WhatsApp, pickup address) when it is off, the three operator-entered
-// fields when it is on. The Mengantar pickup name, the outlet name, the customer charge, the private net
+// only: the gerai identity (name, WhatsApp, pickup address) when it is off, the operator-confirmed sender
+// when it is on: name, phone and area required, street optional (T-094), pre-filled from the shipment's
+// sender (senderFromShipment). The Mengantar pickup name, the outlet name, the customer charge, the private net
 // cost and any discount are not inputs here, so they cannot reach the printout (PR-22).
 import { courierName } from "./format";
 
@@ -15,13 +16,25 @@ export const LABEL_SIZES: Record<LabelSize, { widthMm: number; heightMm: number;
 export const DEFAULT_LABEL_SIZE: LabelSize = "10x15";
 export const isLabelSize = (value: unknown): value is LabelSize => value === "10x15" || value === "10x10";
 
-// Same bounds as create_label_snapshot (20261028150000_masked_label.sql), which stays authoritative.
-export const SENDER_LIMITS = { nameMin: 2, nameMax: 60, cityMin: 2, cityMax: 40 } as const;
+// Same bounds as create_label_snapshot (20261104110000_sender_address.sql), which stays authoritative.
+// Owner (2026-11-04): structured sender fields with text limits so the printed label stays tidy.
+export const SENDER_LIMITS = { nameMin: 2, nameMax: 60, cityMin: 2, cityMax: 40, addressMin: 5, addressMax: 120 } as const;
 
-export type SenderInput = { name: string; phone: string; city: string };
+export type SenderInput = { name: string; phone: string; city: string; address: string };
 export type SenderErrors = Partial<Record<keyof SenderInput, string>>;
 
-export const EMPTY_SENDER: SenderInput = { name: "", phone: "", city: "" };
+export const EMPTY_SENDER: SenderInput = { name: "", phone: "", city: "", address: "" };
+
+// A pasted multi-line street prints on tidy lines: whitespace runs become one space (the database does
+// the same before checking the limits).
+export const tidyAddress = (raw: string) => raw.trim().replace(/\s+/g, " ");
+
+// The masked sender starts from the shipment's own sender (T-094); the operator may still edit it. A
+// value longer than the printed limit is kept as typed, so the field error tells the operator to shorten
+// it instead of silently cutting a word.
+export function senderFromShipment(s: { sender_name: string | null; sender_phone: string | null; sender_address: string | null; sender_area: string | null }): SenderInput {
+  return { name: s.sender_name ?? "", phone: s.sender_phone ?? "", city: s.sender_area ?? "", address: s.sender_address ?? "" };
+}
 
 // Separators removed, digits with an optional leading +: the shape contact and shipment phones use.
 export function cleanSenderPhone(raw: string): string | null {
@@ -43,9 +56,13 @@ export function senderErrors(input: SenderInput): SenderErrors {
   }
   if (!phone) errors.phone = "Isi nomor HP pengirim.";
   else if (!cleanSenderPhone(phone)) errors.phone = "Nomor HP pengirim tidak valid. Gunakan 8–15 digit, misalnya 081234567890.";
-  if (!city) errors.city = "Isi kota pengirim.";
+  if (!city) errors.city = "Isi kecamatan / kota pengirim.";
   else if (city.length < SENDER_LIMITS.cityMin || city.length > SENDER_LIMITS.cityMax || control.test(city)) {
-    errors.city = `Kota pengirim ${SENDER_LIMITS.cityMin}–${SENDER_LIMITS.cityMax} karakter.`;
+    errors.city = `Kecamatan / kota pengirim ${SENDER_LIMITS.cityMin}–${SENDER_LIMITS.cityMax} karakter.`;
+  }
+  const address = tidyAddress(input.address ?? "");
+  if (address && (address.length < SENDER_LIMITS.addressMin || address.length > SENDER_LIMITS.addressMax || control.test(address))) {
+    errors.address = `Alamat pengirim ${SENDER_LIMITS.addressMin}–${SENDER_LIMITS.addressMax} karakter, atau kosongkan.`;
   }
   return errors;
 }
@@ -91,7 +108,7 @@ export function buildLabelContent(facts: LabelFacts, choice: LabelChoice): Label
     ? {
         name: choice.sender.name.trim(),
         phone: cleanSenderPhone(choice.sender.phone.trim()) ?? choice.sender.phone.trim(),
-        address: null,
+        address: tidyAddress(choice.sender.address ?? "") || null,
         city: choice.sender.city.trim(),
       }
     : { name: facts.geraiName, phone: facts.geraiWhatsapp ?? "", address: facts.pickupAddress, city: facts.pickupArea };
@@ -156,12 +173,13 @@ export function contentFromSnapshot(s: LabelSnapshot): LabelContent {
 }
 
 // True when printing this choice would reuse the stored snapshot (create_label_snapshot returns it
-// unchanged): same switch and size and, when masked, the same three sender fields.
+// unchanged): same switch and size and, when masked, the same sender fields.
 export function sameChoice(snapshot: LabelSnapshot, choice: LabelChoice): boolean {
   if (snapshot.mask_sender !== choice.mask || snapshot.size !== choice.size) return false;
   if (!choice.mask) return true;
   const phone = cleanSenderPhone(choice.sender.phone.trim());
   return snapshot.printed_sender_name === choice.sender.name.trim()
     && snapshot.printed_sender_city === choice.sender.city.trim()
+    && (snapshot.printed_sender_address ?? "") === tidyAddress(choice.sender.address ?? "")
     && phone !== null && snapshot.printed_sender_phone === phone;
 }

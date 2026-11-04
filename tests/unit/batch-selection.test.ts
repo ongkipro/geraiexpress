@@ -3,7 +3,9 @@ import type { LabelFacts, LabelSnapshot } from "../../src/lib/label-content";
 import { advanceLatestSnapshots, batchExclusion, batchPreviewContent, batchSender, parseBatchIds, printSequentially } from "../../src/modules/labels/batch-selection";
 
 const id = "00000000-0000-4000-8000-000000000001";
-const row = { id, reference: "GX1", submission_state: "issued", awb: "ABC123", is_simulated: false, sender_name: "Budi", sender_phone: "081234567890" };
+// A shipment made before T-094 (no sender address) and one with its own sender address.
+const row = { id, reference: "GX1", submission_state: "issued", awb: "ABC123", is_simulated: false, sender_name: "Budi", sender_phone: "081234567890", sender_address: null, sender_area: null };
+const rowWithAddress = { ...row, sender_address: "Jl. Kenanga No. 3", sender_area: "Kec. Coblong, Bandung" };
 
 const facts: LabelFacts = {
   reference: "GX1", awb: "ABC123", courier: "JT", service: "REG", weightGrams: 1000, isCod: false, codAmountIdr: null, itemDescription: null,
@@ -36,8 +38,12 @@ describe("batch label selection", () => {
     expect(batchExclusion({ ...row, awb: null }, false, "")).toContain("resi");
     expect(batchExclusion({ ...row, is_simulated: true }, false, "")).toContain("simulasi");
   });
+  it("prints each shipment's own sender; the shared area only fills a shipment without one", () => {
+    expect(batchSender(rowWithAddress, "Bogor")).toEqual({ name: "Budi", phone: "081234567890", address: "Jl. Kenanga No. 3", city: "Kec. Coblong, Bandung" });
+    expect(batchExclusion(rowWithAddress, true, "")).toBeNull();
+  });
   it("uses the shared city and validates stored sender fields for masking", () => {
-    expect(batchSender(row, "Bandung")).toEqual({ name: "Budi", phone: "081234567890", city: "Bandung" });
+    expect(batchSender(row, "Bandung")).toEqual({ name: "Budi", phone: "081234567890", address: "", city: "Bandung" });
     expect(batchExclusion(row, true, "")).toContain("kota");
     expect(batchExclusion({ ...row, sender_name: null }, true, "Bandung")).toContain("nama");
     expect(batchExclusion(row, true, "Bandung")).toBeNull();

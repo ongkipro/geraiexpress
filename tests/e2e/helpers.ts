@@ -190,16 +190,15 @@ export function localSql(statement: string): string {
 
 // PR-24: platform sign-in completes the TOTP challenge with the local fixture secret. The server refuses a
 // time step it already accepted for that factor (replay guard, ADR-0002 obligation 5), and consecutive specs
-// sign in the same fixture administrator within one 30-second step: pick the oldest step in the accepted
-// window (previous, current, next) that is newer than the last accepted one, and wait if none is left.
-import { FIXTURE_TOTP, totp } from "../totp";
+// sign in the same fixture administrator within one 30-second step: pick an unused current/next step
+// and wait if none is left. The previous step can expire between generation and server verification.
+import { FIXTURE_TOTP, freshTotpStep, totp } from "../totp";
 export async function freshAdminCode(email: keyof typeof FIXTURE_TOTP): Promise<string> {
   let extended = false;
   for (;;) {
     const last = Number(localSql(`select coalesce(max(f.last_used_step), -1) from auth.mfa_factors f join auth.users u on u.id = f.user_id where u.email = '${email}'`));
-    const step = Math.floor(Date.now() / 30_000);
-    const usable = [step - 1, step, step + 1].filter((candidate) => candidate > last);
-    if (usable.length) return totp(FIXTURE_TOTP[email], usable[0] * 30_000);
+    const step = freshTotpStep(last, Date.now());
+    if (step !== undefined) return totp(FIXTURE_TOTP[email], step * 30_000);
     // The wait for the next step (up to 30 s) is the replay guard's, not the app's: extend the test once
     // by it, as the sign-in budget wait does (T-097: a 30 s test timed out right after this wait).
     if (!extended) { test.setTimeout(test.info().timeout + 35_000); extended = true; }
