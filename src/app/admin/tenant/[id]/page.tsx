@@ -5,13 +5,13 @@ import { CheckCircle2, ChevronRight, EyeOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatIdr, formatWib, SUBMISSION_LABEL } from "@/lib/format";
 import { LoadError } from "@/components/notice";
-import { requirePlatform } from "@/lib/platform";
+import { platformTitle, requirePlatform } from "@/lib/platform";
 import { dbServer } from "@/lib/db/server";
 import { MaskingForm } from "@/modules/tenants/masking-form";
 import { TenantCustomersPanel } from "../../pelanggan/customer-forms";
 import { LifecycleBadge, PageHeader } from "../../ui";
 
-export const metadata: Metadata = { title: "Detail gerai · Super Admin" };
+export const generateMetadata = (): Promise<Metadata> => platformTitle("Detail gerai · Super Admin", ["tenant_governance", "platform_monitoring"]);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LINK = "inline-flex min-h-11 items-center gap-1 self-start font-semibold text-primary underline-offset-4 hover:underline";

@@ -64,6 +64,15 @@ async function hasVerifiedTotp(userId: string): Promise<boolean> {
 }
 
 // Non-holders get a plain 404 so the platform workspace does not advertise itself.
+// T-098: a page's tab title is part of its response. A static `metadata` export is rendered even after
+// the page calls notFound(), which tells an administrator without access that the page exists. Pages
+// build their title here instead: the same check as the page (any of `capabilities`), then the title.
+export async function platformTitle(title: string, capabilities?: Capability[]): Promise<{ title: string }> {
+  const session = await requirePlatform();
+  if (capabilities && !capabilities.some((c) => session.capabilities.includes(c))) notFound();
+  return { title };
+}
+
 export async function requirePlatform(capability?: Capability): Promise<PlatformSession> {
   if (!(await currentUser())) redirect("/masuk");
   const session = await loadPlatform();

@@ -6,14 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatWib } from "@/lib/format";
-import { CAPABILITY_LABELS, requirePlatform } from "@/lib/platform";
+import { CAPABILITY_LABELS, platformTitle, requirePlatform } from "@/lib/platform";
 import { formatPercentBps, STATUS_LABEL } from "@/modules/pricing/percent";
 import { dbServer } from "@/lib/db/server";
 import { cn } from "@/lib/utils";
 import { AuditActionSelect } from "./action-select";
 import { CardLabel, EmptyState, LoadError, PageHeader, RT, SegmentedNav } from "../ui";
 
-export const metadata: Metadata = { title: "Audit · Super Admin" };
+export const generateMetadata = (): Promise<Metadata> => platformTitle("Audit · Super Admin", ["audit_review"]);
 
 const ACTIONS: Record<string, string> = {
   "tenant.lifecycle": "Status gerai",

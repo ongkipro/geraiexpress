@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import { ClipboardCheck } from "lucide-react";
 import { dbServer } from "@/lib/db/server";
 import { formatWib } from "@/lib/format";
-import { requirePlatform } from "@/lib/platform";
+import { platformTitle, requirePlatform } from "@/lib/platform";
 import { EmptyState, LoadError, PageHeader } from "../ui";
 
-export const metadata: Metadata = { title: "Pengajuan menunggu · Super Admin" };
+export const generateMetadata = (): Promise<Metadata> => platformTitle("Pengajuan menunggu · Super Admin", ["platform_monitoring", "tenant_governance"]);
 
 type Pending = { id: string; business_name: string | null; outlet_name: string | null; pickup_area: string | null; submitted_at: string | null; revision: number };
 

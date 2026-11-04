@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { requirePlatform } from "@/lib/platform";
+import { platformTitle, requirePlatform } from "@/lib/platform";
 import { dbServer } from "@/lib/db/server";
 import { DiscountForm } from "@/modules/pricing/forms";
 import { CurrentTermsCard, HistoryList, VariancePanel } from "@/modules/pricing/panels";
@@ -10,7 +10,7 @@ import {
 import { PageHeader, SectionHeader } from "../../ui";
 import { LoadError } from "@/components/notice";
 
-export const metadata: Metadata = { title: "Atur diskon gerai · Super Admin" };
+export const generateMetadata = (): Promise<Metadata> => platformTitle("Atur diskon gerai · Super Admin", ["integration_operations"]);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

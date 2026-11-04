@@ -4,14 +4,14 @@ import { ChevronLeft, ChevronRight, ClipboardCheck, CheckCircle2, CircleDashed, 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatWib } from "@/lib/format";
-import { requirePlatform } from "@/lib/platform";
+import { platformTitle, requirePlatform } from "@/lib/platform";
 import { dbServer } from "@/lib/db/server";
 import { cn } from "@/lib/utils";
 import { ReviewForm } from "../forms";
 import { Notice } from "@/components/notice";
 import { EmptyState, LoadError, PageHeader, SegmentedNav } from "../ui";
 
-export const metadata: Metadata = { title: "Pengajuan gerai · Super Admin" };
+export const generateMetadata = (): Promise<Metadata> => platformTitle("Pengajuan gerai · Super Admin", ["tenant_governance"]);
 
 const STATUS: Record<string, { label: string; Icon: typeof CheckCircle2; variant: "pending" | "warning" | "success" | "destructive" }> = {
   submitted: { label: "Menunggu tinjauan", Icon: CircleDashed, variant: "pending" },

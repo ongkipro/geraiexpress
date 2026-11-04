@@ -9,13 +9,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { config } from "@/lib/config";
 import { keyMaterialFromReader } from "@/lib/credential-crypto";
 import { formatWib } from "@/lib/format";
-import { requirePlatform } from "@/lib/platform";
+import { platformTitle, requirePlatform } from "@/lib/platform";
 import { dbServer } from "@/lib/db/server";
 import { cn } from "@/lib/utils";
 import { LifecycleForm, RegistrationSwitch } from "./forms";
 import { EmptyState, LIFECYCLE, LifecycleBadge, LoadError, PageHeader, RT, SectionHeader, SegmentedNav } from "./ui";
 
-export const metadata: Metadata = { title: "Gerai · Super Admin" };
+export const generateMetadata = (): Promise<Metadata> => platformTitle("Gerai · Super Admin");
 
 // T-092: one row per gerai (= one cabang) from platform_tenant_directory: readiness and activity counts only.
 type DirectoryRow = {

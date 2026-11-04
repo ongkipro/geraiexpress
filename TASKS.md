@@ -762,6 +762,15 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** T-092
 - **Done when:** a Super Admin with `customer_data_review` can open a gerai's shipment customer details and search a customer by phone to see shipment count and the gerai/cabang used, each read recorded with reason in audit; without the capability every path is denied at the RPC; DB tests for denial, audit and cross-tenant aggregation; e2e at 390 and 1280. Scoring model itself is not built.
 
+### [x] T-098 — Super Admin pages answer a refused capability with a plain 404, including the tab title (owner, 2026-11-04)
+- **Result (2026-11-04):** `RUN-20261104T094425Z-3b43d3a9` PASS. `platformTitle()` (src/lib/platform.ts) gives every gated /admin page its title only after the page's own capability check; e2e `platform-not-found.spec.ts` walks all 11 gated pages refused and permitted (plus /admin/audit refused with a monitoring-only grant, review P1). Browser 90/0 (10 admin specs, 390/1280, image rebuilt). An earlier BLOCKED run `RUN-20261104T094352Z-ba751277` was closed before verification because it started after the code existed.
+- **Primary requirement:** IAM-7
+- **Constraints:** IAM-7, TEN-4; found during T-093 (a static `metadata` export renders even after `notFound()`); no behavior change for permitted administrators
+- **Risk Level:** R2
+- **Allowed Paths:** `src/app/admin/**`, `src/lib/platform.ts`, `tests/**`, `TASKS.md`, `STATUS.md`
+- **Depends On:** T-093
+- **Done when:** every capability-gated `/admin/**` page builds its title through the same check as the page, so a refused administrator gets a 404 whose status, title and body equal an unknown `/admin` path; an e2e walks every gated page with a grant lacking it and with one holding it, at 390 and 1280.
+
 ### [ ] T-094 — Sender address on the shipment and automatic masked-label sender (owner, 2026-11-03)
 - **Primary requirement:** PR-34
 - **Constraints:** DEC-017; Mengantar pickup stays the outlet's; gerai owns contacts (sender, recipient)

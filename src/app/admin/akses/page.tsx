@@ -3,13 +3,13 @@ import { CheckCircle2, KeyRound, ShieldAlert, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatWib } from "@/lib/format";
-import { CAPABILITY_LABELS, requirePlatform, type Capability } from "@/lib/platform";
+import { CAPABILITY_LABELS, platformTitle, requirePlatform, type Capability } from "@/lib/platform";
 import { dbServer } from "@/lib/db/server";
 import { cn } from "@/lib/utils";
 import { GrantForm, RevokeForm } from "../forms";
 import { EmptyState, LoadError, PageHeader, RT, SectionHeader } from "../ui";
 
-export const metadata: Metadata = { title: "Akses Super Admin" };
+export const generateMetadata = (): Promise<Metadata> => platformTitle("Akses Super Admin", ["access_governance"]);
 
 type AdminRow = {
   user_id: string; email: string; capabilities: Capability[]; granted_at: string;

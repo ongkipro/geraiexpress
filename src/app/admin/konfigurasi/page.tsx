@@ -5,13 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { dbServer } from "@/lib/db/server";
 import { formatWib } from "@/lib/format";
-import { requirePlatform } from "@/lib/platform";
+import { platformTitle, requirePlatform } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { courierName } from "@/lib/format";
 import { EmptyState, LoadError, PageHeader, RT, SectionHeader } from "../ui";
 import { DeclarationForm, WeightRuleForm, type RulePrefill } from "./forms";
 
-export const metadata: Metadata = { title: "Konfigurasi · Super Admin" };
+export const generateMetadata = (): Promise<Metadata> => platformTitle("Konfigurasi · Super Admin", ["tenant_governance", "integration_operations"]);
 
 type Declaration = { version: number; body: string; prohibited_categories: string[]; source_url: string; provisional: boolean; effective_at: string };
 type Rule = RulePrefill & { id: string; effective_at: string; is_current: boolean; scheduled: boolean; cargo_minimum_range_grams: number[] | null };

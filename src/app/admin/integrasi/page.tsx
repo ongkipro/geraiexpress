@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, ChevronDown, FlaskConical, HelpCircle, Plug,
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatWib } from "@/lib/format";
-import { requirePlatform } from "@/lib/platform";
+import { platformTitle, requirePlatform } from "@/lib/platform";
 import { dbServer } from "@/lib/db/server";
 import { keyMaterialFromReader } from "@/lib/credential-crypto";
 import { config } from "@/lib/config";
@@ -13,7 +13,7 @@ import { Notice } from "@/components/notice";
 import { EmptyState, LifecycleBadge, PageHeader, RT, SectionHeader } from "../ui";
 import { LoadError } from "@/components/notice";
 
-export const metadata: Metadata = { title: "Integrasi Mengantar · Super Admin" };
+export const generateMetadata = (): Promise<Metadata> => platformTitle("Integrasi Mengantar · Super Admin", ["integration_operations"]);
 
 type Row = { tenant_id: string; tenant_name: string; lifecycle: string; configured: boolean; mode: string | null; hint: string | null; version: number | null; stored_at: string | null };
 

@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, Percent } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { courierName, formatWib } from "@/lib/format";
-import { requirePlatform } from "@/lib/platform";
+import { platformTitle, requirePlatform } from "@/lib/platform";
 import { dbServer } from "@/lib/db/server";
 import { cn } from "@/lib/utils";
 import { DiscountForm } from "@/modules/pricing/forms";
@@ -13,7 +13,7 @@ import { formatPercentBps, formatPointsBps } from "@/modules/pricing/percent";
 import { jakartaToday, type DiscountHistoryRow, type DiscountOverviewRow } from "@/modules/pricing/types";
 import { CardLabel, EmptyState, LoadError, PageHeader, RT, SectionHeader } from "../ui";
 
-export const metadata: Metadata = { title: "Diskon gerai · Super Admin" };
+export const generateMetadata = (): Promise<Metadata> => platformTitle("Diskon gerai · Super Admin", ["integration_operations"]);
 
 const SUMMARY = "inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 font-semibold text-primary [&::-webkit-details-marker]:hidden";
 
