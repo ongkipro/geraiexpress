@@ -26,6 +26,7 @@ export async function printLabelAction(input: PrintInput): Promise<PrintResult> 
   const { data: id, error } = await db.rpc("create_label_snapshot", {
     p_shipment: input.shipmentId, p_mask: mask, p_size: input.size,
     p_sender_name: mask ? input.sender.name : null, p_sender_phone: mask ? input.sender.phone : null, p_sender_city: mask ? input.sender.city : null,
+    p_sender_address: mask ? input.sender.address : null,
   });
   if (error || typeof id !== "string") return { ok: false, error: labelError(error) };
   const printed = await db.rpc("record_label_print", { p_snapshot: id });

@@ -23,6 +23,11 @@ import type { DraftField, DraftValues } from "./draft";
 import { FieldMessage, IntakeStep, type StepState } from "./intake-step";
 import { goodsValueOf, IntakeSummary, quoteCharge, serviceName, SummaryBar, type QuoteStatus } from "./intake-summary";
 import { ChoiceSelect } from "./choice-select";
+// Field limits shown while typing. The server (draft.ts) and the database enforce the same values; the
+// provider limits are DEL-1's (src/lib/mengantar/public-api.ts), kept literal here so this client file
+// does not import the server-side provider module.
+const SENDER_ADDRESS_MAX = 120, SENDER_AREA_MAX = 40;
+const LIVE_RECIPIENT_NAME_MAX = 100, LIVE_RECIPIENT_ADDRESS_MAX = 300;
 import { handoverSummary, PickupFields } from "./pickup-fields";
 
 export type ContactOption = {
@@ -149,22 +154,34 @@ export function IntakeForm(props: Props) {
       ...(role === "recipient" && address
         ? { recipient_address: address.address_line, recipient_area: address.area, recipient_area_id: address.area_id ?? "", recipient_postal_code: address.postal_code ?? "" }
         : {}),
+      // T-094: a picked sender always replaces all three sender address fields (empty when the contact has
+      // none), so a previous sender's address can never stay attached to another sender's name and phone.
+      // A saved value longer than the printed limit is kept and flagged by validation, not cut.
+      ...(role === "sender"
+        ? { sender_address: address?.address_line ?? "", sender_area: address?.area ?? "", sender_postal_code: address?.postal_code ?? "" }
+        : {}),
     }));
   };
-  const pickAddress = (addressId: string) => {
+  const pickAddress = (addressId: string, role: "sender" | "recipient" = "recipient") => {
     // The same merged list the picker shows: a contact picked earlier stays usable after another search.
-    const a = [...props.contacts, ...Object.values(picked)].find((x) => x.id === recipientContact)?.addresses.find((x) => x.id === addressId);
+    const owner = role === "sender" ? senderContact : recipientContact;
+    const a = [...props.contacts, ...Object.values(picked)].find((x) => x.id === owner)?.addresses.find((x) => x.id === addressId);
     if (!a) return;
-    setValues((v) => ({ ...v, recipient_address: a.address_line, recipient_area: a.area, recipient_area_id: a.area_id ?? "", recipient_postal_code: a.postal_code ?? "" }));
+    setValues((v) => role === "sender"
+      ? { ...v, sender_address: a.address_line, sender_area: a.area, sender_postal_code: a.postal_code ?? "" }
+      : { ...v, recipient_address: a.address_line, recipient_area: a.area, recipient_area_id: a.area_id ?? "", recipient_postal_code: a.postal_code ?? "" });
     setDirty(true);
   };
 
   const err = state.fieldErrors ?? {};
-  const field = (name: DraftField, label: string, opts: { type?: string; inputMode?: "numeric" | "tel" | "text"; autoComplete?: string; hint?: string; textarea?: boolean; describedBy?: string } = {}) => {
+  // `max` caps the field at the stored/printed limit and shows the remaining length, so long text is
+  // shortened while typing instead of being cut on the label (owner, 2026-11-04: tidy fields).
+  const field = (name: DraftField, label: string, opts: { type?: string; inputMode?: "numeric" | "tel" | "text"; autoComplete?: string; hint?: string; textarea?: boolean; describedBy?: string; max?: number } = {}) => {
     const id = `f-${name}`;
-    const described = [opts.hint ? `${id}-hint` : null, opts.describedBy ?? null, err[name] ? `${id}-err` : null].filter(Boolean).join(" ") || undefined;
+    const hint = opts.max ? [opts.hint, `${values[name].length}/${opts.max} karakter`].filter(Boolean).join(" · ") : opts.hint;
+    const described = [hint ? `${id}-hint` : null, opts.describedBy ?? null, err[name] ? `${id}-err` : null].filter(Boolean).join(" ") || undefined;
     const common = {
-      id, name, value: values[name],
+      id, name, value: values[name], maxLength: opts.max,
       "aria-invalid": err[name] ? true : undefined,
       "aria-describedby": described,
     };
@@ -177,7 +194,7 @@ export function IntakeForm(props: Props) {
           <Input {...common} type={opts.type ?? "text"} inputMode={opts.inputMode} autoComplete={opts.autoComplete ?? "off"}
             onChange={(e) => set(name, e.target.value)} />
         )}
-        {opts.hint ? <FieldDescription id={`${id}-hint`}>{opts.hint}</FieldDescription> : null}
+        {hint ? <FieldDescription id={`${id}-hint`}>{hint}</FieldDescription> : null}
         {err[name] ? <FieldMessage id={`${id}-err`}>{err[name]}</FieldMessage> : null}
       </Field>
     );
@@ -189,6 +206,7 @@ export function IntakeForm(props: Props) {
   const senders = [...keep(senderContact, props.contacts), ...props.contacts].filter((c) => c.is_sender || c.id === senderContact);
   const recipients = [...keep(recipientContact, props.contacts), ...props.contacts].filter((c) => c.is_recipient || c.id === recipientContact);
   const recipientAddresses = [...keep(recipientContact, props.contacts), ...props.contacts].find((c) => c.id === recipientContact)?.addresses ?? [];
+  const senderAddresses = [...keep(senderContact, props.contacts), ...props.contacts].find((c) => c.id === senderContact)?.addresses ?? [];
   const quotesCurrent = props.quotes.length > 0 && !dirty;
   const selected = props.quotes.find((q) => q.id === quoteId);
   const quoteStatus: QuoteStatus = props.quotes.length === 0 ? "none" : dirty ? "stale" : "current";
@@ -280,8 +298,22 @@ export function IntakeForm(props: Props) {
                   options={senders.map((c) => ({ value: c.id, label: `${c.name} · ${c.phone}` }))} />
               </Field>
               <div className="grid gap-4 @md:grid-cols-2">
-                {field("sender_name", "Nama pengirim", { autoComplete: "off" })}
+                {field("sender_name", "Nama pengirim", { autoComplete: "off", max: 60 })}
                 {field("sender_phone", "No. HP pengirim", { type: "tel", inputMode: "tel", hint: "Contoh 081234567890" })}
+              </div>
+              {senderAddresses.length > 1 ? (
+                <Field className="gap-2">
+                  <FieldLabel htmlFor="pick-sender-address">Alamat pengirim tersimpan</FieldLabel>
+                  <ChoiceSelect id="pick-sender-address" placeholder="Pilih alamat" onValueChange={(v) => pickAddress(v, "sender")}
+                    value={senderAddresses.find((a) => a.address_line === values.sender_address)?.id ?? ""}
+                    options={senderAddresses.map((a) => ({ value: a.id, label: `${a.label ?? "Alamat"} · ${a.address_line}` }))} />
+                </Field>
+              ) : null}
+              {/* T-094: optional; printed on a masked label, never sent to Mengantar (the pickup stays the outlet's). */}
+              {field("sender_address", "Alamat pengirim (opsional)", { max: SENDER_ADDRESS_MAX, hint: "Jalan dan nomor; dicetak di label bermasking" })}
+              <div className="grid gap-4 @md:grid-cols-[minmax(0,1fr)_160px]">
+                {field("sender_area", "Kecamatan / kota pengirim", { max: SENDER_AREA_MAX })}
+                {field("sender_postal_code", "Kode pos pengirim", { inputMode: "numeric" })}
               </div>
               {!senderContact ? (
                 <label className="flex min-h-11 cursor-pointer items-center gap-3">
@@ -305,10 +337,10 @@ export function IntakeForm(props: Props) {
                 </Field>
               ) : null}
               <div className="grid gap-4 @md:grid-cols-2">
-                {field("recipient_name", "Nama penerima")}
+                {field("recipient_name", "Nama penerima", { max: props.live ? LIVE_RECIPIENT_NAME_MAX : 120 })}
                 {field("recipient_phone", "No. HP penerima", { type: "tel", inputMode: "tel" })}
               </div>
-              {field("recipient_address", "Alamat lengkap", { textarea: true })}
+              {field("recipient_address", "Alamat lengkap", { textarea: true, max: props.live ? LIVE_RECIPIENT_ADDRESS_MAX : 500, hint: "Jalan, nomor, RT/RW, patokan" })}
               {props.live ? (
                 <>
                   <AreaPicker label="Wilayah penerima" areaId={values.recipient_area_id} areaText={values.recipient_area}
@@ -318,12 +350,12 @@ export function IntakeForm(props: Props) {
                         recipient_postal_code: next.postalCode ?? v.recipient_postal_code }));
                       setDirty(true);
                     }} />
-                  <div className="@md:max-w-[180px]">{field("recipient_postal_code", "Kode pos", { inputMode: "numeric" })}</div>
+                  <div className="@md:max-w-[180px]">{field("recipient_postal_code", "Kode pos penerima", { inputMode: "numeric" })}</div>
                 </>
               ) : (
                 <div className="grid gap-4 @md:grid-cols-[minmax(0,1fr)_160px]">
-                  {field("recipient_area", "Kecamatan / kota", { hint: "Simulasi: wilayah ditulis bebas" })}
-                  {field("recipient_postal_code", "Kode pos", { inputMode: "numeric" })}
+                  {field("recipient_area", "Kecamatan / kota penerima", { hint: "Simulasi: wilayah ditulis bebas", max: 160 })}
+                  {field("recipient_postal_code", "Kode pos penerima", { inputMode: "numeric" })}
                 </div>
               )}
               {!recipientContact ? (
@@ -477,6 +509,7 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
   const goodsValue = goodsValueOf(v);
   const shipment: [string, string][] = [
     ["Pengirim", `${v.sender_name} · ${v.sender_phone}`],
+    ...(v.sender_address || v.sender_area ? [["Alamat pengirim", [v.sender_address, v.sender_area, v.sender_postal_code].filter(Boolean).join(", ")] as [string, string]] : []),
     ["Penerima", `${v.recipient_name} · ${v.recipient_phone}`],
     ["Alamat tujuan", [v.recipient_address, v.recipient_area, v.recipient_postal_code].filter(Boolean).join(", ")],
     ["Pickup", props.outlet.name],

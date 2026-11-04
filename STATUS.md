@@ -9,6 +9,28 @@ Independent-Review: Regular baseline approval belongs to RUN-20261103T085327Z-57
 Independent-Reviewer: d264fdd1-6723-4373-8d56-67733f212566 (separate reviewer; latest repair review 2957899e-9617-4acf-90f0-5ce0656fe7b7; same retained session)
 Independent-Review-Head: Uncommitted worktree; approval must bind to the delivery boundary digest, not HEAD alone.
 
+## T-094 Sender address and masked-label sender (2026-11-04, verification in progress)
+
+Run `RUN-20261104T095832Z-7628e0cb` (R3), built in worktree `.gx-wt/T-094`; not merged or closed.
+The closing e2e initially failed at Super Admin 2FA login (114 passed, 1 failed, 1 skipped).
+The fixture helper could select a previous-step TOTP that expires during rollover; the trace shows
+submission crossing the boundary, strongly supporting this diagnosis without establishing the submitted
+step. It now selects only unused current/next steps; deterministic rollover/replay-selection tests cover the fix.
+Production authentication and replay protection are unchanged. Final gates passed: typecheck,
+1,025 unit tests, 477 DB tests, 115 e2e tests (1 skipped). A separate running-PostgREST upgrade proof
+passed all 7 sender-address tests without restarting the API. Independent final review e27c4118 approved
+the implementation, with only the diagnosis-certainty note corrected here. Run closure and its final
+surface-bound verification are recorded by the delivery ledger. Owner decisions
+recorded as DEC-025: the masked label may print the full sender address; structured fields with text
+limits; the recipient arranged the same way. Assistant-recommended limits: sender name 60, street 5–120,
+area 3–40 (printed 2–40), postal 5 digits; recipient name/address keep the provider limits (100/300 live).
+The sender address never reaches Mengantar (dispatch payload unchanged, DB test). Review 1 found four
+issues (stale sender address after switching contacts, missing PostgREST schema reload, partial contact
+address silently dropped, one weakened unit assertion); all repaired, review 2 APPROVE. RELEASE.md step 11
+now requires a schema reload after server migrations (the committed T-093 migration has no notify of its
+own; the T-094 migration's notify covers both). Reports: `/data/tmp/t094/review/`.
+Next: T-096 logo → T-095 resi formats; T-084 after T-094 (same label RPCs); T-082 (in progress), T-099.
+
 ## T-093 Super Admin customer-data review (2026-11-04, PASS, local only)
 
 Run `RUN-20261104T061201Z-1b6e7ebc` (R3). Owner instruction: everything stays local — no commit, no

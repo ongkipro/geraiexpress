@@ -47,6 +47,15 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
   if (!mode) return { error: friendlyError({ message: "not_found" }) };
   const live = !mode.is_simulated;
   const { values, update, errors } = parseDraft(form, intent === "quote" && live);
+  // T-094: a sender contact keeps its address only as street + area (contact_addresses requires both).
+  // When the operator asks to save the sender, a half-entered address is named instead of silently dropped.
+  if (form.get("save_sender") === "on" && !form.get("sender_contact_id")) {
+    const hasStreet = Boolean(update.sender_address), hasArea = Boolean(update.sender_area);
+    if (hasStreet !== hasArea || (update.sender_postal_code && !(hasStreet && hasArea))) {
+      if (!hasStreet && !errors.sender_address) errors.sender_address = "Isi alamat pengirim, atau kosongkan semua alamat pengirim, untuk menyimpan kontak.";
+      if (!hasArea && !errors.sender_area) errors.sender_area = "Isi kecamatan / kota pengirim, atau kosongkan semua alamat pengirim, untuk menyimpan kontak.";
+    }
+  }
   if (Object.keys(errors).length) {
     return { error: "Periksa isian yang ditandai.", fieldErrors: errors, values };
   }
@@ -92,6 +101,15 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
       const { error: ae } = await db.from("contact_addresses").insert({
         tenant_id: ws.tenant.id, contact_id: contact.id, label: "Utama", address_line: update.recipient_address,
         area: update.recipient_area, area_id: update.recipient_area_id ?? null, postal_code: update.recipient_postal_code, is_primary: true,
+      });
+      if (ae) return "failed";
+    }
+    // T-094: a saved sender keeps its street and area as its primary address (the provider area id is a
+    // recipient-only concept; the sender address never reaches Mengantar).
+    if (role === "sender" && update.sender_address && update.sender_area) {
+      const { error: ae } = await db.from("contact_addresses").insert({
+        tenant_id: ws.tenant.id, contact_id: contact.id, label: "Utama", address_line: update.sender_address,
+        area: update.sender_area, postal_code: update.sender_postal_code ?? null, is_primary: true,
       });
       if (ae) return "failed";
     }

@@ -12,7 +12,7 @@ export async function printBatchLabelsAction(input: { ids: string[]; mask: boole
   if (!ids || !isLabelSize(input.size) || typeof input.city !== "string" || input.city.length > 100 || typeof input.mask !== "boolean") return { snapshots: [], error: "Pilihan label tidak valid." };
   const db = await dbServer();
   const [{ data: rows, error }, { data: tenant }] = await Promise.all([
-    db.from("shipments").select("id, reference, submission_state, awb, is_simulated, sender_name, sender_phone").eq("tenant_id", ws.tenant.id).in("id", ids),
+    db.from("shipments").select("id, reference, submission_state, awb, is_simulated, sender_name, sender_phone, sender_address, sender_area").eq("tenant_id", ws.tenant.id).in("id", ids),
     db.from("tenants").select("contact_whatsapp, masking_allowed").eq("id", ws.tenant.id).maybeSingle(),
   ]);
   if (error || !tenant) return { snapshots: [], error: "Daftar label belum bisa dimuat." };
@@ -24,7 +24,7 @@ export async function printBatchLabelsAction(input: { ids: string[]; mask: boole
   if (candidates.length !== ids.length) return { snapshots: [], error: "Pilihan pengiriman berubah atau tidak tersedia. Muat ulang dan periksa kembali sebelum mencetak." };
   return printSequentially(candidates, async (row) => {
     const sender = batchSender(row, input.city);
-    const created = await db.rpc("create_label_snapshot", { p_shipment: row.id, p_mask: input.mask, p_size: input.size, p_sender_name: input.mask ? sender.name : null, p_sender_phone: input.mask ? sender.phone : null, p_sender_city: input.mask ? sender.city : null });
+    const created = await db.rpc("create_label_snapshot", { p_shipment: row.id, p_mask: input.mask, p_size: input.size, p_sender_name: input.mask ? sender.name : null, p_sender_phone: input.mask ? sender.phone : null, p_sender_city: input.mask ? sender.city : null, p_sender_address: input.mask ? sender.address : null });
     if (created.error || typeof created.data !== "string") return { ok: false, error: labelError(created.error) };
     const printed = await db.rpc("record_label_print", { p_snapshot: created.data });
     if (printed.error) return { ok: false, error: labelError(printed.error) };

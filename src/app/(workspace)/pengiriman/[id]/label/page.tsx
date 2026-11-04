@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { courierName, formatIdr, formatWeight, formatWib } from "@/lib/format";
-import { SNAPSHOT_COLUMNS, type LabelFacts, type LabelSnapshot } from "@/lib/label-content";
+import { SNAPSHOT_COLUMNS, senderFromShipment, type LabelFacts, type LabelSnapshot } from "@/lib/label-content";
 import { dbServer } from "@/lib/db/server";
 import { requireWorkspace } from "@/lib/workspace";
 import { LabelWorkbench, type PrintHistoryEntry } from "@/modules/labels/label-workbench";
@@ -11,7 +11,7 @@ import { PrintButton } from "./print-button";
 export const metadata: Metadata = { title: "Label" };
 
 const SHIPMENT_COLUMNS =
-  "id, reference, awb, is_simulated, submission_state, is_cod, cod_amount_idr, goods_value_idr, sender_name, sender_phone, recipient_name, recipient_phone, recipient_address, recipient_area, recipient_postal_code, item_description, weight_grams, customer_charge_idr, pickup_snapshot, issued_at, selected_quote_id";
+  "id, reference, awb, is_simulated, submission_state, is_cod, cod_amount_idr, goods_value_idr, sender_name, sender_phone, sender_address, sender_area, recipient_name, recipient_phone, recipient_address, recipient_area, recipient_postal_code, item_description, weight_grams, customer_charge_idr, pickup_snapshot, issued_at, selected_quote_id";
 
 // A real issued shipment prints a local masked label from a stored snapshot (PR-6, PR-34, TD-13). A demo
 // shipment keeps the watermarked sample (UX-3), which is not a courier label.
@@ -64,6 +64,7 @@ export default async function LabelPage({ params }: { params: Promise<{ id: stri
           snapshots={snapshots}
           history={history}
           preferenceKey={`gx:label-choice:${ws.tenant.id}:${ws.userId}`}
+          initialSender={senderFromShipment(s)}
         />
       </div>
     );

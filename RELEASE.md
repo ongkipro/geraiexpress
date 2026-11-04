@@ -135,7 +135,10 @@ by the app. Gates before a release is started:
     it. Rewrap retained credential ciphertext before retiring an encryption key. Nothing remote was changed here.
 11. **Database provisioning (owner-gated).** Apply `DATABASE_URL` from a protected operator environment with
     `scripts/db-migrate.sh` (never `--reset`, never seed production). Foundation creates roles; runner verifies
-    applied checksums before applying new files. Local runner provisions `authenticator` from generated
+    applied checksums before applying new files. After applying, run `notify pgrst, 'reload schema';` (or restart
+    PostgREST) and call one RPC added by the release: a migration that forgot its own notify (for example
+    `20261104100000_customer_data_review.sql`; the later T-094 migration notifies for both) must not leave the
+    running Data API on an old schema cache. Local runner provisions `authenticator` from generated
     `AUTHENTICATOR_PASSWORD`; remote runner deliberately does not set it. On the remote server, connect as
     database administrator with `psql` using libpq environment, run `\password authenticator` interactively
     (no password in SQL history or argv), then put the same strong, URI-encoded password in `PGRST_DB_URI`.

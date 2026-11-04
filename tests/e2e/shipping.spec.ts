@@ -113,7 +113,7 @@ test("real tenant without a provider cannot quote and is told why", async ({ pag
   await page.getByLabel("No. HP penerima").fill("081211112222");
   await page.getByLabel("Alamat lengkap").fill("Jl. Tujuan A No. 9");
   // A real gerai picks the recipient's area from Mengantar (T-023); without a key it cannot.
-  await expect(page.getByLabel("Kecamatan / kota")).toHaveCount(0);
+  await expect(page.getByLabel("Kecamatan / kota penerima")).toHaveCount(0);
   await page.getByLabel("Wilayah penerima").fill("Sukatani");
   // exact: the mobile top bar also has "Cari pengiriman" (T-079).
   await page.getByRole("button", { name: "Cari", exact: true }).click();
@@ -249,7 +249,7 @@ test("saving a typed recipient as a contact is explicit and visible in Kontak", 
   await page.getByLabel("Nama penerima").fill("Penerima Baru Disimpan");
   await page.getByLabel("No. HP penerima").fill("081299990000");
   await page.getByLabel("Alamat lengkap").fill("Jl. Baru Disimpan No. 2");
-  await page.getByLabel("Kecamatan / kota").fill("Kec. Baru, Kota Uji");
+  await page.getByLabel("Kecamatan / kota penerima").fill("Kec. Baru, Kota Uji");
   await page.getByRole("checkbox", { name: "Simpan sebagai kontak penerima" }).click();
   await page.getByRole("button", { name: "Simpan draf" }).click();
   await expect(page.getByText("Draf tersimpan.")).toBeVisible();
@@ -1019,7 +1019,7 @@ test("the recipient area combobox: Enter searches, arrows move, Enter picks, Esc
   await expect(active).toHaveAttribute("aria-selected", "true");
   await box.press("Enter");
   await expect(page.getByTestId("area-chosen")).toContainText("SUKATANI, TAMBUN SELATAN, BEKASI");
-  await expect(page.getByLabel("Kode pos")).toHaveValue("17510");
+  await expect(page.getByLabel("Kode pos penerima")).toHaveValue("17510");
   await expect(box).toHaveAttribute("aria-expanded", "false");
   await expect(box).not.toHaveAttribute("aria-activedescendant");
   await expect(box).toBeFocused();

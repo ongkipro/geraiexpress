@@ -1,5 +1,5 @@
 import {
-  buildLabelContent, contentFromSnapshot, sameChoice, senderErrors,
+  buildLabelContent, contentFromSnapshot, sameChoice, senderErrors, senderFromShipment,
   type LabelChoice, type LabelContent, type LabelFacts, type LabelSnapshot, type SenderInput,
 } from "../../lib/label-content";
 
@@ -17,13 +17,15 @@ export function parseBatchIds(raw: unknown): string[] | null {
 
 export type BatchCandidate = {
   id: string; reference: string; submission_state: string; awb: string | null; is_simulated: boolean;
-  sender_name: string | null; sender_phone: string | null;
+  sender_name: string | null; sender_phone: string | null; sender_address: string | null; sender_area: string | null;
 };
 
-// Shipments store no sender city. Masked batches use a single operator-entered city, never the
-// recipient's area or the outlet pickup area. Name and phone always come from the shipment.
-export function batchSender(row: BatchCandidate, city: string): SenderInput {
-  return { name: row.sender_name ?? "", phone: row.sender_phone ?? "", city };
+// T-094: each masked label prints its own shipment's sender (name, phone, street, area). A shipment made
+// before T-094 has no sender area: the batch-wide area typed by the operator fills only that gap, never
+// the recipient's area or the outlet pickup area.
+export function batchSender(row: BatchCandidate, fallbackCity: string): SenderInput {
+  const own = senderFromShipment(row);
+  return { ...own, city: own.city || fallbackCity };
 }
 
 export function batchExclusion(row: BatchCandidate, mask: boolean, city: string): string | null {

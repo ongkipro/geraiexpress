@@ -43,7 +43,7 @@ const AUTHENTICATED_EXECUTE = [
   "public.close_unknown_batch_payment(uuid,uuid,text)",
   "public.confirm_shipment(uuid,uuid,integer,text,integer)",
   "public.create_invoice_snapshot(uuid)",
-  "public.create_label_snapshot(uuid,boolean,text,text,text,text)",
+  "public.create_label_snapshot(uuid,boolean,text,text,text,text,text)",
   "public.create_shipment_draft(uuid)",
   "public.deactivate_member(uuid,uuid,integer)",
   "public.gerai_cost_for_quote(uuid,uuid)",
@@ -169,7 +169,9 @@ const AUTHENTICATED_COLUMN_WRITES: Record<string, { insert: string[]; update: st
       "goods_value_idr", "handover", "height_cm", "is_cod", "item_description", "length_cm", "pickup_date", "pickup_note",
       "pickup_slot_hour", "pickup_volume", "recipient_address", "recipient_area",
       "recipient_area_id", "recipient_contact_id", "recipient_name", "recipient_phone", "recipient_postal_code",
-      "sender_contact_id", "sender_name", "sender_phone", "weight_grams", "width_cm",
+      // T-094: the optional sender address is draft content, written like the other draft fields.
+      "sender_address", "sender_area", "sender_contact_id", "sender_name", "sender_phone", "sender_postal_code",
+      "weight_grams", "width_cm",
     ],
   },
 };

@@ -169,7 +169,7 @@ describe("drawing geometry", () => {
 // pickup name, the outlet name, the customer charge and the private net cost never reach the printout.
 import {
   DEFAULT_LABEL_SIZE, LABEL_SIZES, EMPTY_SENDER, buildLabelContent, cleanSenderPhone, contentFromSnapshot, sameChoice,
-  senderErrors, type LabelChoice, type LabelFacts, type LabelSnapshot,
+  senderErrors, senderFromShipment, SENDER_LIMITS, type LabelChoice, type LabelFacts, type LabelSnapshot,
 } from "../../src/lib/label-content";
 
 const PICKUP_NAME = "Pickup Mengantar Rahasia";
@@ -186,7 +186,9 @@ const facts: LabelFacts = {
 // A caller that over-shares: the extra fields must be ignored, not copied.
 const overshared = { ...facts, pickupName: PICKUP_NAME, outletName: OUTLET_NAME, netCostIdr: NET_COST, customerChargeIdr: CHARGE, discountBps: 250 } as LabelFacts;
 const off: LabelChoice = { mask: false, size: "10x15", sender: EMPTY_SENDER };
-const on: LabelChoice = { mask: true, size: "10x10", sender: { name: "  Toko Pelanggan ", phone: "0813-1111-2222", city: " Bandung " } };
+const on: LabelChoice = { mask: true, size: "10x10", sender: { name: "  Toko Pelanggan ", phone: "0813-1111-2222", city: " Bandung ", address: "" } };
+// T-094: the masked sender may carry a street; a pasted multi-line street is printed on tidy lines.
+const onWithAddress: LabelChoice = { ...on, sender: { ...on.sender, address: "  Jl. Pelanggan\n  No. 7 " } };
 
 describe("label content (PR-34)", () => {
   it("masking off prints the gerai name, WhatsApp and pickup address as the sender", () => {
@@ -197,12 +199,24 @@ describe("label content (PR-34)", () => {
     expect(c.cod).toEqual({ amountIdr: 125000 });
   });
 
-  it("masking on prints exactly the three entered fields and not the gerai pickup address", () => {
+  it("masking on prints exactly the entered sender (street optional) and never the gerai pickup address", () => {
     const c = buildLabelContent(overshared, on);
     expect(c.sender).toEqual({ name: "Toko Pelanggan", phone: "081311112222", address: null, city: "Bandung" });
     expect(c.size).toBe("10x10");
-    const printed = JSON.stringify(c);
-    for (const gerai of ["Gerai Uji A", "081355550000", "Jl. Pickup Nyata No. 5", "Kec. Pickup, Kota Nyata"]) expect(printed).not.toContain(gerai);
+    const withAddress = buildLabelContent(overshared, onWithAddress);
+    expect(withAddress.sender).toEqual({ name: "Toko Pelanggan", phone: "081311112222", address: "Jl. Pelanggan No. 7", city: "Bandung" });
+    for (const content of [c, withAddress]) {
+      const printed = JSON.stringify(content);
+      for (const gerai of ["Gerai Uji A", "081355550000", "Jl. Pickup Nyata No. 5", "Kec. Pickup, Kota Nyata"]) expect(printed).not.toContain(gerai);
+    }
+  });
+
+  it("pre-fills the masked sender from the shipment's sender (T-094), keeping long values for validation", () => {
+    expect(senderFromShipment({ sender_name: "Budi", sender_phone: "081234567890", sender_address: "Jl. Kenanga No. 3", sender_area: "Kec. Coblong, Bandung" }))
+      .toEqual({ name: "Budi", phone: "081234567890", address: "Jl. Kenanga No. 3", city: "Kec. Coblong, Bandung" });
+    expect(senderFromShipment({ sender_name: null, sender_phone: null, sender_address: null, sender_area: null })).toEqual(EMPTY_SENDER);
+    const long = "y".repeat(SENDER_LIMITS.addressMax + 1);
+    expect(senderFromShipment({ sender_name: "Budi", sender_phone: "081234567890", sender_address: long, sender_area: "Bandung" }).address).toBe(long);
   });
 
   it("never carries the Mengantar pickup name, the outlet name, any cost, charge or discount, with the switch on or off", () => {
@@ -223,14 +237,24 @@ describe("label content (PR-34)", () => {
   });
 
   it("previews a half-filled masked sender without throwing, and gates printing with field errors", () => {
-    expect(buildLabelContent(facts, { mask: true, size: "10x15", sender: { name: "Toko", phone: "", city: "" } }).sender)
+    expect(buildLabelContent(facts, { mask: true, size: "10x15", sender: { name: "Toko", phone: "", city: "", address: "" } }).sender)
       .toEqual({ name: "Toko", phone: "", address: null, city: "" });
-    expect(senderErrors(EMPTY_SENDER)).toEqual({ name: "Isi nama pengirim.", phone: "Isi nomor HP pengirim.", city: "Isi kota pengirim." });
-    expect(senderErrors({ name: "Toko Pelanggan", phone: "081311112222", city: "Bandung" })).toEqual({});
-    expect(senderErrors({ name: "A", phone: "abc", city: "B" })).toMatchObject({
+    expect(senderErrors(EMPTY_SENDER)).toEqual({ name: "Isi nama pengirim.", phone: "Isi nomor HP pengirim.", city: "Isi kecamatan / kota pengirim." });
+    expect(senderErrors({ name: "Toko Pelanggan", phone: "081311112222", city: "Bandung", address: "" })).toEqual({});
+    expect(senderErrors({ name: "Toko Pelanggan", phone: "081311112222", city: "Bandung", address: "Jl. Pelanggan No. 7" })).toEqual({});
+    expect(senderErrors({ name: "A", phone: "abc", city: "B", address: "Jl" })).toMatchObject({
       name: expect.stringContaining("2–60"), phone: expect.stringContaining("tidak valid"), city: expect.stringContaining("2–40"),
+      address: expect.stringContaining("5–120"),
     });
-    expect(senderErrors({ name: "x".repeat(61), phone: "12345", city: "y".repeat(41) })).toHaveProperty("name");
+    // One limit per case, each from a valid baseline, so every client-side limit is checked on its own.
+    const valid = { name: "Toko Pelanggan", phone: "081311112222", city: "Bandung", address: "" };
+    expect(senderErrors({ ...valid, name: "x".repeat(61) })).toEqual({ name: expect.stringContaining("2–60") });
+    expect(senderErrors({ ...valid, city: "y".repeat(41) })).toEqual({ city: expect.stringContaining("2–40") });
+    expect(senderErrors({ ...valid, phone: "12345" })).toEqual({ phone: expect.stringContaining("tidak valid") });
+    expect(senderErrors({ ...valid, address: "z".repeat(121) })).toEqual({ address: expect.stringContaining("5–120") });
+    expect(senderErrors({ name: "Toko", phone: "081311112222", city: "Bandung", address: "Jl. A\u0007 No. 7" })).toHaveProperty("address");
+    // Whitespace is collapsed before counting, exactly as the database does.
+    expect(senderErrors({ name: "Toko", phone: "081311112222", city: "Bandung", address: `Jl.${" ".repeat(200)}No. 7` })).toEqual({});
     expect(cleanSenderPhone("+62 812-3456-7890")).toBe("+6281234567890");
     expect(cleanSenderPhone("123")).toBeNull();
   });
@@ -249,14 +273,20 @@ describe("label content (PR-34)", () => {
   });
 
   it("the same choice reuses the stored snapshot; a changed switch, size or sender field does not", () => {
-    const stored = { ...contentSnapshot(), mask_sender: true, size: "10x10" as const, printed_sender_name: "Toko Pelanggan", printed_sender_phone: "081311112222", printed_sender_city: "Bandung" };
+    // A masked snapshot stores only what was printed: no street here (contentSnapshot() is the unmasked one).
+    const stored = { ...contentSnapshot(), mask_sender: true, size: "10x10" as const, printed_sender_name: "Toko Pelanggan", printed_sender_phone: "081311112222", printed_sender_city: "Bandung", printed_sender_address: null };
     expect(sameChoice(stored, on)).toBe(true);
     expect(sameChoice(stored, { ...on, size: "10x15" })).toBe(false);
     expect(sameChoice(stored, { ...on, mask: false })).toBe(false);
     expect(sameChoice(stored, { ...on, sender: { ...on.sender, city: "Cimahi" } })).toBe(false);
     expect(sameChoice(stored, { ...on, sender: { ...on.sender, phone: "abc" } })).toBe(false);
+    // T-094: the street is part of the choice; an equal street after whitespace tidying reuses the snapshot.
+    expect(sameChoice(stored, onWithAddress)).toBe(false);
+    const storedWithAddress = { ...stored, printed_sender_address: "Jl. Pelanggan No. 7" };
+    expect(sameChoice(storedWithAddress, onWithAddress)).toBe(true);
+    expect(sameChoice(storedWithAddress, on)).toBe(false);
     const ungated = { ...stored, mask_sender: false, size: "10x15" as const };
-    expect(sameChoice(ungated, { mask: false, size: "10x15", sender: { name: "ignored", phone: "", city: "" } })).toBe(true);
+    expect(sameChoice(ungated, { mask: false, size: "10x15", sender: { name: "ignored", phone: "", city: "", address: "ignored" } })).toBe(true);
   });
 });
 
