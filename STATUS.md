@@ -9,6 +9,22 @@ Independent-Review: T-099 source run RUN-20261104T132445Z-6016ac5f closed PASS a
 Independent-Reviewer: reviewer-185798e0 (separate reviewer; retained session 615c5c30-a61c-475a-850a-58feab6d7907)
 Independent-Review-Head: Source commit 8b092c5; merge 209c1c5 preserves its five source blobs. This documentation handoff has its own integration gates under RUN-20261104T174014Z-efb3143a.
 
+## T-100 Local Mengantar area catalogue (implementation verified; final gates and integration pending)
+
+Run `RUN-20261104T194904Z-1ff1e869` (R2), worktree `.gx-wt/T-100`; not merged, committed or deployed.
+Owner request 2026-11-05: kelurahan/kecamatan/kota/kode pos locally, from Mengantar or the owner's
+99ribu project. `data/mengantar/areas-2026-10-30.json.gz` is the 99ribu read-only Mengantar
+`/address/search` harvest copied unchanged (SHA-256 f1712dc0...2e02, 79,391 rows, Mengantar area ids;
+~435 Kepmendagri districts unmatched). Migration `20261105100000` adds `public.mengantar_areas` (no API
+table grants) and member-only `search_mengantar_areas` (3-60 chars, 1-30 rows, every word must match;
+postal, kelurahan, kecamatan, kota ranking). `npm run db:areas` validates the whole file, upserts in
+1,000-row transactions and never deletes. `/api/mengantar/area` reads the catalogue first; only a miss
+in a connected non-demo gerai uses the live Mengantar search. Demo intake keeps free-text fields.
+Evidence: typecheck, 1,085 unit, focused DB 50 fresh + 50 upgrade (including a real loader run), 4 e2e
+at 390/1280 PASS (`/data/tmp/t100/`); screenshots opened; review 7ba0eaff code OK, visual PASS, one P2
+architecture inventory contradiction fixed. After review: schema-reload notify and typed-separator
+normalisation added (re-verified by the final gates). Loading the dev `gxdb` catalogue is owner-approved
+(2026-11-05: "ya lanjutkan masukan ke katalog"); retained/production loads and refreshes still need approval.
 ## T-096 Gerai logo upload (verified; integrated, not deployed)
 
 Run `RUN-20261104T161806Z-137154a5`, worktree `.gx-wt/T-096`, based on verified T-094 `f020c09`;

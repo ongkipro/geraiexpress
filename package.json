@@ -16,6 +16,7 @@
     "db:up": "bash scripts/db-up.sh",
     "db:down": "bash scripts/db-down.sh",
     "db:migrate": "bash scripts/db-migrate.sh",
+    "db:areas": "node scripts/load-mengantar-areas.mjs",
     "db:backup": "bash scripts/db-backup.sh",
     "db:restore-check": "bash scripts/db-restore-check.sh",
     "db:reset": "bash scripts/db-migrate.sh --reset",

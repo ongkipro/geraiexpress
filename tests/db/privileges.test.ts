@@ -98,6 +98,8 @@ const AUTHENTICATED_EXECUTE = [
   "public.review_unpaid_batch(uuid,uuid)",
   "public.revoke_invitation(uuid,integer)",
   "public.save_application(integer,text,text,text,text,text)",
+  // T-100: bounded provider reference search, checked for active membership inside the RPC.
+  "public.search_mengantar_areas(text,integer)",
   "public.seller_credential_status(uuid)",
   "public.set_member_role(uuid,uuid,text,integer)",
   "public.set_outlet_mengantar_pickup(uuid,text,text,text,text)",

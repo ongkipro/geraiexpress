@@ -37,6 +37,16 @@ Names below are proposed logical entities, not existing tables or promised SDK A
 | Gerai discount terms | Tenant or platform template + provider environment + version | Basis points, effective date, source reference, status per value, actor; DATA-9. Private; no operator projection. |
 | Masked label snapshot | Tenant + shipment + snapshot ID | Immutable printed content (mask switch, printed sender, AWB barcode value, size, template version); DATA-10. |
 | Shipment reference counter | Tenant + day | Last allocated sequence for the per-day reference; DATA-8. |
+| Mengantar area catalogue | Shared provider reference data; **no tenant owner**; `public.mengantar_areas`, primary key `id` (original Mengantar 24-hex `_id`) | T-100, owner request 2026-11-05: province/city/district/subdistrict (1–160 characters), postal code (five digits or empty), `dataset_version`, generated lowercase `search`. RLS enabled, no direct API-role grants; bounded authenticated `search_mengantar_areas(text, integer)` verifies active membership, demo included. Owner-run `scripts/load-mengantar-areas.mjs` validates and upserts the committed 79,391-row 2026-10-30 99ribu harvest, never deleting omitted historical ids. Defined on disk in `20261105100000_mengantar_area_catalogue.sql`; application/execution remains a verification gate, not a deployed-schema claim. |
+
+T-100 reference-data boundary: the local catalogue is an incomplete, versioned search aid,
+not an authority over Mengantar quote/order validity. The area route reads it first with the
+user JWT; only an empty catalogue result for a connected non-demo gerai falls back to live
+Mengantar `GET /address/search`. Provider ids remain unchanged in shipment/contact fields;
+there is deliberately no foreign key requiring historical or live-fallback ids to be present
+in the local harvest. Refresh/new harvest requires owner approval; see
+`data/mengantar/README.md` for provenance, approximately 435 unmatched Kepmendagri districts
+and capped-query gaps. Demo route access is enabled while demo intake retains free-text areas.
 
 Use composite unique parent keys and composite foreign keys where records have
 tenant-owned parents. Restrict changes to ownership/authority columns; RLS row

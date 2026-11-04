@@ -13,8 +13,8 @@ type Area = { id: string; province: string; city: string; district: string; subd
 export const areaLabel = (a: Area) => [a.subdistrict, a.district, a.city].filter(Boolean).join(", ");
 
 // T-023 / T-072 (UX-15): the recipient's Mengantar area for a connected gerai, as an ARIA combobox
-// (list autocomplete). Typing never calls Mengantar by itself: Enter (or "Cari") searches, because every
-// search is a request to the seller's Mengantar account. With results shown, Arrow Down/Up move the active
+// (list autocomplete). Enter (or "Cari") searches the local catalogue first; only a miss can use
+// the seller's Mengantar account (T-100). With results shown, Arrow Down/Up move the active
 // option (aria-activedescendant; focus stays in the box), Enter picks it, Escape closes the list and a
 // pointer click picks too. The status line announces loading, the result count, no match and errors.
 // Choosing a saved contact or address takes that address's saved area (or clears the choice when it has
@@ -46,7 +46,7 @@ export function AreaPicker(props: {
     const q = query.trim();
     if (q.length < 3) {
       setStatus("error");
-      setMessage("Ketik minimal 3 huruf nama kelurahan, kecamatan atau kota.");
+      setMessage("Ketik minimal 3 karakter nama kelurahan, kecamatan, kota atau kode pos.");
       return;
     }
     setStatus("loading");
@@ -134,7 +134,7 @@ export function AreaPicker(props: {
           Cari
         </Button>
       </div>
-      <p id={`${id}-hint`} className="text-sm text-muted-foreground">Ketik nama kelurahan, kecamatan atau kota, lalu tekan Enter.</p>
+      <p id={`${id}-hint`} className="text-sm text-muted-foreground">Ketik kelurahan, kecamatan, kota atau kode pos, lalu tekan Enter.</p>
       <p id={`${id}-status`} role="status"
         className={cn("flex items-start gap-1.5 text-sm empty:hidden", status === "error" ? "text-destructive" : "text-muted-foreground")}>
         {message ? (
