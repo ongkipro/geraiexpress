@@ -972,6 +972,35 @@ test("keyboard only: from the last intake control to the label page (T-070, 1280
   await expect(page).toHaveURL(/\/label$/);
 });
 
+// T-100: real route + member RPC on both configured 390/1280 projects, not a page.route stub.
+// The isolated harness seeds only db/seed.sql; keep this tiny fixture local to the test.
+test("recipient area pick uses the local catalogue without a seller key (T-100)", async ({ page }) => {
+  const id = "ffff30000000000000000001";
+  localSql(`insert into public.mengantar_areas (id, province, city, district, subdistrict, postal_code, dataset_version)
+    values ('${id}', 'JAWA BARAT', 'DEPOK', 'TAPOS', 'ZZT100 KATALOG', '16454', 'mengantar-2099-01-03-1')`);
+  try {
+    await signIn(page, "operator-a@geraiexpress.test");
+    await page.goto("/pengiriman/00000000-0000-4000-e000-00000000000a");
+    const box = page.getByRole("combobox", { name: "Wilayah penerima" });
+    await box.fill("zzt100 katalog");
+    const response = page.waitForResponse((r) => r.url().includes("/api/mengantar/area?"));
+    await box.press("Enter");
+    const result = await response;
+    expect(result.status()).toBe(200);
+    expect(await result.json()).toMatchObject({ source: "catalogue", areas: [{ id, zip: "16454" }] });
+    await expect(page.getByRole("option", { name: /ZZT100 KATALOG/ })).toBeVisible();
+    await box.press("ArrowDown");
+    await box.press("Enter");
+    await expect(page.getByTestId("area-chosen")).toContainText("ZZT100 KATALOG, TAPOS, DEPOK");
+    await expect(page.locator('input[name="recipient_area_id"]')).toHaveValue(id);
+    await expect(page.getByLabel("Kode pos penerima")).toHaveValue("16454");
+    await expectNoHorizontalOverflow(page);
+    await evidence(page, "t100-catalogue-area", false);
+  } finally {
+    localSql(`delete from public.mengantar_areas where id = '${id}'`);
+  }
+});
+
 // T-072 / UX-15: the recipient area is a keyboard combobox. The area endpoint is answered in the browser
 // (page.route), so no request reaches Mengantar; the first search is held to observe the loading state.
 test("the recipient area combobox: Enter searches, arrows move, Enter picks, Escape closes; loading, count, empty and error are announced (T-072)", async ({ page }) => {

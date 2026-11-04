@@ -253,6 +253,7 @@ flowchart LR
         Pages["App Router pages<br/>public, auth, workspace and /admin routes<br/>(full list: Runtime route map)"]
         Actions["Server actions<br/>auth · contacts · credentials · shipments · labels · invoices · pricing"]
         WS["lib/workspace.ts<br/>tenant = active membership<br/>(ge_tenant cookie is only a selector)"]
+        AreaRoute["GET /api/mengantar/area<br/>workspace member · local first (T-100)"]
         Health["/healthz (no-store)"]
         Hosts["lib/hosts.ts<br/>host table, route-family matrix, per-environment origins"]
         AuthMod["lib/auth/**<br/>scrypt · emailed code · refresh rotation · TOTP · Turnstile<br/>signs HS256 access tokens"]
@@ -261,13 +262,21 @@ flowchart LR
         PgRest["PostgREST<br/>HS256 JWT (AUTH_JWT_SECRET) · schema public<br/>roles anon / authenticated / service_role"]
         AuthDb["auth schema: users · sessions · otp_codes · mfa_factors<br/>(no API grants) · 14 machine-only auth_* functions<br/>before_user_created gate blocks public signup<br/>anonymous identities locked to demo"]
         DB["public schema: RLS on every table<br/>composite same-tenant FKs<br/>column-level grants"]
+        AreaRPC["search_mengantar_areas(query, limit)<br/>authenticated · active membership · max 30"]
+        Areas["PostgreSQL: public.mengantar_areas<br/>provider reference data · RLS · no API table grants"]
         Priv["private schema: helpers, triggers,<br/>quote_costs, seller_credentials,<br/>tenant_mengantar_onboarding (no API grants)"]
     end
     Sim["Simulated provider<br/>(SQL, demo tenants only)"]
     Mengantar["Mengantar Partner/Public API"]
     Dispatcher["Account dispatcher (dispatcher.ts, partner-key-rotation.ts, pickup.ts)<br/>machine identity, service_role-only RPCs"]
 
+    AreaLoader["scripts/load-mengantar-areas.mjs<br/>versioned data/mengantar/*.json.gz<br/>owner-only gx_psql · upsert, never delete"]
+
     UI --> MW --> Pages
+    UI --> AreaRoute
+    AreaRoute -->|user JWT via PostgREST| AreaRPC --> Areas
+    AreaRoute -->|empty catalogue + connected non-demo only: address/search| Mengantar
+    AreaLoader --> Areas
     MW --> Hosts
     UI -->|form posts| Actions
     Pages --> WS
@@ -296,8 +305,22 @@ RPCs that only `service_role` may execute, so no user can forge a resi. Since T-
 machine identity (a static `service_role` JWT the app signs with the container environment secret `AUTH_JWT_SECRET`, never in the client bundle)
 serves `machine_seller_key` (the sealed key, opened only on the server) and
 `record_live_quotes` (live Mengantar estimates; net cost to `private.quote_costs`). Connected
-real gerai quote live and pick recipient areas from Mengantar; demo gerai keep the SQL
-simulation. Without `MENGANTAR_ENV` and the auth/PostgREST values (`POSTGREST_URL`, `AUTH_JWT_SECRET`, `AUTH_SECRET`) live features fail
+real gerai quote live; demo gerai keep the SQL simulation. T-100 (owner request
+2026-11-05) changes T-023 recipient area search to local-first: the member's
+`GET /api/mengantar/area` calls `search_mengantar_areas` through the user's DB client,
+reading `public.mengantar_areas` before opening any seller key. The owner-run
+`scripts/load-mengantar-areas.mjs` loads the unchanged 99ribu read-only 2026-10-30
+Mengantar harvest (79,391 rows), with validation, versioned upserts and no deletion.
+Exact postal code ranks first, then kelurahan/kecamatan/kota prefix; contains and
+multiword search use normalized text. Bounds are 3–60 query characters and 1–30
+results. Only a catalogue miss for a connected non-demo gerai falls back to
+Mengantar `GET /address/search`; DB errors fail closed, not through to the provider.
+There are no direct API-role table grants. The route/RPC also accepts demo members,
+but the demo intake deliberately retains its existing free-text area UI (no second
+picker/control); SQL simulation does not require any specific provider area id.
+Live quotes/orders send a chosen provider id unchanged; Mengantar remains the authority.
+Harvest gaps/caps and refresh-by-owner-approval are recorded in `data/mengantar/README.md`.
+Loading is an explicit operation, not part of migration or seed execution. Without `MENGANTAR_ENV` and the auth/PostgREST values (`POSTGREST_URL`, `AUTH_JWT_SECRET`, `AUTH_SECRET`) live features fail
 closed with an explanatory message.
 
 T-080's owner-approved regular-service slice adds sourced, append-only
@@ -673,7 +696,7 @@ API.
 | Hooks (`hooks.`, `hooks-staging.`) | the reserved prefix `/api/webhooks` (no route exists), `/healthz` | None today; cookies are stripped and none is set (the Send Email Hook route `/api/auth/send-email` was removed by T-066) |
 | Shared (loopback in a non-production build, or `HOST_SHARED_MODE=1`, e.g. the local container behind the local proxy profile) | Every route above on one origin (not the internal cron routes) | As the route's own audience |
 | Internal (`internal.geraiexpress.local`, never routed by the proxy) | `POST /api/internal/cron/dispatch`, `POST /api/internal/cron/cleanup`, `/healthz` | `CRON_SECRET` bearer (constant-time compare); 404 while the secret is unset; no cookie reaches the route |
-| API route handlers | `GET /api/mengantar/area` (recipient area search; 401 without a workspace, 403 for demo), `GET /pengiriman/export.csv` (tenant-admin CSV; 403 operator and demo, 404 anonymous), `GET /healthz` (liveness only), and the internal `POST /api/internal/cron/*` routes above | Workspace, tenant admin, none, `CRON_SECRET` respectively |
+| API route handlers | `GET /api/mengantar/area` (member-only local catalogue search, including demo; 401 without a workspace; live fallback only on a connected non-demo catalogue miss), `GET /pengiriman/export.csv` (tenant-admin CSV; 403 operator and demo, 404 anonymous), `GET /healthz` (liveness only), and the internal `POST /api/internal/cron/*` routes above | Workspace, tenant admin, none, `CRON_SECRET` respectively |
 | Not present | any webhook, cancel or tracking route; responsibility acceptance at activation; admin close for unknown payment or ambiguous pickup reservation; scheduled credential rewrap | |
 
 `src/app/robots.ts` reads the request host: the production apex allows only the five public pages
@@ -778,7 +801,7 @@ target.
 | Discount environment | Provider percentage and gerai/admin UI are built; discount terms themselves remain tenant-scoped without a provider-environment column | Owner/design gate, DATA-9 |
 | Sequences | `shipment_events_id_seq` and `audit_events_id_seq` are granted to API roles (PostgREST does not expose sequences) | Deferred |
 | Demo references | Demo references repeat across tenants; any support lookup by reference must be scoped by tenant | T-049 Result |
-| Wilayah | No local area reference dataset (provider area ids are required) | Deferred (owner decision) |
+| Wilayah | Local Mengantar area catalogue built (T-100: `mengantar_areas`, `search_mengantar_areas`, `npm run db:areas`); coverage is the 2026-10-30 harvest (~435 Kepmendagri districts unmatched), so live search stays the fallback. Loading into a retained or production database and any refresh need owner approval | T-100 (owner request 2026-11-05) |
 | Provider shapes | `POST /order/pay-unpaid` success, Partner regenerate, `POST /time` and `GET /time` shapes are documentation-derived fixtures, not captures; courier acceptance of the local label is unproven | T-048 |
 | Release record | STATUS.md now holds the final counts; the release record (ledger gates, `.env.example` audit, rollback artifact) is still not updated | T-037 |
 
@@ -839,7 +862,7 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
 | Durable Object / queues for the dispatcher (TD-3) | Deferred by DEC-010 until volume requires them; the 5-minute scheduler call (`dispatch_due` through `POST /api/internal/cron/dispatch`, T-024, T-062) handles stale operations today |
 | Pricing monitoring and cross-tenant recovery (PR-25, PR-27) | Not implemented; discount terms, tenant-admin cost/settings views and the masking admin page are built (T-041/T-053), not platform health or cross-tenant recovery |
 | Production Super Admin bootstrap | Owner runs the first grant on the production database (explicit write approval) and enrols TOTP; a second recovery governor follows (DEC-008). Never via `seed.sql`, which holds local-only working admin credentials |
-| Overview, finance, local wilayah dataset | Later accepted requirements; CSV export and invoices are built (T-047); the wilayah dataset is deferred (owner decision) |
+| Overview, finance | Later accepted requirements; CSV export and invoices are built (T-047); the local wilayah catalogue is built locally by T-100, its load into a retained or production database awaits owner approval |
 | Production database and server deployment | Explicit release approval and the owner's server (provider, region, fixed IPv4, DNS); where the database runs (same server or managed PostgreSQL), backups and point-in-time recovery are owner decisions and gates (T-067); nothing is provisioned |
 | Host split in production (owner., app., apex, hooks) | Built in code (T-042) and in `infra/proxy/Caddyfile` (T-062); live only after the owner provisions the server and DNS and sets the `*_ORIGIN` values (TD-14); the hooks host serves no route until a provider webhook exists |
 | Order cancel and signed webhook | TASKS T-045; pickup (T-043) and the masked label (T-044) are built, the label announcement waits for the courier test (T-048) |

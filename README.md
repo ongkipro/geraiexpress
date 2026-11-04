@@ -78,6 +78,7 @@ Database scripts (`pnpm db:verify` takes `flock /tmp/gx-db.lock`, so two databas
 pnpm db:up        # generates infra/dev/.env (gitignored secrets; prints names only), starts postgres + mailpit,
                   # applies db/foundation then db/migrations, loads db/seed.sql when absent, starts PostgREST and waits for it
 pnpm db:migrate   # applies only new migrations; serializes deploys and refuses missing/changed applied migration history
+pnpm db:areas     # T-100 (owner 2026-11-05): owner-only load of committed Mengantar gzip; validated upsert, never delete
 pnpm db:backup /secure/path/gxdb.dump  # custom-format archive; exclusive create, mode 0600 (or set BACKUP_DIR)
 pnpm db:restore-check /secure/path/gxdb.dump gxrestore_drill # NEW scratch DB, row counts + ledger, then drop
 pnpm db:reset     # drops and recreates database gxdb, then migrates (loopback host and gx* name only; no seed)
@@ -91,6 +92,11 @@ Cluster roles/passwords are re-provisioned, not dumped. Release backup storage, 
 procedure: [RELEASE.md](RELEASE.md), gates 11–17. `node scripts/reseal-totp.mjs` rotates sealed MFA secrets in one
 transaction with `OLD_AUTH_SECRET` / `NEW_AUTH_SECRET` from protected environment; stop writers first, never
 rotate `AUTH_SECRET` alone. Local `GX_PSQL_DB=gxrestore_name` selects a restored copy for rotation rehearsal.
+
+T-100's area catalogue is loaded explicitly after migration, not by seed/reset or the isolated
+harness. See [`data/mengantar/README.md`](data/mengantar/README.md) for provenance, gaps,
+refresh approval and the optional dataset path. Run the loader twice to verify idempotence:
+the second identical load must report `validated=79391 changed=0 unchanged=79391`.
 
 `scripts/db-migrate.sh` also accepts `DATABASE_URL` (psql on PATH) instead of the Compose container, and
 `DB_FOUNDATION_DIR`/`DB_MIGRATIONS_DIR` to point at other SQL directories. `db/foundation` creates what plain
