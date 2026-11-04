@@ -1,6 +1,7 @@
 import { formatIdr, formatWeight } from "@/lib/format";
 import { LABEL_SIZES, type LabelContent } from "@/lib/label-content";
 import { Code128Barcode } from "./code128-barcode";
+import { GeraiIdentity } from "./gerai-identity";
 
 // Print-first label sheet (UI-6): exactly the chosen label size, black on white, system font, no
 // gradient, shadow or accent colour, one label per page. The @page rule sets the printed page to the sheet;
@@ -45,7 +46,10 @@ export function LabelSheet({ content }: { content: LabelContent }) {
         className="box-border flex shrink-0 flex-col gap-[1.6mm] overflow-hidden border border-black bg-white p-[3mm] text-[3.2mm] leading-[1.25] text-black [overflow-wrap:anywhere] print:m-0 print:break-inside-avoid print:border-0"
       >
         <section aria-label="Pengirim" data-testid="label-sender" className="min-h-0 overflow-hidden border-b border-black pb-[1.4mm]">
-          <p className="text-[2.2mm] font-semibold uppercase tracking-wide">Pengirim</p>
+          <div className="flex items-start justify-between gap-[1mm]">
+            <p className="text-[2.2mm] font-semibold uppercase tracking-wide">Pengirim</p>
+            {content.geraiName ? <GeraiIdentity name={content.geraiName} logo={content.geraiLogo} /> : null}
+          </div>
           <p className={`font-semibold ${clamp.senderName} ${tight ? "text-[3.2mm]" : "text-[3.8mm]"}`} data-testid="label-sender-name">{dash(content.sender.name)}</p>
           <p className="tabular-nums" data-testid="label-sender-phone">{dash(content.sender.phone)}</p>
           <p className={`${clamp.senderPlace} ${fit(senderAddress.length, tight)}`} data-testid="label-sender-place">{dash(senderAddress)}</p>

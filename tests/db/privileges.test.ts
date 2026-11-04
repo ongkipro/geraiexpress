@@ -96,11 +96,13 @@ const AUTHENTICATED_EXECUTE = [
   "public.set_member_role(uuid,uuid,text,integer)",
   "public.set_outlet_mengantar_pickup(uuid,text,text,text,text)",
   "public.set_tenant_contact_whatsapp(uuid,text,integer)",
+  "public.set_tenant_logo(uuid,text,text,integer)", // T-096: admin-only, revision-checked logo mutation.
   "public.start_demo()",
   "public.store_seller_credential(uuid,integer,text,text,text,text,text)",
   "public.submit_application(uuid,integer)",
   "public.tenant_gerai_discount(uuid)",
   "public.tenant_invitations_list(uuid)",
+  "public.tenant_logo(uuid)", // T-096: member-scoped read; version rows have no direct grants.
   "public.tenant_members(uuid)",
   "public.withdraw_application(uuid,integer)",
 ];

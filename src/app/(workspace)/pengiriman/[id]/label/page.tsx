@@ -4,6 +4,7 @@ import { courierName, formatIdr, formatWeight, formatWib } from "@/lib/format";
 import { SNAPSHOT_COLUMNS, senderFromShipment, type LabelFacts, type LabelSnapshot } from "@/lib/label-content";
 import { dbServer } from "@/lib/db/server";
 import { requireWorkspace } from "@/lib/workspace";
+import { readGeraiLogo } from "@/lib/gerai-logo-server";
 import { LabelWorkbench, type PrintHistoryEntry } from "@/modules/labels/label-workbench";
 import { PrintHeader } from "../print-header";
 import { PrintButton } from "./print-button";
@@ -43,6 +44,7 @@ export default async function LabelPage({ params }: { params: Promise<{ id: stri
       const snapshot = byId.get(e.snapshot_id);
       return snapshot ? [{ id: e.id, at: e.created_at, version: snapshot.version, size: snapshot.size, mask: snapshot.mask_sender }] : [];
     });
+    const logo = await readGeraiLogo(ws.tenant.id);
     const facts: LabelFacts = {
       reference: s.reference, awb: s.awb, courier: quote?.courier ?? null, service: quote?.service ?? null,
       weightGrams: s.weight_grams, isCod: s.is_cod, codAmountIdr: s.cod_amount_idr, itemDescription: s.item_description,
@@ -50,7 +52,7 @@ export default async function LabelPage({ params }: { params: Promise<{ id: stri
         name: s.recipient_name, phone: s.recipient_phone, address: s.recipient_address,
         area: s.recipient_area, postalCode: s.recipient_postal_code,
       },
-      geraiName: tenant.name, geraiWhatsapp: tenant.contact_whatsapp,
+      geraiName: tenant.name, geraiLogo: logo?.logo ?? null, geraiWhatsapp: tenant.contact_whatsapp,
       pickupAddress: pickup.address ?? ws.outlet.pickupAddress, pickupArea: pickup.area ?? ws.outlet.pickupArea,
     };
     return (

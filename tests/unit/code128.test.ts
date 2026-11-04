@@ -207,7 +207,18 @@ describe("label content (PR-34)", () => {
     expect(withAddress.sender).toEqual({ name: "Toko Pelanggan", phone: "081311112222", address: "Jl. Pelanggan No. 7", city: "Bandung" });
     for (const content of [c, withAddress]) {
       const printed = JSON.stringify(content);
-      for (const gerai of ["Gerai Uji A", "081355550000", "Jl. Pickup Nyata No. 5", "Kec. Pickup, Kota Nyata"]) expect(printed).not.toContain(gerai);
+      expect(content.geraiName).toBe("Gerai Uji A");
+      for (const gerai of ["081355550000", "Jl. Pickup Nyata No. 5", "Kec. Pickup, Kota Nyata"]) expect(printed).not.toContain(gerai);
+    }
+  });
+
+  it.each(["10x15", "10x10"] as const)("previews masked parcel branding without the gerai contact (%s)", (size) => {
+    const logo = { version: 2, mime: "image/png" as const, base64: "iVBORw0KGgo=" };
+    for (const geraiLogo of [logo, null]) {
+      const content = buildLabelContent({ ...facts, geraiLogo }, { ...onWithAddress, size });
+      expect(content).toMatchObject({ geraiName: facts.geraiName, geraiLogo, sender: { name: "Toko Pelanggan", phone: "081311112222", address: "Jl. Pelanggan No. 7", city: "Bandung" } });
+      expect(JSON.stringify(content)).not.toContain(facts.geraiWhatsapp);
+      expect(JSON.stringify(content)).not.toContain(facts.pickupAddress);
     }
   });
 
@@ -224,7 +235,7 @@ describe("label content (PR-34)", () => {
       const c = buildLabelContent(overshared, choice);
       const printed = JSON.stringify(c);
       for (const secret of [PICKUP_NAME, OUTLET_NAME, String(NET_COST), String(CHARGE), "discount", "Rahasia"]) expect(printed, secret).not.toContain(secret);
-      expect(Object.keys(c).sort()).toEqual(["awb", "cod", "courierLine", "itemDescription", "recipient", "reference", "sender", "size", "weightGrams"]);
+      expect(Object.keys(c).sort()).toEqual(["awb", "cod", "courierLine", "geraiLogo", "geraiName", "itemDescription", "recipient", "reference", "sender", "size", "weightGrams"].sort());
       expect(Object.keys(c.sender).sort()).toEqual(["address", "city", "name", "phone"]);
     }
   });
@@ -265,11 +276,29 @@ describe("label content (PR-34)", () => {
       printed_sender_address: null, printed_sender_city: "Bandung", awb: facts.awb, shipment_reference: facts.reference, courier: "JT", service: "REG",
       weight_grams: 1500, is_cod: true, cod_amount_idr: 125000, item_description: "Buku", recipient_name: "Penerima Uji",
       recipient_phone: "081234567890", recipient_address: "Jl. Tujuan Uji No. 9", recipient_area: "Kec. Tujuan, Kota Uji",
-      recipient_postal_code: "40132", created_at: "2026-10-28T03:00:00Z",
+      recipient_postal_code: "40132", created_at: "2026-10-28T03:00:00Z", true_tenant_name: facts.geraiName,
     };
     expect(contentFromSnapshot(snapshot)).toEqual(buildLabelContent(facts, on));
     // Live data changing afterwards (gerai renamed, WhatsApp edited) does not matter to a stored snapshot.
-    expect(contentFromSnapshot(snapshot)).toEqual(buildLabelContent({ ...facts, geraiName: "Nama Baru", geraiWhatsapp: null }, on));
+    expect(contentFromSnapshot(snapshot).geraiName).toBe("Gerai Uji A");
+    expect(contentFromSnapshot(snapshot)).not.toEqual(buildLabelContent({ ...facts, geraiName: "Nama Baru", geraiWhatsapp: null }, on));
+  });
+
+  it("freezes the gerai logo and fallback name independently of later live branding", () => {
+    const logo = { version: 2, mime: "image/png" as const, base64: "iVBORw0KGgo=" };
+    const snapshot = { ...contentSnapshot(), true_tenant_name: "Gerai Saat Cetak", gerai_logo: logo, gerai_logo_revision: 2 };
+    expect(contentFromSnapshot(snapshot)).toMatchObject({ geraiName: "Gerai Saat Cetak", geraiLogo: logo });
+    expect(sameChoice(snapshot, off)).toBe(true);
+    expect(buildLabelContent({ ...facts, geraiName: "Nama Baru", geraiLogo: null }, off)).toMatchObject({ geraiName: "Nama Baru", geraiLogo: null });
+    expect(contentFromSnapshot(snapshot).geraiLogo).toBe(logo);
+    expect(contentFromSnapshot({ ...snapshot, gerai_logo: null, gerai_logo_revision: 3 })).toMatchObject({ geraiName: "Gerai Saat Cetak", geraiLogo: null });
+    // Owner (2026-11-05): masked parcels show frozen branding too, never the gerai contact.
+    const masked = { ...snapshot, mask_sender: true, printed_sender_name: "Toko Pelanggan", printed_sender_phone: "081311112222", printed_sender_address: null, printed_sender_city: "Bandung" };
+    const content = contentFromSnapshot(masked);
+    expect(content).toMatchObject({ geraiName: "Gerai Saat Cetak", geraiLogo: logo, sender: { name: "Toko Pelanggan", phone: "081311112222", address: null, city: "Bandung" } });
+    expect(JSON.stringify(content)).not.toContain(facts.geraiWhatsapp);
+    expect(sameChoice(masked, { ...off, mask: true, sender: { name: "Toko Pelanggan", phone: "081311112222", address: "", city: "Bandung" } })).toBe(true);
+    expect(contentFromSnapshot({ ...masked, gerai_logo: null, gerai_logo_revision: 3 })).toMatchObject({ geraiName: "Gerai Saat Cetak", geraiLogo: null });
   });
 
   it("the same choice reuses the stored snapshot; a changed switch, size or sender field does not", () => {

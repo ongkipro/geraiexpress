@@ -477,6 +477,16 @@ observed. Counts and executed checks are under "Verified counts and gates".
   `export.shipments`, and hides invoice snapshots from the default audit list (explicit filter
   still returns them). Invoice COD copy says goods value plus customer shipping charge, including
   the COD fee. Only Chromium print-to-PDF exists; courier acceptance remains unproven.
+- **Gerai logo on labels (T-096).** Settings `/pengaturan#logo-gerai` (tenant admin) uploads,
+  replaces or removes the logo through `set_tenant_logo` (magic-byte PNG/JPEG/WebP, at most
+  204800 bytes, mandatory revision, audited); bytes live in append-only
+  `private.gerai_logo_versions`, never behind a public URL. Individual and batch label pages read
+  `tenant_logo` for the unsaved preview; printing uses the snapshot, whose `gerai_logo` and
+  `gerai_logo_revision` are frozen on INSERT by `private.capture_label_logo` and included in the
+  digest. `GeraiIdentity` renders a size-bounded image or the gerai name, and falls back to the name
+  when an image fails, including a failure finished before hydration (`complete && naturalWidth === 0`).
+  Owner decision 2026-11-05: masked parcels show the same branding; masked content still excludes
+  the gerai WhatsApp/contact. The 10x5 slip is T-095.
 - **Gerai discount terms (T-041).** Append-only `public.gerai_discount_terms` per tenant (basis
   points, effective date, source reference, status `owner_stated`, `provider_observed` or
   `provider_verified`, audit), a platform default template (prefill only), Super Admin screens

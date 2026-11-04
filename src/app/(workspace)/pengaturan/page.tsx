@@ -21,6 +21,8 @@ import { MASKING_DISABLED, RETENTION_NOTE } from "@/modules/labels/messages";
 import { GeraiDiscountCard } from "@/modules/pricing/gerai-discount-card";
 import { SettingsNav, type SettingsSection } from "./settings-nav";
 import { LoadError } from "@/components/notice";
+import { readGeraiLogo } from "@/lib/gerai-logo-server";
+import { GeraiLogoForm } from "@/modules/tenants/logo-form";
 
 type CredentialStatus = { configured: boolean; mode?: string | null; hint: string | null; version: number | null; created_at: string | null; latest_version: number };
 
@@ -80,6 +82,7 @@ export default async function SettingsPage() {
     retry_after_at: null,
   };
   const isAdmin = ws.role === "tenant_admin";
+  const logo = ws.isDemo ? null : await readGeraiLogo(ws.tenant.id);
 
   // T-023: with a stored key, the server reads the seller's saved pickup addresses through it; a
   // successful read is the first proof the key works against Mengantar. Only for admins, who
@@ -151,6 +154,7 @@ export default async function SettingsPage() {
         { id: "mengantar", label: "Mengantar" },
         { id: "alamat-jemput", label: "Alamat jemput" },
         { id: "whatsapp-gerai", label: "WhatsApp gerai" },
+        { id: "logo-gerai", label: "Logo gerai" },
         { id: "harga", label: "Harga & diskon" },
       ];
 
@@ -314,6 +318,12 @@ export default async function SettingsPage() {
                     </Alert>
                   ) : null}
                   {isAdmin ? <p className="text-sm text-muted-foreground">{RETENTION_NOTE}</p> : null}
+                </section>
+              </Group>
+
+              <Group id="logo-gerai" title="Logo gerai" description="Identitas gerai pada label cetak lokal.">
+                <section className={CARD}>
+                  <GeraiLogoForm name={ws.tenant.name} current={logo} canEdit={isAdmin} />
                 </section>
               </Group>
 

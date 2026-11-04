@@ -238,7 +238,10 @@ test("masking on needs all three sender fields, previews them, keeps the true id
   await expect(page.getByTestId("label-sender-phone")).toHaveText("081311112222");
   await expect(page.getByTestId("label-sender-place")).toHaveText("Bandung");
   const sender = (await page.getByTestId("label-sender").innerText()).replace(/\s+/g, " ");
-  for (const gerai of ["Gerai Uji A", WHATSAPP, "Jl. Pickup Nyata No. 5", PICKUP_NAME]) expect(sender).not.toContain(gerai);
+  await expect(page.getByTestId("gerai-identity")).toContainText("Gerai Uji A");
+  for (const gerai of [WHATSAPP, "Jl. Pickup Nyata No. 5", PICKUP_NAME]) expect(sender).not.toContain(gerai);
+  await expect(page.getByTestId("label-sheet")).not.toContainText(WHATSAPP);
+  await expect(page.getByTestId("label-sheet").locator('a[href*="wa.me"], a[href^="tel:"]')).toHaveCount(0);
   expect(await decodeBarcode(page)).toBe("JP1234567890");
   await expectNoHorizontalOverflow(page);
   await expectTouchTargets(page);
