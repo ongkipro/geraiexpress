@@ -9,9 +9,13 @@ Independent-Review: Regular baseline approval belongs to RUN-20261103T085327Z-57
 Independent-Reviewer: d264fdd1-6723-4373-8d56-67733f212566 (separate reviewer; latest repair review 2957899e-9617-4acf-90f0-5ce0656fe7b7; same retained session)
 Independent-Review-Head: Uncommitted worktree; approval must bind to the delivery boundary digest, not HEAD alone.
 
-## T-094 Sender address and masked-label sender (2026-11-04, verification in progress)
+## T-094 Sender address and masked-label sender (2026-11-04, PASS; pushed, not deployed)
 
-Run `RUN-20261104T095832Z-7628e0cb` (R3), built in worktree `.gx-wt/T-094`; not merged or closed.
+Run `RUN-20261104T095832Z-7628e0cb` (R3) closed PASS and verified. Implementation commit `f020c09`,
+merged as `c91927a` into `feat/counter-ops-2026-11` and pushed to origin. Integration typecheck and
+all 1,025 unit tests passed; both branches' ledger histories and T-098 work were preserved.
+Only TASKS.md and the generated delivery projection conflicted; both were resolved without source changes.
+No production migration, provider operation, deployment or physical-printer verification was performed.
 The closing e2e initially failed at Super Admin 2FA login (114 passed, 1 failed, 1 skipped).
 The fixture helper could select a previous-step TOTP that expires during rollover; the trace shows
 submission crossing the boundary, strongly supporting this diagnosis without establishing the submitted
