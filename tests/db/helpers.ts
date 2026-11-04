@@ -26,6 +26,9 @@ const FIXTURE_EMAIL_DOMAIN = "geraiexpress.test";
 type TestUser = { id: string; email: string | null; is_anonymous: boolean };
 type Session = { token: string; user: TestUser | null };
 
+// Opt-in lifecycle for suites that own cancellable SQL and HTTP resources.
+export type TestIo = { sql?: (statement: string) => Promise<string>; signal?: AbortSignal };
+
 // The suite's client type: the application's data client plus the small `auth` shim of `connect` below.
 export type TestClient = Db & {
   auth: {
@@ -37,14 +40,18 @@ export type TestClient = Db & {
 // A PostgREST client whose bearer follows `session`. `auth` offers only what the identity-only suites use:
 // getUser (verified claims of this session) and signInAnonymously (a fresh anonymous auth.users row).
 // Everything else about identity goes through `authService()` (real codes, passwords and sessions).
-function connect(session: Session): TestClient {
+function connect(session: Session, signal?: AbortSignal): TestClient {
   const base = process.env.POSTGREST_URL;
   if (!base) throw new Error("POSTGREST_URL missing: run `pnpm db:up` first");
   const api = new PostgrestClient(base, {
-    fetch: (input, init) => {
+    fetch: async (input, init) => {
+      const requestSignal = signal && init?.signal ? AbortSignal.any([signal, init.signal]) : signal ?? init?.signal;
+      requestSignal?.throwIfAborted();
       const headers = new Headers(init?.headers);
       headers.set("Authorization", `Bearer ${session.token}`);
-      return fetch(input, { ...init, headers });
+      const response = await fetch(input, { ...init, headers, signal: requestSignal });
+      requestSignal?.throwIfAborted();
+      return response;
     },
   });
   const auth = {
@@ -64,16 +71,16 @@ function connect(session: Session): TestClient {
   return Object.assign(api, { auth }) as unknown as TestClient;
 }
 
-const asUser = (user: TestUser, claims: Partial<Claims> = {}): TestClient =>
-  connect({ token: mintJwt({ sub: user.id, role: "authenticated", email: user.email ?? "", is_anonymous: user.is_anonymous, ...claims }), user });
+const asUser = (user: TestUser, claims: Partial<Claims> = {}, signal?: AbortSignal): TestClient =>
+  connect({ token: mintJwt({ sub: user.id, role: "authenticated", email: user.email ?? "", is_anonymous: user.is_anonymous, ...claims }), user }, signal);
 
 export function client(): TestClient {
   return connect({ token: mintJwt({ role: "anon" }), user: null });
 }
 
 // DEC-010: the dispatcher's machine identity (service_role JWT). Only for dispatch_* tests.
-export function machine(): TestClient {
-  return connect({ token: mintJwt({ role: "service_role" }, 3600), user: null });
+export function machine(signal?: AbortSignal): TestClient {
+  return connect({ token: mintJwt({ role: "service_role" }, 3600), user: null }, signal);
 }
 
 // The application's own auth service against the live stack: the machine client is its store, the
@@ -128,8 +135,14 @@ function fixtureUser(email: string): TestUser {
   return { id, email, is_anonymous: anonymous === "t" };
 }
 
-export async function signIn(email: string): Promise<TestClient> {
-  return asUser(fixtureUser(email));
+export async function signIn(email: string, io: TestIo = {}): Promise<TestClient> {
+  io.signal?.throwIfAborted();
+  if (!io.sql) return asUser(fixtureUser(email), {}, io.signal);
+  const row = await io.sql(`select id || '|' || is_anonymous from auth.users where lower(email) = lower('${email.replace(/'/g, "''")}') and deleted_at is null`);
+  io.signal?.throwIfAborted();
+  if (!row) throw new Error(`sign-in ${email}: no such user (is the seed loaded?)`);
+  const [id, anonymous] = row.split("|");
+  return asUser({ id, email, is_anonymous: anonymous === "t" }, {}, io.signal);
 }
 
 export async function demoVisitor(): Promise<{ c: TestClient; tenant: string; outlet: string }> {
@@ -174,12 +187,14 @@ export type Fixture = { tenant: string; shipment: string; op: string };
 // A fresh active tenant with a Mengantar-ready outlet, a submitted shipment, a real quote, a
 // sealed seller key and one queued real operation. Built as superuser: confirm_shipment does not
 // create real operations until T-024.
-export async function realOperation(opts: { tenant?: string; demo?: boolean; simulated?: boolean; sellerKey?: string; sealKey?: string; noCredential?: boolean; credentialEnv?: "sandbox" | "production" } = {}): Promise<Fixture> {
+export async function realOperation(opts: { tenant?: string; demo?: boolean; simulated?: boolean; sellerKey?: string; sealKey?: string; noCredential?: boolean; credentialEnv?: "sandbox" | "production" } = {}, io: TestIo = {}): Promise<Fixture> {
+  io.signal?.throwIfAborted();
   const tenant = opts.tenant ?? randomUUID();
   const outlet = randomUUID(), shipment = randomUUID(), quote = randomUUID(), op = randomUUID();
   const ref = `GX261014-${randomUUID().slice(0, 6).toUpperCase()}`;
   const sealed = await sealCredential(opts.sellerKey ?? "API-TESTSELLERKEY01", credentialAad(tenant, 1), opts.sealKey ?? Buffer.alloc(32, 7).toString("base64"));
-  sql(`
+  io.signal?.throwIfAborted();
+  await (io.sql ?? sql)(`
     ${opts.tenant ? "" : `insert into public.tenants (id, name, lifecycle, is_demo) values ('${tenant}', 'Gerai Dispatch', 'active', ${opts.demo ? "true" : "false"});
     ${opts.noCredential ? "" : `insert into private.seller_credentials (tenant_id, mode, ciphertext, iv, key_version, hint, version, provider_env)
       values ('${tenant}', 'byok', '${sealed.ciphertext}', '${sealed.iv}', '${sealed.keyVersion}', 'Y01', 1, '${opts.credentialEnv ?? "sandbox"}');`}`}

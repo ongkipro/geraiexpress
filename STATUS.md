@@ -9,6 +9,53 @@ Independent-Review: Regular baseline approval belongs to RUN-20261103T085327Z-57
 Independent-Reviewer: d264fdd1-6723-4373-8d56-67733f212566 (separate reviewer; latest repair review 2957899e-9617-4acf-90f0-5ce0656fe7b7; same retained session)
 Independent-Review-Head: Uncommitted worktree; approval must bind to the delivery boundary digest, not HEAD alone.
 
+## T-099 DB test lifecycle (implementation verified; final source-bound gates and review pending)
+
+Run `RUN-20261104T132445Z-6016ac5f`, worktree `.gx-wt/T-099`; not merged or committed.
+The initial normal-test-only patch was rejected by independent review: blocking fixture SQL, late fixture
+continuations and lost container-session ownership remained reachable. The repaired implementation uses
+asynchronous optional helper I/O, cancellation-bound fetch, per-test ownership, a durable closed startup
+gate, container-side process bounds and independent bounded cleanup. Existing assertions and test budgets
+are unchanged. Normal isolated file: 12 PASS; full isolated DB: 470 PASS; typecheck PASS. The added permanent
+HTTP transport regression passed 2 tests, proving pre/post-fetch cancellation and no follow-up dispatch,
+not server transaction completion. Executed logs and probe instrumentation: `/data/tmp/t099/`.
+Forced startup-delay, late-encryption and host-delay probes observed no late backend/fixture; stronger
+pre-admission proof additionally observed container resumption and closed-gate exit 125.
+BLOCKER: admitted-process proof v2/v3 fails real teardown: initial cleanup psql exits 0, final cleanup psql
+exits 2, first observer connection also exits 2 then recovers, and one fixture remains. Process ownership
+was verified and the delayed connection did not resume. A single quiet-host diagnostic v4 reproduced
+failure and captured an actual signal-9 return receipt for owned group 150, followed at the same time by
+PostgreSQL PID 1 reporting abnormal child 168, terminating other processes, reinitializing and recovery.
+Immediately before the kill, process 168 belonged to the proof-owned delayed shell (PPID 151, group 150),
+not an identified postgres process. Independent reviewer 9dfe9b67 corroborated the PID-1 orphan-adoption/reaping fault rather than a
+backend inheriting the client's process group. Official upstream PG17 stable postmaster source confirms
+waitpid(-1) routes abnormal unrecognized children to HandleChildCrash before BackendList membership.
+The source branch was not independently matched to the pinned image's exact minor/build.
+Filtered lifecycle/process receipts: `/data/tmp/t099/admitted-connect18-v4-{events.jsonl,driver.log}`.
+No raw secret-bearing PostgreSQL logs were persisted; v2/v3 evidence remains untouched.
+Requirement-linked R3 expansions add Docker --init in the isolated harness and init:true in the local
+compose PostgreSQL service; production configurations are unchanged. Compose validates with env-file
+resolution disabled. A single otherwise unchanged v5 init proof PASS: init PID 1, postmaster PID 7,
+successful group-SIGKILL receipt, both cleanup psql exits 0, 69 clean observer samples over 25 seconds,
+no delayed resumption and no kill-associated PostgreSQL recovery. Original test intentionally times out
+at 15 seconds (runner exit 1); that expected failure is separate from proof PASS. Cleanup budgets remain
+7 seconds container/8 seconds host. Evidence: `/data/tmp/t099/admitted-connect18-v5-init-{events.jsonl,driver.log}`.
+Canonical --init harness regression passed: 12 file tests and 470 full isolated DB tests. A final preflight
+now rejects known unsafe postmaster-PID-1, missing or empty proc identity before fixture SQL/admission;
+its actionable message requests recreation without restarting the existing user database. Four permanent
+shell-preflight cases plus the two HTTP-cancellation cases PASS (6 total), typecheck PASS and all 12
+DB lifecycle tests PASS again. Logs: `/data/tmp/t099/{init-full-db,preflight-unit,preflight-typecheck,preflight-file}.log`.
+Reviewer 82ae9b2c accepted the init changes and comparable v5 causal confirmation. Its lifecycle timestamp
+finding was repaired to start from the matching kill request while requiring successful return; replay of
+stored v5 receipts passes the wider interval without another runtime claim. Existing compose containers
+have NOT been recreated: configuration validation is not current-stack runtime acceptance. The guard
+fails safely on the known unsafe topology until the user recreates it with init.
+Reviewer 2b471b29 accepted the final preflight and its regression without findings. This guard rejects
+known-unsafe topology; it does not certify every possible PID 1 reaper, nor suppress all afterEach SQL.
+Final executed typecheck/full DB, current-source admitted proof, compose validation and independent
+digest-bound review remain due before source-run closure. Keep task unchecked until the verified
+implementation is integrated and its separate documentation handoff records completion.
+
 ## T-093 Super Admin customer-data review (2026-11-04, PASS, local only)
 
 Run `RUN-20261104T061201Z-1b6e7ebc` (R3). Owner instruction: everything stays local — no commit, no
