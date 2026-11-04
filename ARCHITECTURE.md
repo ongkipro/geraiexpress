@@ -477,7 +477,7 @@ observed. Counts and executed checks are under "Verified counts and gates".
   `export.shipments`, and hides invoice snapshots from the default audit list (explicit filter
   still returns them). Invoice COD copy says goods value plus customer shipping charge, including
   the COD fee. Only Chromium print-to-PDF exists; courier acceptance remains unproven.
-- **Counter payments and receipts (T-082 implementation; behavioral verification pending).**
+- **Counter payments and receipts (T-082, verified locally).**
   `20261104120000_counter_payments.sql` adds member-readable, RPC-only `counter_payments` and
   `cash_periods`. Payment reads are column-scoped: members receive payment/receipt facts, not stored
   `expected_idr`, `difference_reason` or `void_reason`. Only `counter_payment_admin_details(uuid)`
@@ -499,8 +499,7 @@ observed. Counts and executed checks are under "Verified counts and gates".
   limiting rows. Print history records a request, not paper output; browser-native print outside the
   application action cannot be proven by that history. `/struk` is covered by the existing tenant
   `/pengiriman` host prefix. No provider/payment processing is added; closing cash remains T-083.
-  **Receipt identity/content accepted by the owner on 2026-11-05 (DEC-026); behavioral verification
-  remains pending.** Non-COD gerai name/WhatsApp stay frozen at *payment time* in the payment record,
+  **Receipt identity/content accepted by the owner on 2026-11-05 (DEC-026).** Non-COD gerai name/WhatsApp stay frozen at *payment time* in the payment record,
   not at confirmation. COD has no payment: its first application print freezes current tenant name and
   nullable WhatsApp in `label_print_events.receipt_gerai_name/receipt_gerai_whatsapp`; later receipt
   events copy that frozen identity. Before the first print, `/struk` previews current tenant identity;
@@ -522,8 +521,18 @@ observed. Counts and executed checks are under "Verified counts and gates".
   reason input and the amount (demo-labelled), or explicit unsupported-value wording without rounding.
   Full-bigint presentation is a residual read-path gap, not a DATA-11 cap. Authored e2e coverage includes
   forwarding a real Server Action once, discarding its committed response, then reloading without replay.
-  New DB/unit/e2e tests are authored, not executed in this continuation; typecheck
-  is the only permitted executable validation. No behavioral or task-completion claim follows.
+  Executed (final gates, RUN-20261104T132645Z-49fd8a7a): 1,046 unit, 492 DB and 51 browser tests at
+  390/768/1280; window printing is stubbed, so no physical-printer output is proved.
+- **Gerai logo on labels (T-096).** Settings `/pengaturan#logo-gerai` (tenant admin) uploads,
+  replaces or removes the logo through `set_tenant_logo` (magic-byte PNG/JPEG/WebP, at most
+  204800 bytes, mandatory revision, audited); bytes live in append-only
+  `private.gerai_logo_versions`, never behind a public URL. Individual and batch label pages read
+  `tenant_logo` for the unsaved preview; printing uses the snapshot, whose `gerai_logo` and
+  `gerai_logo_revision` are frozen on INSERT by `private.capture_label_logo` and included in the
+  digest. `GeraiIdentity` renders a size-bounded image or the gerai name, and falls back to the name
+  when an image fails, including a failure finished before hydration (`complete && naturalWidth === 0`).
+  Owner decision 2026-11-05: masked parcels show the same branding; masked content still excludes
+  the gerai WhatsApp/contact. The 10x5 slip is T-095.
 - **Gerai discount terms (T-041).** Append-only `public.gerai_discount_terms` per tenant (basis
   points, effective date, source reference, status `owner_stated`, `provider_observed` or
   `provider_verified`, audit), a platform default template (prefill only), Super Admin screens

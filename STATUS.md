@@ -9,6 +9,35 @@ Independent-Review: T-099 source run RUN-20261104T132445Z-6016ac5f closed PASS a
 Independent-Reviewer: reviewer-185798e0 (separate reviewer; retained session 615c5c30-a61c-475a-850a-58feab6d7907)
 Independent-Review-Head: Source commit 8b092c5; merge 209c1c5 preserves its five source blobs. This documentation handoff has its own integration gates under RUN-20261104T174014Z-efb3143a.
 
+## T-096 Gerai logo upload (verified; integrated, not deployed)
+
+Run `RUN-20261104T161806Z-137154a5`, worktree `.gx-wt/T-096`, based on verified T-094 `f020c09`;
+T-094 has since merged/pushed as `c91927a` (handoff `db71536`). T-096 remains unmerged and uncommitted;
+Data model (DATA-10) and ARCHITECTURE now record the logo storage, INSERT capture and read path.
+Implemented tenant-admin-only versioned logo replacement/removal with optimistic revisions and audit,
+server/DB PNG/JPEG/WebP signature and MIME checks, 204,800-byte maximum, private PostgreSQL storage,
+scoped individual/batch preview and immutable snapshot logo bytes/revision. Gerai name remains visible
+if an unmasked image cannot render. No provider calls, storage service or new dependency were added.
+Executed: typecheck PASS, unit 1,036 PASS, full isolated DB 483 PASS. Initial browser gate: 26 PASS,
+2 FAIL, both settings corrupt-image feedback. The SSR image could fail before hydration attaches onError;
+refs now reconcile complete images with naturalWidth=0 while retaining onError for subsequent failure.
+A deterministic delayed-hydration regression and visible synthetic 96x24 logo fixtures were added.
+Post-fix typecheck, 1,036 unit and all 30 logo/label browser tests PASS at 390/1280. Logs:
+`/data/tmp/t096/{unit-postfix,browser-postfix}.log`; refreshed PNG/PDF captures: `test-results/gerai-logo-*`.
+Parent opened narrow settings, narrow 10x10 batch and wide 10x15 batch captures: synthetic GE/GX marks
+are visible and contained, name and barcode stay unobscured. Initial evidence remains preserved at
+`/data/tmp/t096/render-first/`. Independent source review found no P0-P2 defect before the hydration
+repair; bounded source/visual re-review e6f87ba4 reports code OK, visual OK for narrow/wide saved
+settings and both batch sizes (including masked reprint), with no reachable P0-P2 defect found.
+Runtime and inspected rendering gaps are closed; this is not unconditional task-completion approval.
+Owner decision 2026-11-05 ("label paket juga dong") is implemented: masked and unmasked parcels show
+the frozen logo or gerai-name fallback; masked parcels still exclude gerai WhatsApp/contact and keep
+confirmed sender fields. DEC-017 and PR-34 record the amendment. Delta verification: typecheck,
+1,038 unit, 37 focused gerai-logo/privilege DB and 34 browser tests PASS at 390/1280. Logs:
+`/data/tmp/t096/masked-{unit,db-focused,browser}.log`. Independent review e32ca8ad opened 12 masked
+individual/batch captures and reports code OK, visual OK, no findings. T-095's 10x5 customer slip is not built/proved;
+GeraiIdentity and snapshot logo data provide its seam. No physical-printer or courier acceptance proof.
+
 ## T-094 Sender address and masked-label sender (2026-11-04, PASS; pushed, not deployed)
 
 Run `RUN-20261104T095832Z-7628e0cb` (R3) closed PASS and verified. Implementation commit `f020c09`,

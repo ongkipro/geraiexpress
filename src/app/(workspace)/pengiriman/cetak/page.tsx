@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { dbServer } from "@/lib/db/server";
 import { requireWorkspace } from "@/lib/workspace";
+import { readGeraiLogo } from "@/lib/gerai-logo-server";
 import { SNAPSHOT_COLUMNS, type LabelFacts, type LabelSnapshot } from "@/lib/label-content";
 import { parseBatchIds, type BatchCandidate } from "@/modules/labels/batch-selection";
 import { BatchWorkbench, type BatchEntry } from "@/modules/labels/batch-workbench";
@@ -27,6 +28,7 @@ export default async function BatchLabelPage({ searchParams }: { searchParams: P
   for (const snapshot of (snapshotRows ?? []) as unknown as (LabelSnapshot & { shipment_id: string })[]) {
     if (!latest.has(snapshot.shipment_id)) latest.set(snapshot.shipment_id, snapshot);
   }
+  const logo = await readGeraiLogo(ws.tenant.id);
   const byId = new Map(rows.map((row) => [row.id, row]));
   const entries: BatchEntry[] = ids.flatMap((id) => {
     const row = byId.get(id);
@@ -37,7 +39,7 @@ export default async function BatchLabelPage({ searchParams }: { searchParams: P
       reference: row.reference, awb: row.awb ?? "", courier: quote?.courier ?? null, service: quote?.service ?? null,
       weightGrams: row.weight_grams, isCod: row.is_cod, codAmountIdr: row.cod_amount_idr, itemDescription: row.item_description,
       recipient: { name: row.recipient_name, phone: row.recipient_phone, address: row.recipient_address, area: row.recipient_area, postalCode: row.recipient_postal_code },
-      geraiName: tenant.name, geraiWhatsapp: tenant.contact_whatsapp,
+      geraiName: tenant.name, geraiLogo: logo?.logo ?? null, geraiWhatsapp: tenant.contact_whatsapp,
       pickupAddress: pickup.address ?? ws.outlet.pickupAddress, pickupArea: pickup.area ?? ws.outlet.pickupArea,
     };
     return [{ row: row as BatchCandidate, facts, latest: latest.get(row.id) ?? null }];

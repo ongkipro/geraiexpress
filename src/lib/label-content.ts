@@ -5,6 +5,7 @@
 // sender (senderFromShipment). The Mengantar pickup name, the outlet name, the customer charge, the private net
 // cost and any discount are not inputs here, so they cannot reach the printout (PR-22).
 import { courierName } from "./format";
+import type { GeraiLogo } from "./gerai-logo";
 
 export type LabelSize = "10x15" | "10x10";
 
@@ -79,6 +80,7 @@ export type LabelFacts = {
   itemDescription: string | null;
   recipient: { name: string | null; phone: string | null; address: string | null; area: string | null; postalCode: string | null };
   geraiName: string;
+  geraiLogo?: GeraiLogo | null;
   geraiWhatsapp: string | null;
   pickupAddress: string | null;
   pickupArea: string | null;
@@ -87,6 +89,8 @@ export type LabelFacts = {
 export type LabelChoice = { mask: boolean; size: LabelSize; sender: SenderInput };
 
 export type LabelContent = {
+  geraiName?: string;
+  geraiLogo?: GeraiLogo | null;
   size: LabelSize;
   reference: string;
   awb: string;
@@ -113,6 +117,10 @@ export function buildLabelContent(facts: LabelFacts, choice: LabelChoice): Label
       }
     : { name: facts.geraiName, phone: facts.geraiWhatsapp ?? "", address: facts.pickupAddress, city: facts.pickupArea };
   return {
+    // Owner (2026-11-05): parcel branding is independent of masking; the gerai contact stays out
+    // of the masked sender block and is not part of this separate logo/name identity.
+    geraiName: facts.geraiName,
+    geraiLogo: facts.geraiLogo ?? null,
     size: choice.size,
     reference: facts.reference,
     awb: facts.awb,
@@ -152,14 +160,19 @@ export type LabelSnapshot = {
   recipient_area: string | null;
   recipient_postal_code: string | null;
   created_at: string;
+  true_tenant_name?: string;
+  gerai_logo?: GeraiLogo | null;
+  gerai_logo_revision?: number;
 };
 
 export const SNAPSHOT_COLUMNS =
-  "id, version, size, mask_sender, printed_sender_name, printed_sender_phone, printed_sender_address, printed_sender_city, awb, shipment_reference, courier, service, weight_grams, is_cod, cod_amount_idr, item_description, recipient_name, recipient_phone, recipient_address, recipient_area, recipient_postal_code, created_at";
+  "id, version, size, mask_sender, printed_sender_name, printed_sender_phone, printed_sender_address, printed_sender_city, awb, shipment_reference, courier, service, weight_grams, is_cod, cod_amount_idr, item_description, recipient_name, recipient_phone, recipient_address, recipient_area, recipient_postal_code, created_at, true_tenant_name, gerai_logo, gerai_logo_revision";
 
 // The label printed from a stored snapshot: only stored values, never live shipment, tenant or outlet data.
 export function contentFromSnapshot(s: LabelSnapshot): LabelContent {
   return {
+    geraiName: s.true_tenant_name ?? s.printed_sender_name,
+    geraiLogo: s.gerai_logo ?? null,
     size: s.size,
     reference: s.shipment_reference,
     awb: s.awb,
