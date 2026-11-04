@@ -477,6 +477,53 @@ observed. Counts and executed checks are under "Verified counts and gates".
   `export.shipments`, and hides invoice snapshots from the default audit list (explicit filter
   still returns them). Invoice COD copy says goods value plus customer shipping charge, including
   the COD fee. Only Chromium print-to-PDF exists; courier acceptance remains unproven.
+- **Counter payments and receipts (T-082 implementation; behavioral verification pending).**
+  `20261104120000_counter_payments.sql` adds member-readable, RPC-only `counter_payments` and
+  `cash_periods`. Payment reads are column-scoped: members receive payment/receipt facts, not stored
+  `expected_idr`, `difference_reason` or `void_reason`. Only `counter_payment_admin_details(uuid)`
+  returns those administrative fields, after checking current shipment-tenant membership and admin
+  role (including demo admins); the detail page calls it only for administrators. Possible inference
+  from the shared shipment tariff is not authorization to read the stored reasons (IAM-1).
+  Recording locks the shipment, requires a confirmed known charge, derives its
+  outlet and open period (auto-opens one), and keeps one active record through a partial unique
+  index. All COD records are refused with `cod_collected_by_courier`, even with a difference reason:
+  DATA-11 excludes extra COD counter charges. Non-COD differences require a reason; admin-only void
+  keeps actor/time/reason and refuses closed periods. Reopening a shipment requires voiding first.
+  The detail keeps counter Lunas separate from the Mengantar payment state, including an unpaid
+  provider state; an active record remains visible for voiding after provider failure.
+  `/pengiriman/[id]/struk` renders 58/80 mm browser-print and prefilled WhatsApp content without
+  private pricing or tax wording. Each application print action calls `record_receipt_print`, adding
+  `kind='receipt'` to the existing append-only `label_print_events`; original label rows default to
+  `kind='label'` and retain their snapshot/size constraints. Receipt events bind a matching active
+  payment, or NULL only through the confirmed-COD RPC branch. Label history filters its kind before
+  limiting rows. Print history records a request, not paper output; browser-native print outside the
+  application action cannot be proven by that history. `/struk` is covered by the existing tenant
+  `/pengiriman` host prefix. No provider/payment processing is added; closing cash remains T-083.
+  **Receipt identity/content accepted by the owner on 2026-11-05 (DEC-026); behavioral verification
+  remains pending.** Non-COD gerai name/WhatsApp stay frozen at *payment time* in the payment record,
+  not at confirmation. COD has no payment: its first application print freezes current tenant name and
+  nullable WhatsApp in `label_print_events.receipt_gerai_name/receipt_gerai_whatsapp`; later receipt
+  events copy that frozen identity. Before the first print, `/struk` previews current tenant identity;
+  afterwards it reads the earliest COD receipt event, never live settings. The single five-argument
+  `record_receipt_print(uuid,uuid,text,text,text)` accepts preview name/WhatsApp (last two default NULL
+  for non-COD callers). With the shipment locked, first COD print SHARE-locks the tenant and compares
+  the preview to current settings; reprints compare to the frozen event. A mismatch raises
+  `receipt_identity_changed`: the action returns a Bahasa reload instruction and does not invoke
+  `window.print`. The RPC remains membership-checked, authenticated-only; event writes remain RPC-only
+  and append-only, and strict kind constraints exclude identity columns from label/non-COD rows.
+  Customer receipt/WhatsApp content omits staff entirely; internal `recorded_by`, audit and collecting
+  staff in the void summary remain unchanged. Non-COD receipts show `No. pembayaran: PAY-` plus the first
+  eight uppercase UUID hex characters. The header adds `Outlet <name>` from frozen
+  `shipments.pickup_snapshot.outlet` only when present and different from the gerai name. Both print
+  widths and WhatsApp use the same content builder. PostgreSQL keeps unrestricted bigint rupiah. The current JS presentation path
+  supports exact integers only through `Number.MAX_SAFE_INTEGER`; larger fetched values withhold payment
+  amounts/receipt/WhatsApp output rather than round. A recorded payment remains identified as recorded,
+  with safe admin void available. The void confirmation includes reference, method, collecting staff,
+  reason input and the amount (demo-labelled), or explicit unsupported-value wording without rounding.
+  Full-bigint presentation is a residual read-path gap, not a DATA-11 cap. Authored e2e coverage includes
+  forwarding a real Server Action once, discarding its committed response, then reloading without replay.
+  New DB/unit/e2e tests are authored, not executed in this continuation; typecheck
+  is the only permitted executable validation. No behavioral or task-completion claim follows.
 - **Gerai discount terms (T-041).** Append-only `public.gerai_discount_terms` per tenant (basis
   points, effective date, source reference, status `owner_stated`, `provider_observed` or
   `provider_verified`, audit), a platform default template (prefill only), Super Admin screens
@@ -668,7 +715,7 @@ API.
 | Audience (host) | Routes served | Access |
 |---|---|---|
 | Public (apex `geraiexpress.com`, `staging.`) | `/` (signed-in users are redirected to `/pengiriman`, `/pilih-gerai`, `/akses` or `/admin`), `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`, `/robots.txt`, `/sitemap.xml`, `/healthz` | No session; the proxy resolves no session on this host |
-| Gerai application (`app.`, `app-staging.`) | `/` (redirects), `/masuk`, `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/undangan`, `/akses`, `/pilih-gerai`, `/api/mengantar/area`, `/robots.txt`, `/healthz`, and the workspace: `/pengiriman`, `/pengiriman/baru`, `/pengiriman/[id]`, `/pengiriman/[id]/label`, `/pengiriman/[id]/invoice`, `/pengiriman/export.csv`, `/kontak`, `/kontak/[id]`, `/pengaturan`, `/anggota` | Workspace group: verified active membership; tenant from the `ge_tenant` selector validated against memberships; `/anggota` and the CSV export are tenant admin only |
+| Gerai application (`app.`, `app-staging.`) | `/` (redirects), `/masuk`, `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/undangan`, `/akses`, `/pilih-gerai`, `/api/mengantar/area`, `/robots.txt`, `/healthz`, and the workspace: `/pengiriman`, `/pengiriman/baru`, `/pengiriman/[id]`, `/pengiriman/[id]/label`, `/pengiriman/[id]/invoice`, `/pengiriman/[id]/struk`, `/pengiriman/export.csv`, `/kontak`, `/kontak/[id]`, `/pengaturan`, `/anggota` | Workspace group: verified active membership; tenant from the `ge_tenant` selector validated against memberships; `/anggota` and the CSV export are tenant admin only |
 | Super Admin (`owner.`, `owner-staging.`) | `/`, `/masuk` (demo and registration hidden), `/verifikasi-2fa`, `/admin` (tenant directory with slug), `/admin/tenant/[id]` (masking control), `/admin/pengajuan`, `/admin/integrasi`, `/admin/akses`, `/admin/audit`, `/admin/diskon`, `/admin/diskon/[tenant]`, `/robots.txt`, `/healthz` | Platform grant plus capability plus `aal2` (`requirePlatform`) |
 | Hooks (`hooks.`, `hooks-staging.`) | the reserved prefix `/api/webhooks` (no route exists), `/healthz` | None today; cookies are stripped and none is set (the Send Email Hook route `/api/auth/send-email` was removed by T-066) |
 | Shared (loopback in a non-production build, or `HOST_SHARED_MODE=1`, e.g. the local container behind the local proxy profile) | Every route above on one origin (not the internal cron routes) | As the route's own audience |

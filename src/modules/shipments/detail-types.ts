@@ -3,6 +3,7 @@ export type ShipmentRecord = {
   id: string;
   reference: string;
   submission_state: string;
+  payment_state?: "not_applicable" | "unpaid" | "paid";
   is_simulated: boolean;
   is_cod: boolean;
   awb: string | null;

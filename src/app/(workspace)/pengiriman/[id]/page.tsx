@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Notice } from "@/components/notice";
 import { dbServer } from "@/lib/db/server";
 import { requireWorkspace } from "@/lib/workspace";
+import { COUNTER_PAYMENT_COLUMNS, CounterPaymentCard, type CounterPaymentRecord, type CounterPaymentAdminDetails } from "@/modules/payments/counter-payment-card";
 import { geraiCostForQuote } from "@/modules/pricing/gerai-cost";
 import { ShipmentFacts } from "@/modules/shipments/detail-facts";
 import { ShipmentFlash, ShipmentHeader, type ShipmentFlags } from "@/modules/shipments/detail-header";
@@ -44,7 +46,7 @@ export default async function ShipmentPage({
 
   const shipment = s as ShipmentRecord;
   const real = !shipment.is_simulated;
-  const [{ data: quote }, { data: events }, { data: label }, { data: op }, { data: batchReviewData }] = await Promise.all([
+  const [{ data: quote }, { data: events }, { data: label }, { data: op }, { data: batchReviewData }, { data: counterPayments, error: counterPaymentError }, { data: paymentAdminDetails, error: paymentAdminError }] = await Promise.all([
     shipment.selected_quote_id
       ? db.from("shipment_quotes").select("courier, service, eta_days, is_simulated").eq("tenant_id", ws.tenant.id).eq("id", shipment.selected_quote_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -55,6 +57,10 @@ export default async function ShipmentPage({
     real && shipment.submission_state === "awaiting_payment" && isAdmin
       ? db.rpc("review_unpaid_batch", { p_shipment: shipment.id })
       : Promise.resolve({ data: null }),
+    // T-082: counter payment records, newest first (voided ones stay visible to the administrator).
+    db.from("counter_payments").select(COUNTER_PAYMENT_COLUMNS).eq("tenant_id", ws.tenant.id).eq("shipment_id", shipment.id)
+      .order("recorded_at", { ascending: false }),
+    isAdmin ? db.rpc("counter_payment_admin_details", { p_shipment: shipment.id }) : Promise.resolve({ data: [], error: null }),
   ]);
   const operation = (op ?? null) as OperationRecord | null;
   // T-053: the gerai-facing cost basis is for tenant administrators of real gerai only; operators,
@@ -74,6 +80,17 @@ export default async function ShipmentPage({
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
         <div className="flex min-w-0 flex-col gap-6">
           <NextStepCard s={shipment} op={operation} hasLabel={!!label} isAdmin={isAdmin} batchReview={(batchReviewData ?? null) as BatchReview | null} />
+          {counterPaymentError || paymentAdminError ? <Notice tone="danger">Pembayaran pelanggan belum bisa dimuat. Muat ulang halaman sebelum mencatat pembayaran.</Notice> : <CounterPaymentCard
+            shipmentId={shipment.id}
+            reference={shipment.reference}
+            state={shipment.submission_state}
+            chargeIdr={shipment.customer_charge_idr}
+            isCod={shipment.is_cod}
+            isAdmin={isAdmin}
+            isDemo={ws.isDemo}
+            payments={(counterPayments ?? []) as CounterPaymentRecord[]}
+            adminDetails={(paymentAdminDetails ?? []) as CounterPaymentAdminDetails[]}
+          />}
           <ShipmentFacts s={shipment} quote={quote} op={operation} pickup={pickup} isPickup={isPickup} reservationText={reservationText} geraiCost={geraiCost} viewerId={ws.userId} />
         </div>
         <ShipmentTimeline events={(events ?? []) as ShipmentEvent[]} className="xl:sticky xl:top-8" />

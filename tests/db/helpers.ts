@@ -173,22 +173,23 @@ export type Fixture = { tenant: string; shipment: string; op: string };
 
 // A fresh active tenant with a Mengantar-ready outlet, a submitted shipment, a real quote, a
 // sealed seller key and one queued real operation. Built as superuser: confirm_shipment does not
-// create real operations until T-024.
-export async function realOperation(opts: { tenant?: string; demo?: boolean; simulated?: boolean; sellerKey?: string; sealKey?: string; noCredential?: boolean; credentialEnv?: "sandbox" | "production" } = {}): Promise<Fixture> {
+// create real operations until T-024. Outlet ownership and COD content are set at INSERT: the
+// shipment guard forbids moving an existing row or editing submitted content, including in fixtures.
+export async function realOperation(opts: { tenant?: string; outlet?: string; cod?: number; demo?: boolean; simulated?: boolean; sellerKey?: string; sealKey?: string; noCredential?: boolean; credentialEnv?: "sandbox" | "production" } = {}): Promise<Fixture> {
   const tenant = opts.tenant ?? randomUUID();
-  const outlet = randomUUID(), shipment = randomUUID(), quote = randomUUID(), op = randomUUID();
+  const outlet = opts.outlet ?? randomUUID(), shipment = randomUUID(), quote = randomUUID(), op = randomUUID();
   const ref = `GX261014-${randomUUID().slice(0, 6).toUpperCase()}`;
   const sealed = await sealCredential(opts.sellerKey ?? "API-TESTSELLERKEY01", credentialAad(tenant, 1), opts.sealKey ?? Buffer.alloc(32, 7).toString("base64"));
   sql(`
     ${opts.tenant ? "" : `insert into public.tenants (id, name, lifecycle, is_demo) values ('${tenant}', 'Gerai Dispatch', 'active', ${opts.demo ? "true" : "false"});
     ${opts.noCredential ? "" : `insert into private.seller_credentials (tenant_id, mode, ciphertext, iv, key_version, hint, version, provider_env)
       values ('${tenant}', 'byok', '${sealed.ciphertext}', '${sealed.iv}', '${sealed.keyVersion}', 'Y01', 1, '${opts.credentialEnv ?? "sandbox"}');`}`}
-    insert into public.outlets (tenant_id, id, name, mengantar_pickup_address_id, mengantar_area_id)
-      values ('${tenant}', '${outlet}', 'Outlet D', '6acf44a4771fe2b474c055ca', '5fc62f60f8f44b34aa4c0dcd');
+    ${opts.outlet ? "" : `insert into public.outlets (tenant_id, id, name, mengantar_pickup_address_id, mengantar_area_id)
+      values ('${tenant}', '${outlet}', 'Outlet D', '6acf44a4771fe2b474c055ca', '5fc62f60f8f44b34aa4c0dcd');`}
     insert into public.shipments (tenant_id, outlet_id, id, reference, submission_state, recipient_name, recipient_phone,
-      recipient_address, recipient_area_id, item_description, weight_grams, goods_value_idr, is_simulated, created_by)
+      recipient_address, recipient_area_id, item_description, weight_grams, goods_value_idr, is_cod, cod_amount_idr, is_simulated, created_by)
       values ('${tenant}', '${outlet}', '${shipment}', '${ref}', 'queued', 'Penerima Uji', '081234567890',
-      'Jl. Uji 1', '5fc63169f8f44b34aa4c2ee1', 'Dokumen', 1000, 50000, ${opts.simulated ? "true" : "false"}, '${OWNER_A}');
+      'Jl. Uji 1', '5fc63169f8f44b34aa4c2ee1', 'Dokumen', 1000, 50000, ${opts.cod === undefined ? "false" : "true"}, ${opts.cod ?? "null"}, ${opts.simulated ? "true" : "false"}, '${OWNER_A}');
     insert into public.shipment_quotes (tenant_id, shipment_id, id, shipment_revision, courier, service, normal_tariff_idr,
       eta_days, is_simulated, expires_at)
       values ('${tenant}', '${shipment}', '${quote}', 1, 'JT', 'REG', 9000, '1-2', ${opts.simulated ? "true" : "false"}, now() + interval '1 hour');

@@ -49,6 +49,10 @@ export function ShipmentFacts({ s, quote, op, pickup, isPickup, reservationText,
       title: "Biaya",
       facts: [
         ["Ongkir pelanggan", <span className="tabular font-semibold" key="c">{formatIdr(s.customer_charge_idr)}</span>],
+        ...(real ? [["Pembayaran Mengantar", <span key="mp" data-testid="provider-payment-state">{
+          s.payment_state === "paid" ? "Sudah dibayar ke Mengantar" : s.payment_state === "unpaid" ? "Belum dibayar ke Mengantar"
+            : s.payment_state === "not_applicable" ? "Tidak berlaku" : "Belum teramati"
+        }</span>] as Fact] : []),
         ...(s.is_cod ? ([
           ["Metode pembayaran", "COD (Bayar di Tempat)"],
           ["Nilai barang", <span className="tabular" key="gv">{formatIdr(s.goods_value_idr)}</span>],
