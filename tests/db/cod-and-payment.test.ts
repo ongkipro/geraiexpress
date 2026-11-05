@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import type { TestClient } from "./helpers";
 import { credentialAad, sealCredential } from "../../src/lib/credential-crypto";
 import { payUnpaidShipmentBatch } from "../../src/lib/mengantar/dispatcher";
-import { IDS, client, demoVisitor, machine, realOperation, signIn, sql } from "./helpers";
+import { IDS, client, machine, realOperation, signIn, sql } from "./helpers";
 
 describe("COD quotes, confirmation, and provider refusal detail (T-025)", () => {
   it("requires goods_value_idr >= 1000 for COD quotes, stores cod_fee_idr and customer_charge_idr, and keeps net cost private", async () => {
