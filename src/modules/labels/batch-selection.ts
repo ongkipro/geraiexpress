@@ -1,6 +1,6 @@
 import {
   buildLabelContent, contentFromSnapshot, sameChoice, senderErrors, senderFromShipment,
-  type LabelChoice, type LabelContent, type LabelFacts, type LabelSnapshot, type SenderInput,
+  type LabelChoice, type LabelContent, type LabelFacts, type LabelSize, type LabelSnapshot, type SenderInput,
 } from "../../lib/label-content";
 
 export const BATCH_LIMIT = 50;
@@ -28,10 +28,11 @@ export function batchSender(row: BatchCandidate, fallbackCity: string): SenderIn
   return { ...own, city: own.city || fallbackCity };
 }
 
-export function batchExclusion(row: BatchCandidate, mask: boolean, city: string): string | null {
+export function batchExclusion(row: BatchCandidate, mask: boolean, city: string, size?: LabelSize, lockedSize?: LabelSize | null): string | null {
   if (row.is_simulated) return "Pengiriman simulasi tidak dapat dicetak massal.";
   if (row.submission_state !== "issued") return "Resi belum terbit.";
   if (!row.awb || !/^[A-Za-z0-9-]{6,40}$/.test(row.awb)) return "Nomor resi tidak tersedia atau tidak valid.";
+  if (size && lockedSize && size !== lockedSize) return `Format resi terkunci pada ${lockedSize === "10x15" ? "10 × 15" : "10 × 10"} cm sejak cetak pertama. Pilih ukuran tersebut untuk mencetak ulang.`;
   if (mask) {
     const errors = Object.values(senderErrors(batchSender(row, city)));
     if (errors.length) return errors.join(" ");
@@ -47,7 +48,7 @@ export function batchPreviewContent(facts: LabelFacts, latest: LabelSnapshot | n
 }
 
 // After a print, each returned snapshot becomes the shipment's latest stored snapshot, so a later
-// preview (for example after switching 10x15 -> 10x10 -> 10x15) compares against the same row
+// preview after changing masking compares against the same row
 // create_label_snapshot compares against instead of falling back to the page-load snapshot.
 export function advanceLatestSnapshots(previous: ReadonlyMap<string, LabelSnapshot | null>, printedIds: string[], snapshots: LabelSnapshot[]): Map<string, LabelSnapshot | null> {
   const next = new Map(previous);

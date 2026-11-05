@@ -14,7 +14,7 @@ import { printBatchLabelsAction } from "./batch-actions";
 import { LABEL_UNKNOWN_RESULT } from "./messages";
 import { PreviewDesk, ScaledSheet, SegmentedControl } from "./print-ui";
 
-export type BatchEntry = { row: BatchCandidate; facts: LabelFacts; latest: LabelSnapshot | null };
+export type BatchEntry = { row: BatchCandidate; facts: LabelFacts; latest: LabelSnapshot | null; lockedSize: LabelSize | null };
 
 export function BatchWorkbench({ entries, maskingAllowed, whatsapp, preferenceKey }: { entries: BatchEntry[]; maskingAllowed: boolean; whatsapp: string | null; preferenceKey: string }) {
   const [mask, setMask] = useState(false);
@@ -36,8 +36,9 @@ export function BatchWorkbench({ entries, maskingAllowed, whatsapp, preferenceKe
       if (saved?.mask === true && maskingAllowed) setMask(true);
     } catch { /* preference is optional */ }
   }, [preferenceKey, maskingAllowed]);
-  const included = entries.filter(({ row }) => !batchExclusion(row, mask, city));
-  const excluded = entries.flatMap(({ row }) => { const reason = batchExclusion(row, mask, city); return reason ? [{ row, reason }] : []; });
+  const exclusion = ({ row, lockedSize }: BatchEntry) => batchExclusion(row, mask, city, size, lockedSize ?? latestById.get(row.id)?.size);
+  const included = entries.filter((entry) => !exclusion(entry));
+  const excluded = entries.flatMap((entry) => { const { row } = entry; const reason = exclusion(entry); return reason ? [{ row, reason }] : []; });
   const blocked = !mask && !whatsapp;
   const changeChoice = (nextMask: boolean, nextSize: LabelSize) => {
     setMask(nextMask); setSize(nextSize); setSnapshots([]);
@@ -82,6 +83,7 @@ export function BatchWorkbench({ entries, maskingAllowed, whatsapp, preferenceKe
     <header className="flex flex-wrap items-center gap-3 print:hidden"><h1 className="text-3xl tracking-tight">Cetak label massal</h1><Badge variant="neutral">{included.length} label</Badge></header>
     <section className="flex flex-col gap-4 rounded-lg bg-card p-5 ring-1 ring-border print:hidden" aria-label="Pengaturan label">
       <div><p className="mb-2 text-sm font-semibold">Ukuran label</p><SegmentedControl label="Ukuran label" value={size} onChange={(value) => changeChoice(mask, value)} options={[{ value: "10x15", label: "10 × 15 cm", disabled: pending }, { value: "10x10", label: "10 × 10 cm", disabled: pending }]} /></div>
+      <p className="text-sm text-muted-foreground">10 × 15 cm: label paket 10 × 10 cm + slip pelanggan 10 × 5 cm. Kiriman yang terkunci pada ukuran lain tidak disertakan.</p>
       {maskingAllowed ? <label className="flex min-h-11 items-center gap-3"><Switch checked={mask} disabled={pending} onCheckedChange={(value) => changeChoice(value, size)} />Gunakan masking pengirim</label> : null}
       {mask && entries.some(({ row }) => !row.sender_area) ? <div className="flex flex-col gap-2"><Label htmlFor="batch-city">Kecamatan / kota pengirim untuk kiriman yang belum mengisinya</Label><p className="text-sm text-muted-foreground">Label lain memakai pengirim kirimannya sendiri. Isian ini hanya dipakai untuk kiriman lama tanpa kecamatan pengirim.</p><Input id="batch-city" value={city} maxLength={40} disabled={pending} onChange={(event) => { setCity(event.target.value); setSnapshots([]); }} /></div> : null}
       {blocked ? <p role="alert">Isi WhatsApp gerai sebelum mencetak. <Link className="text-primary underline" href="/pengaturan#whatsapp-gerai">Buka pengaturan WhatsApp gerai</Link></p> : null}

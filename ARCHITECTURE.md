@@ -500,8 +500,17 @@ observed. Counts and executed checks are under "Verified counts and gates".
   `masking_allowed` (`platform_set_masking_allowed`, `tenant_governance`, `aal2`;
   T-053 screen `/admin/tenant/[id]` with `platform_tenant_masking`, reason and confirmation),
   append-only `label_snapshots` and `label_print_events`, `create_label_snapshot`,
-  `record_label_print`. The label page renders the stored snapshot at 10x15 cm (default) or
-  10x10 cm with a Code128-B barcode (`src/lib/label-code128.ts`); no provider call, no net cost,
+  `record_label_print`. The label page renders a 100x100 mm parcel in either format: `10x15`
+  (default) adds a detachable 100x50 mm customer slip below the cut line on one 100x150 mm page;
+  `10x10` is parcel only. The slip has frozen gerai logo/name and courier/service on one row,
+  then Code128 AWB bars and the AWB number, with no sender/recipient contacts or gerai WhatsApp.
+  `20261105120000_resi_format_lock.sql` replaces the latest seven-argument `create_label_snapshot`
+  body: under `lock_member_shipment`'s FOR UPDATE lock, a different size from the first snapshot
+  is refused with `label_format_locked` (55000); same-size reuse and masking/sender changes remain.
+  Existing snapshots are unchanged, including historical mixed-size versions; their first version
+  determines future format. Individual controls show the locked size disabled; batch previews exclude
+  other-format shipments with a Bahasa reason, and racing RPC refusals are reported per reference.
+  Code128 uses sets B/C (`src/lib/label-code128.ts`); no provider call, no net cost,
   no pickup name as sender; the unsaved preview does not print. `invoice_snapshots` (append-only,
   `<PREFIX>-INV-<yymmdd>-<seq>` from `private.invoice_counters`), `create_invoice_snapshot(uuid)`,
   route `/pengiriman/[id]/invoice` (stored label read-only, then an A4 invoice; not proof of
@@ -567,7 +576,7 @@ observed. Counts and executed checks are under "Verified counts and gates".
   digest. `GeraiIdentity` renders a size-bounded image or the gerai name, and falls back to the name
   when an image fails, including a failure finished before hydration (`complete && naturalWidth === 0`).
   Owner decision 2026-11-05: masked parcels show the same branding; masked content still excludes
-  the gerai WhatsApp/contact. The 10x5 slip is T-095.
+  the gerai WhatsApp/contact. T-095 reuses this frozen identity on the 10x5 slip.
 - **Gerai discount terms (T-041).** Append-only `public.gerai_discount_terms` per tenant (basis
   points, effective date, source reference, status `owner_stated`, `provider_observed` or
   `provider_verified`, audit), a platform default template (prefill only), Super Admin screens
@@ -758,7 +767,8 @@ member-checked search RPC exposes it, and its owner-approved load is separate fr
 receipt events require it to be NULL. `receipt_payment_id` is optional for receipts (NULL for COD)
 and NULL for label events. Each event belongs to a shipment and proves an application print
 request, not paper output. Snapshot INSERT captures the current private logo version and gerai
-name; later logo edits never rewrite stored labels. `/kas` and the separate 10x5 slip are not built.
+name; later logo edits never rewrite stored labels. The separate 10x5 customer slip is part of the
+`10x15` page (T-095); `/kas` is not built.
 
 ### Primary flow — demo counter issuance
 

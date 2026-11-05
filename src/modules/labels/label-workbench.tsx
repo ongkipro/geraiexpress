@@ -16,7 +16,7 @@ import {
   type LabelChoice, type LabelFacts, type LabelSize, type LabelSnapshot, type SenderErrors, type SenderInput,
 } from "@/lib/label-content";
 import { printLabelAction } from "./actions";
-import { LABEL_UNKNOWN_RESULT, MASKING_DISABLED, RETENTION_NOTE, WHATSAPP_MISSING } from "./messages";
+import { FORMAT_LOCKED, LABEL_UNKNOWN_RESULT, MASKING_DISABLED, RETENTION_NOTE, WHATSAPP_MISSING } from "./messages";
 import { PendingLabel, PreviewDesk, ScaledSheet, SegmentedControl, ZOOM_OPTIONS, type Zoom } from "./print-ui";
 
 export type PrintHistoryEntry = { id: number; at: string; version: number; size: LabelSize; mask: boolean };
@@ -50,13 +50,14 @@ function writePreference(key: string, value: Preference) {
 // same facts the snapshot command reads; once printed, the sheet is rendered from the stored snapshot the
 // command returned, and a reprint of an unchanged choice is another print event on that same snapshot.
 export function LabelWorkbench({
-  shipmentId, facts, role, maskingAllowed, snapshots, history, preferenceKey, initialSender,
+  shipmentId, facts, role, maskingAllowed, snapshots, history, preferenceKey, initialSender, lockedSize,
 }: {
   shipmentId: string;
   facts: LabelFacts;
   role: "tenant_admin" | "operator";
   maskingAllowed: boolean;
   snapshots: LabelSnapshot[];
+  lockedSize: LabelSize | null;
   history: PrintHistoryEntry[];
   preferenceKey: string;
   // T-094: the masked sender starts from the shipment's own sender and stays editable.
@@ -64,7 +65,7 @@ export function LabelWorkbench({
 }) {
   const router = useRouter();
   const [mask, setMask] = useState(false);
-  const [size, setSize] = useState<LabelSize>(DEFAULT_LABEL_SIZE);
+  const [chosenSize, setSize] = useState<LabelSize>(DEFAULT_LABEL_SIZE);
   const [zoom, setZoom] = useState<Zoom>("fit");
   const [sender, setSender] = useState<SenderInput>(initialSender);
   const [errors, setErrors] = useState<SenderErrors>({});
@@ -81,6 +82,8 @@ export function LabelWorkbench({
 
   // A tenant whose masking was disabled by the platform always prints the gerai identity.
   const effectiveMask = maskingAllowed && mask;
+  const formatLock = lockedSize ?? printed?.size ?? null;
+  const size = formatLock ?? chosenSize;
   const choice: LabelChoice = { mask: effectiveMask, size, sender };
   const stored = printed ?? snapshots[0] ?? null;
   const reuse = stored !== null && sameChoice(stored, choice);
@@ -144,6 +147,7 @@ export function LabelWorkbench({
           setErrors(result.fieldErrors ?? {});
           setFailure(result.error);
           setReconcile(result.reconcile === true);
+          if (result.error === FORMAT_LOCKED) router.refresh();
           return;
         }
         setPrinted(result.snapshot);
@@ -170,7 +174,8 @@ export function LabelWorkbench({
       <section aria-label="Pengaturan label" className="flex flex-col rounded-lg bg-card ring-1 ring-border lg:col-start-1 lg:row-start-1 print:hidden">
         <div className="flex flex-col gap-3 p-5">
           <h2 id="size-heading" className="text-[17px]">Ukuran label</h2>
-          <SegmentedControl value={size} onChange={(value) => choose({ size: value })} options={SIZE_OPTIONS} labelledBy="size-heading" stretch />
+          <SegmentedControl value={size} onChange={(value) => choose({ size: value })} options={SIZE_OPTIONS.map((option) => ({ ...option, disabled: formatLock !== null || pending }))} labelledBy="size-heading" stretch />
+          {formatLock ? <p data-testid="format-locked" className="text-sm text-muted-foreground">{FORMAT_LOCKED}</p> : <p className="text-sm text-muted-foreground">10 × 15 cm: label paket 10 × 10 cm + slip pelanggan 10 × 5 cm. Format terkunci saat cetak pertama.</p>}
         </div>
 
         <div className="flex flex-col gap-3 border-t border-border p-5">

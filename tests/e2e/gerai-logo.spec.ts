@@ -94,7 +94,7 @@ test("admin previews, uploads, replaces and removes; unmasked print and reprint 
 
   const id = shipment();
   await page.goto(`/pengiriman/${id}/label`);
-  const identity = page.getByTestId("gerai-identity");
+  const identity = page.getByTestId("label-sheet").getByTestId("gerai-identity");
   await expect(identity).toContainText(NAME);
   await expect(identity.getByRole("img")).toHaveAttribute("src", `data:image/png;base64,${png.toString("base64")}`);
   await page.getByRole("button", { name: "Cetak label", exact: true }).click();
@@ -134,8 +134,7 @@ test("admin previews, uploads, replaces and removes; unmasked print and reprint 
   expect(removed).toEqual({ logo: null, revision: 3 });
 });
 
-// Each size has its own shipments: the base contract compares only the latest snapshot, so
-// switching one shipment between sizes would create new versions rather than prove a reprint.
+// Each size has its own shipments: the first snapshot locks the format.
 for (const size of ["10x10", "10x15"] as const) {
   test(`batch ${size}: mixed frozen/current logos, removal and masked reprints`, async ({ page, baseURL }) => {
     await page.addInitScript(() => { window.__prints = 0; window.print = () => { window.__prints++; }; });
@@ -168,12 +167,16 @@ for (const size of ["10x10", "10x15"] as const) {
       await expectTouchTargets(page);
     }
     async function expectBrand(id: string, bytes: Buffer | null) {
-      const identity = sheet(id).getByTestId("gerai-identity");
-      await expect(identity).toContainText(NAME);
-      if (bytes) {
-        await expect(identity.getByRole("img")).toHaveAttribute("src", `data:image/png;base64,${bytes.toString("base64")}`);
-        await expect.poll(() => identity.getByRole("img").evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-      } else await expect(identity.getByRole("img")).toHaveCount(0);
+      const identities = [sheet(id).getByTestId("gerai-identity")];
+      const preview = page.getByRole("region", { name: `Pratinjau LOGO-${id.slice(0, 8)}`, exact: true });
+      if (size === "10x15") identities.push(preview.getByTestId("customer-slip").getByTestId("gerai-identity"));
+      for (const identity of identities) {
+        await expect(identity).toContainText(NAME);
+        if (bytes) {
+          await expect(identity.getByRole("img")).toHaveAttribute("src", `data:image/png;base64,${bytes.toString("base64")}`);
+          await expect.poll(() => identity.getByRole("img").evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+        } else await expect(identity.getByRole("img")).toHaveCount(0);
+      }
     }
     async function printBatch(ids: string[], phase: string) {
       const before = await page.evaluate(() => window.__prints);
@@ -306,12 +309,17 @@ for (const size of ["10x10", "10x15"] as const) {
     async function open(id: string, bytes: Buffer | null) {
       await page.goto(`/pengiriman/${id}/label`);
       await page.getByRole("switch", { name: /Gunakan masking pengirim/ }).setChecked(true);
-      await page.getByRole("radio", { name: size === "10x10" ? "10 × 10 cm" : "10 × 15 cm (standar)", exact: true }).check();
+      const sizeOption = page.getByRole("radio", { name: size === "10x10" ? "10 × 10 cm" : "10 × 15 cm (standar)", exact: true });
+      if (await sizeOption.isEnabled()) await sizeOption.check();
+      else await expect(sizeOption).toBeChecked();
       await expect(sheet).toHaveAttribute("data-size", size);
-      const identity = sheet.getByTestId("gerai-identity");
-      await expect(identity).toContainText(NAME);
-      if (bytes) await expect(identity.getByRole("img")).toHaveAttribute("src", `data:image/png;base64,${bytes.toString("base64")}`);
-      else await expect(identity.getByRole("img")).toHaveCount(0);
+      const identities = [sheet.getByTestId("gerai-identity")];
+      if (size === "10x15") identities.push(page.getByTestId("customer-slip").getByTestId("gerai-identity"));
+      for (const identity of identities) {
+        await expect(identity).toContainText(NAME);
+        if (bytes) await expect(identity.getByRole("img")).toHaveAttribute("src", `data:image/png;base64,${bytes.toString("base64")}`);
+        else await expect(identity.getByRole("img")).toHaveCount(0);
+      }
       await expectMaskedSender(sheet);
     }
     async function print(phase: string) {
@@ -373,7 +381,7 @@ test("an unreadable image leaves a visible gerai name and Bahasa feedback", asyn
   await expect(form.getByTestId("logo-preview").getByRole("img")).toHaveCount(0);
   const id = shipment();
   await page.goto(`/pengiriman/${id}/label`);
-  const identity = page.getByTestId("gerai-identity");
+  const identity = page.getByTestId("label-sheet").getByTestId("gerai-identity");
   await expect(identity).toContainText(NAME);
   await expect(identity.getByRole("img")).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
@@ -404,10 +412,11 @@ test("completed image failures are recovered when logo hydration is delayed", as
         const image = document.querySelector<HTMLImageElement>(selector);
         return image?.complete && image.naturalWidth === 0;
       }, surface.selector);
-      await expect(page.getByTestId(surface.testId).getByRole("img")).toHaveCount(1);
+      const identity = surface.testId === "gerai-identity" ? page.getByTestId("label-sheet").getByTestId(surface.testId) : page.getByTestId(surface.testId);
+      await expect(identity.getByRole("img")).toHaveCount(1);
       scripts.resolve();
-      await expect(page.getByTestId(surface.testId)).toContainText(NAME);
-      await expect(page.getByTestId(surface.testId).getByRole("img")).toHaveCount(0);
+      await expect(identity).toContainText(NAME);
+      await expect(identity.getByRole("img")).toHaveCount(0);
       if (surface.testId === "logo-preview") {
         await expect(page.getByTestId("gerai-logo-form").getByRole("alert")).toContainText("Logo tidak dapat dibaca");
       }

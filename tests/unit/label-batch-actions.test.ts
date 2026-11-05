@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { printBatchLabelsAction } from "../../src/modules/labels/batch-actions";
-import { LABEL_UNKNOWN_RESULT } from "../../src/modules/labels/messages";
+import { FORMAT_LOCKED, LABEL_UNKNOWN_RESULT } from "../../src/modules/labels/messages";
 
 const id = "00000000-0000-4000-b000-000000000001";
 const otherId = "00000000-0000-4000-b000-000000000002";
@@ -53,6 +53,12 @@ describe("printBatchLabelsAction", () => {
       snapshots: [], error: `GX1: ${LABEL_UNKNOWN_RESULT}`, reconcile: true,
     });
     expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a concurrent format lock refusal in Bahasa for the shipment, without a print event or unknown-outcome retry", async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { message: "label_format_locked", code: "55000" } });
+    expect(await printBatchLabelsAction(input)).toEqual({ snapshots: [], error: `GX1: ${FORMAT_LOCKED}` });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("create_label_snapshot", expect.objectContaining({ p_shipment: id, p_size: "10x15" }));
   });
 
   it("requires reconciliation when a print committed but its snapshot cannot be read", async () => {

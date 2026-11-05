@@ -68,9 +68,9 @@ describe("printLabelAction", () => {
     expect(rpc).toHaveBeenCalledTimes(4); // No hidden write retry.
   });
 
-  it("keeps a definite RPC refusal recoverable instead of treating it as unknown", async () => {
-    rpc.mockResolvedValueOnce({ error: { message: "masking_disabled" } });
-    expect(await printLabelAction(input)).toEqual({ ok: false, error: labelError({ message: "masking_disabled" }), reconcile: false });
+  it.each(["masking_disabled", "label_format_locked"])("keeps definite RPC refusal %s recoverable instead of treating it as unknown", async (message) => {
+    rpc.mockResolvedValueOnce({ error: { message, code: "55000" } });
+    expect(await printLabelAction(input)).toEqual({ ok: false, error: labelError({ message }), reconcile: false });
     expect(rpc).toHaveBeenCalledTimes(1);
   });
 });

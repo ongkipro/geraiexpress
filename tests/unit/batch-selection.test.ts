@@ -38,6 +38,12 @@ describe("batch label selection", () => {
     expect(batchExclusion({ ...row, awb: null }, false, "")).toContain("resi");
     expect(batchExclusion({ ...row, is_simulated: true }, false, "")).toContain("simulasi");
   });
+  it("excludes only formats locked to another size, including after a masking change", () => {
+    expect(batchExclusion(row, false, "", "10x15", null)).toBeNull();
+    expect(batchExclusion(row, false, "", "10x15", "10x15")).toBeNull();
+    expect(batchExclusion(row, false, "", "10x10", "10x15")).toContain("terkunci pada 10 × 15 cm");
+    expect(batchExclusion(rowWithAddress, true, "", "10x15", "10x10")).toContain("terkunci pada 10 × 10 cm");
+  });
   it("prints each shipment's own sender; the shared area only fills a shipment without one", () => {
     expect(batchSender(rowWithAddress, "Bogor")).toEqual({ name: "Budi", phone: "081234567890", address: "Jl. Kenanga No. 3", city: "Kec. Coblong, Bandung" });
     expect(batchExclusion(rowWithAddress, true, "")).toBeNull();
@@ -64,14 +70,14 @@ describe("batch preview matches what create_label_snapshot will print", () => {
     expect(batchPreviewContent(facts, storedMasked, masked).sender.city).toBe("Bandung");
     expect(batchPreviewContent(facts, storedMasked, { ...masked, sender: batchSender(row, "Bogor") }).sender.city).toBe("Bogor");
   });
-  it("updates the latest snapshot on print so a 10x15 -> 10x10 -> 10x15 round-trip does not revert to the page-load identity", () => {
+  it("updates the latest snapshot after a masking change rather than reverting to page-load identity", () => {
     let latest = new Map<string, LabelSnapshot | null>([[row.id, stored]]);
-    expect(batchPreviewContent(facts, latest.get(row.id) ?? null, unmasked).sender.name).toBe("Gerai Lama");
-    const printed10x10: LabelSnapshot = { ...stored, id: "s2", version: 2, size: "10x10", printed_sender_name: "Gerai Baru" };
-    latest = advanceLatestSnapshots(latest, [row.id], [printed10x10]);
-    expect(batchPreviewContent(facts, latest.get(row.id) ?? null, { ...unmasked, size: "10x10" }).sender.name).toBe("Gerai Baru");
-    // Switching back to 10x15 now compares against v2 (10x10), which does not match 10x15, so the preview builds from current facts ("Gerai Baru").
-    expect(batchPreviewContent(facts, latest.get(row.id) ?? null, unmasked).sender.name).toBe("Gerai Baru");
+    const choice = { ...unmasked, mask: true, sender: batchSender(row, "Bandung") };
+    const printed: LabelSnapshot = { ...stored, id: "s2", version: 2, mask_sender: true,
+      printed_sender_name: "Budi", printed_sender_phone: "081234567890", printed_sender_address: null, printed_sender_city: "Bandung" };
+    latest = advanceLatestSnapshots(latest, [row.id], [printed]);
+    expect(batchPreviewContent(facts, latest.get(row.id) ?? null, choice).sender.name).toBe("Budi");
+    expect(latest.get(row.id)?.size).toBe("10x15");
   });
 });
 
