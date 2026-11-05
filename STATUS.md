@@ -5,11 +5,11 @@ Status: Active
 State: INTEGRATING
 Review-Risk: R3
 Primary-Worker: pi-parent-01a1a300
-Independent-Review: T-082, T-096 and T-100 source runs closed PASS after independent R3 digest approvals; T-101 remediation run RUN-20261104T213403Z-eb091d80 awaits its digest approval. This does not close provider, legal or release gates.
-Independent-Reviewer: separate reviewer per run (T-082 decba79d, T-096 708b2380, T-100 1ff03b98); T-101 pending
-Independent-Review-Head: Integrated HEAD 45d7534 (merges ad326cb T-082, b41b7df T-096, 45d7534 T-100) plus uncommitted T-101 surface; approval binds to the ledger digest.
+Independent-Review: T-082, T-096, T-100 and T-101 source runs closed PASS after independent R3 digest approvals (T-101: c28062b3, digest 7b0e4018). This does not close provider, legal or release gates.
+Independent-Reviewer: separate reviewer per run (T-082 decba79d, T-096 708b2380, T-100 1ff03b98, T-101 c28062b3)
+Independent-Review-Head: T-101 commit 0fd1be5 on top of merges ad326cb (T-082), b41b7df (T-096), 45d7534 (T-100); this handoff is a separate docs-only run.
 
-## T-101 Whole-repo review remediation (verified locally; digest approval pending; not deployed)
+## T-101 Whole-repo review remediation (PASS; committed, not deployed)
 
 Run `RUN-20261104T213403Z-eb091d80` (R3) on `feat/counter-ops-2026-11` after the T-082/T-096/T-100
 integration. Three independent read-only reviews (database 58a1c4ad, application/security 7578a80b,
@@ -34,10 +34,17 @@ RUN-20261104T211915Z-75a6e643 was closed BLOCKED before its gates in favour of t
 - Test fixes found by the gates: unit tests now import through relative paths (no Vitest alias);
   a prefix assertion no longer assumes `TOKO` is free in a shared suite; the T-070 "no print" check
   targets label/resi links, because the T-082 receipt is allowed for confirmed and COD shipments.
+Run closed PASS with independent R3 approval c28062b3 (digest 7b0e4018); commit 0fd1be5.
 Final executed ledger gates on this surface: typecheck, 1,180 unit, 534 full DB, 176 upgrade-replay
 DB tests (12 affected files), 133 e2e at 390/1280 (one desktop-only keyboard test skipped on mobile by
-design), diff hygiene. Logs `/data/tmp/t101/`. Not deployed; production migrations, catalogue loads
-and dev `gxdb` recreation are separate steps.
+design), diff hygiene. Logs `/data/tmp/t101/`. Not deployed; production migrations and catalogue loads
+remain separate approval-gated release steps.
+Local dev database (owner-approved 2026-11-05): backups `/data/backups/geraiexpress/gxdb-before-t100-20261104T210931Z.dump`
+and `gxdb-before-t101-20261105T004603Z.dump` (SHA-256 files beside them); `pnpm db:up` recreated
+`gxdb-postgres-1` with `init: true` (PID 1 `docker-init`, volume kept) and applied the five pending
+migrations (56 total). `npm run db:areas` loaded 79,391 areas (`mengantar-2026-10-30-79391`); a repeat
+load reported `changed=0`. Member-RPC timings on gxdb: 2-5 ms for postal, kelurahan, kota and
+multi-word queries; about 17 ms for the broad `bogor barat` (30 of many matches, sorted).
 
 ## T-100 Local Mengantar area catalogue (verified; integrated, not deployed)
 

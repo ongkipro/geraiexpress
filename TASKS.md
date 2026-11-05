@@ -665,7 +665,7 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Done when:** the declaration is written only inside `confirm_shipment` (new `p_declaration_version` parameter, `auth.uid()`, `now()`; no column grant) and the privilege allowlist and TypeScript callers follow the new signature; `confirm_shipment` refuses a shipment without item description or declaration and freezes version, member and time; `public.declaration_texts` has one seeded Bahasa version listing the Art 22 categories; the intake checkbox and missing-item message follow UX-19 item 4; DB tests for refusal, freeze and cross-tenant denial; e2e at 390 and 1280; existing confirmation e2e updated with a one-line reason each.
 
 ### [x] T-082 — Counter payment record and receipt (PR-38)
-- **Progress:** implementation and owner receipt decision DEC-026 (2026-11-05) verified: typecheck, 1,046 unit, 491 full DB, 24 browser (390/768/1280); reviews code/visual PASS; closed-period variance P2 fixed. Final surface-bound gates and integration pending; details in `STATUS.md`. Not deployed.
+- **Result (2026-11-05):** run `RUN-20261104T132645Z-49fd8a7a` PASS (R3 approval decba79d); commit 37314c1, merged ad326cb, hardened by T-101 (0fd1be5). Evidence in `STATUS.md`. Not deployed; physical-printer output unproved.
 - **Primary requirement:** PR-38
 - **Constraints:** UX-17 items 1–4, 7, 8; DATA-11; UX-13; PR-22; IAM-1 counter rows; no gateway, no surcharge, no tax line
 - **Risk Level:** R3
@@ -808,13 +808,13 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** T-096
 - **Done when:** label print offers 10x15 (10x10 parcel label + 10x5 slip: gerai logo or name and courier name, then the Code128 resi barcode, then the resi number below it) and 10x10 (parcel label only); the first print freezes the format in the label snapshot and every reprint uses it (DB refuses a different format); unit/DB tests for the lock and slip content; e2e and print-layout evidence at 390 and 1280.
 
-### [ ] T-101 — Whole-repo review remediation after the T-082/T-096/T-100 integration (2026-11-05)
+### [x] T-101 — Whole-repo review remediation after the T-082/T-096/T-100 integration (2026-11-05)
 - **Primary requirement:** NFR-1
 - **Constraints:** owner direction 2026-11-05 ("review keseluruhan ... menyempurnakan"); forward migration only; no applied migration edited; behavior changes limited to the review findings.
 - **Risk Level:** R3
 - **Allowed Paths:** `db/migrations/**` (new forward migration only), `src/modules/labels/**`, `src/modules/shipments/**`, `src/modules/payments/**`, `src/app/api/mengantar/**`, `src/lib/**`, `tests/**`, `docs/spec/**`, `ARCHITECTURE.md`, `RELEASE.md`, `OBSERVABILITY.md`, `README.md`, `DECISIONS.md`, `STATUS.md`, `TASKS.md`
 - **Done when:** every P1 and P2 finding of reviews 58a1c4ad, 7578a80b and 2890e8da is fixed with a regression or documented as accepted; typecheck, unit, full DB, upgrade replay and affected e2e pass; independent digest approval.
-- **Progress:** all findings fixed; executed gates PASS (1,180 unit, 534 DB, 176 upgrade, 133 e2e); digest approval pending. Details in `STATUS.md`.
+- **Result (2026-11-05):** run `RUN-20261104T213403Z-eb091d80` PASS; R3 approval c28062b3 on digest 7b0e4018; commit 0fd1be5. Gates: 1,180 unit, 534 DB, 176 upgrade, 133 e2e. Details in `STATUS.md`.
 
 ### [x] T-100 — Local Mengantar area catalogue for recipient kelurahan/kecamatan/kota/kode pos (owner, 2026-11-05)
 - **Primary requirement:** PR-3
