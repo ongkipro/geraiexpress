@@ -187,17 +187,35 @@ Local test accounts (seeded fixtures, local stack only, password `geraiexpress-l
 `no-access@geraiexpress.test`, `multi@geraiexpress.test` (two gerai → choose one),
 `owner-c@geraiexpress.test` (Gerai Uji C, used by platform lifecycle tests).
 
-Review gerai (local only, optional): `db/review-fixture.sql` adds one synthetic, non-demo,
-active gerai, "Gerai Demo Review (contoh)", with `admin-review@geraiexpress.test` (tenant admin)
-and `operator-review@geraiexpress.test` (operator), the same fixture password, one outlet in
-Bandung, four contacts with addresses, and three simulated shipments (issued, unknown outcome,
-draft). It is not part of `seed.sql` and never runs on `pnpm db:reset`, `pnpm db:verify` or against a remote database.
-Its tenant insert gets a slug and a shipment prefix from the `tenants_identity` trigger (T-049), so its
-shipments use the `PREFIX-yymmdd-seq` references; it has no discount-terms row and no `contact_whatsapp`
-value yet, and its shipments are simulated, so the local masked label is not exercised by it.
-Apply it with
-`docker exec -i gxdb-postgres-1 psql -U postgres -d gxdb -v ON_ERROR_STOP=1 < db/review-fixture.sql`
-(safe to repeat; it refuses to run unless the database is the gx-prefixed local one and the local seed user exists).
+Review gerai and local data (local only, optional): `pnpm db:fixture` (`scripts/db-fixture.sh`) applies
+`db/review-fixture.sql` and then `db/local-fixture.sql` to the local Compose `gxdb`. It refuses when
+`DATABASE_URL` is set, and both files refuse any database that is not gx-prefixed with `app.gx_local=on` or
+that lacks the local seed user, so it never runs against a remote database; it is not part of `seed.sql`,
+`pnpm db:reset`, `pnpm db:verify`, the tests or CI. Safe to repeat: each file skips when its data is present.
+The first application refuses (`local_fixture_open_period_exists`, nothing is written) when the review outlet
+already has an open cash period; close that period in `/kas` as the review admin, then run it again.
+Take `pnpm db:backup` first if the local data matters.
+
+- `db/review-fixture.sql`: one synthetic, non-demo, active gerai, "Gerai Demo Review (contoh)", with
+  `admin-review@geraiexpress.test` (tenant admin) and `operator-review@geraiexpress.test` (operator), the same
+  fixture password, one outlet in Bandung, four contacts and three simulated shipments (issued, unknown
+  outcome, draft). Its tenant insert gets a slug and a shipment prefix from the `tenants_identity` trigger
+  (T-049), so its shipments use `PREFIX-yymmdd-seq` references.
+- `db/local-fixture.sql` (T-108, needs the review gerai): realistic, clearly synthetic data spread over the
+  last 14 WIB days so every screen has content: 12 contacts with addresses on real Mengantar kelurahan
+  (Bandung, Jakarta, Surabaya, Sleman, Yogyakarta, Malang, Denpasar, Medan); 25 shipments (draft, estimated,
+  queued, in flight, unknown outcome, refused, issued; COD and non-COD; JNE, SiCepat, J&T, ID Express,
+  AnterAja, Lion Parcel); 6 label snapshots (masked and unmasked, 10x15 and 10x10) with print history;
+  12 counter payments (Tunai, QRIS, Transfer, Lainnya, one with a reasoned difference, one voided) with
+  receipt prints; one closed and one open cash period; one open return case and one closed compensated
+  case; the gerai WhatsApp (when empty) and a 10% owner-stated discount term (when none exists), so the
+  pilot report has earnings. Every name ends in "(contoh)" and every resi starts with `SIM`.
+  **Ten issued shipments are locally non-simulated** so labels, print history and the pilot report
+  (`/kas/laporan`, which counts only non-simulated shipments of a real gerai) can be exercised. They are
+  not real orders: their provider operations are terminal (`succeeded`) with no provider environment, order
+  id or dispatch time, they are paid, the gerai has no seller credential and no tracking link exists. The
+  file ends with assertions that roll everything back if anything a dispatch, reconcile or payment sweep
+  could select exists. The remaining shipments are simulated, so no Mengantar call can be made for them.
 
 Credentials (local): `pnpm dev:env` writes a local `CREDENTIAL_KEY` (kept across runs), used as
 version 1 to seal keys saved under `/pengaturan`. Ring values belong in runtime secrets (the 0600 env
@@ -263,7 +281,8 @@ geraiexpress/
 │   ├── foundation/               # plain-PostgreSQL prerequisites (roles, auth and extensions schemas)
 │   ├── migrations/               # schema, RLS, RPCs, signup gate, COD, Partner onboarding, demo cleanup, 2026-10-28 batch, auth core (2026-10-29)
 │   ├── seed.sql                  # local synthetic fixtures only (refuses to run outside a gx-prefixed local database)
-│   └── review-fixture.sql        # optional local review gerai
+│   ├── review-fixture.sql        # optional local review gerai
+│   └── local-fixture.sql         # optional local review data (pnpm db:fixture)
 ├── tests/                        # unit/, db/ (PostgREST/RPC), e2e/ (Playwright, 3 viewports)
 ├── scripts/                      # bundle scan, environment guard, docker wrappers, container smoke, ui smoke, dev env
 ├── docs/                         # canonical spec pack, research, promotion manifest
