@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Notice } from "@/components/notice";
 import { dbServer } from "@/lib/db/server";
 import { formatIdr, formatWib } from "@/lib/format";
@@ -78,5 +79,5 @@ export default async function CashPage() {
   } catch (error) {
     content = <Notice tone="danger">{error instanceof Error && error.message === UNSUPPORTED_PAYMENT_AMOUNT ? UNSUPPORTED_PAYMENT_AMOUNT : "Kas belum bisa dimuat lengkap. Muat ulang halaman; jangan menutup kas sebelum data tersedia."}</Notice>;
   }
-  return <div className="flex flex-col gap-6 lg:gap-8"><header><h1 className="text-3xl tracking-tight">Kas</h1><p className="mt-2 text-muted-foreground">Kas per outlet milik {ws.tenant.name}. Periode tetap terbuka melewati tengah malam sampai ditutup. Waktu ditampilkan dalam WIB.</p><p className="mt-1 text-sm text-muted-foreground">Total hanya pembayaran aktif. Selisih kas adalah uang terhitung dikurangi tunai yang diharapkan{ws.isDemo ? "; semua nilai merupakan contoh" : ""}.</p></header>{content}</div>;
+  return <div className="flex flex-col gap-6 lg:gap-8"><header><h1 className="text-3xl tracking-tight">Kas</h1><p className="mt-2 text-muted-foreground">Kas per outlet milik {ws.tenant.name}. Periode tetap terbuka melewati tengah malam sampai ditutup. Waktu ditampilkan dalam WIB.</p><p className="mt-1 text-sm text-muted-foreground">Total hanya pembayaran aktif. Selisih kas adalah uang terhitung dikurangi tunai yang diharapkan{ws.isDemo ? "; semua nilai merupakan contoh" : ""}.</p>{ws.role === "tenant_admin" ? <p className="mt-2"><Link href="/kas/laporan" className="font-semibold text-primary underline-offset-4 hover:underline">Laporan pilot</Link> <span className="text-sm text-muted-foreground">(khusus admin gerai)</span></p> : null}</header>{content}</div>;
 }

@@ -61,6 +61,8 @@ const AUTHENTICATED_EXECUTE = [
   "public.my_account_state()",
   "public.my_invitations()",
   "public.partner_onboarding_status(uuid)",
+  // T-087: pilot report per outlet/WIB day; current tenant administrator only, derived measures only.
+  "public.pilot_report(uuid,date,date)",
   "public.platform_add_declaration_text(text,text[],text,boolean,text)",
   "public.platform_admins()",
   "public.platform_applications(text)",

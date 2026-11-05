@@ -33,10 +33,12 @@ export function dayBounds(from: string, to: string): { gte?: string; lt?: string
   return out;
 }
 
-// pengiriman-<slug>-<yyyymmdd>.csv with the WIB date of the export. The slug is already a restricted
-// identifier; it is filtered again here so no header-unsafe character can reach Content-Disposition.
-export function exportFilename(slug: string, now: Date): string {
+// <kind>-<slug>-<yyyymmdd>.csv with the WIB date of the export (kind "pengiriman" for the shipment list,
+// "laporan-pilot" for the T-087 pilot report). The slug is already a restricted identifier; it is
+// filtered again here so no header-unsafe character can reach Content-Disposition.
+export type ExportKind = "pengiriman" | "laporan-pilot";
+export function exportFilename(slug: string, now: Date, kind: ExportKind = "pengiriman"): string {
   const safe = slug.toLowerCase().replace(/[^a-z0-9-]/g, "") || "gerai";
   const day = new Date(now.getTime() + WIB_OFFSET_MS).toISOString().slice(0, 10).replaceAll("-", "");
-  return `pengiriman-${safe}-${day}.csv`;
+  return `${kind}-${safe}-${day}.csv`;
 }

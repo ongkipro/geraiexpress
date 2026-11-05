@@ -3,7 +3,7 @@
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Building2, ClipboardCheck, Contact, LayoutDashboard, Package, PackagePlus, Percent, Plug, ScrollText, Settings, ShieldCheck, UserCog,
+  Building2, ChartColumn, ClipboardCheck, Contact, LayoutDashboard, Package, PackagePlus, Percent, Plug, ScrollText, Settings, ShieldCheck, UserCog,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ const ICONS = {
   discount: Percent,
   access: ShieldCheck,
   audit: ScrollText,
+  report: ChartColumn,
 } satisfies Record<string, LucideIcon>;
 
 export type NavIcon = keyof typeof ICONS;

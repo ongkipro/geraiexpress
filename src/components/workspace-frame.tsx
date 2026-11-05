@@ -39,6 +39,8 @@ export async function WorkspaceFrame({ children }: { children: React.ReactNode }
     { href: "/pengiriman", label: "Pengiriman", icon: "package", group: "Kirim", count: attention },
     { href: "/pengiriman/baru", label: "Buat pengiriman", icon: "package-plus", group: "Kirim" },
     { href: "/kas", label: "Kas", icon: "audit", group: "Data" },
+    // T-087 / PR-45: the pilot report (with earnings) is for tenant administrators only.
+    ...(ws.role === "tenant_admin" ? [{ href: "/kas/laporan", label: "Laporan pilot", icon: "report", group: "Data" } as NavItem] : []),
     { href: "/kontak", label: "Kontak", icon: "contacts", group: "Data" },
     ...(ws.role === "tenant_admin" && !ws.isDemo ? [{ href: "/anggota", label: "Anggota", icon: "members", group: "Pengelolaan" } as NavItem] : []),
     { href: "/pengaturan", label: "Pengaturan", icon: "settings", group: "Pengelolaan" },

@@ -24,7 +24,7 @@ const PATHS: Record<RouteFamily, string[]> = {
   signin: ["/masuk"],
   tenant: [
     "/akses", "/pilih-gerai", "/undangan", "/daftar", "/daftar/gerai", "/daftar/kata-sandi", "/pengiriman",
-    "/kas", "/pengiriman/baru", "/pengiriman/abc/label", "/kontak", "/kontak/abc", "/pengaturan", "/anggota",
+    "/kas", "/kas/laporan", "/kas/laporan/export.csv", "/pengiriman/baru", "/pengiriman/abc/label", "/kontak", "/kontak/abc", "/pengaturan", "/anggota",
     "/api/mengantar/area",
   ],
   platform: ["/admin", "/admin/pengajuan", "/admin/integrasi", "/admin/akses", "/admin/audit", "/verifikasi-2fa"],
@@ -179,7 +179,12 @@ describe("route matrix (every host x route family)", () => {
   it("matches prefixes on a segment boundary and fails closed on unusual spellings", () => {
     expect(routeFamily("tenant", "/pengiriman/")).toBe("tenant");
     expect(routeFamily("platform", "/admin/")).toBe("platform");
-    for (const path of ["/daftarx", "/administrator", "/Admin", "/%61dmin", "/pengiriman%2f..%2fadmin", "/nope", "//admin", "/api/auth"]) {
+    // T-087: "/kas" became a prefix; it still matches only on a segment boundary.
+    expect(routeFamily("tenant", "/kas/")).toBe("tenant");
+    expect(routeFamily("tenant", "/kas/laporan")).toBe("tenant");
+    expect(routeAllowed("public", "/kas/laporan")).toBe(false);
+    expect(routeAllowed("platform", "/kas/laporan/export.csv")).toBe(false);
+    for (const path of ["/kasx", "/kasir", "/kas%2flaporan", "/daftarx", "/administrator", "/Admin", "/%61dmin", "/pengiriman%2f..%2fadmin", "/nope", "//admin", "/api/auth"]) {
       expect(routeAllowed("shared", path), path).toBe(false);
     }
   });
