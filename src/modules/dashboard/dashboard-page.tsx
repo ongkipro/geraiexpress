@@ -4,6 +4,7 @@ import { CreateDraftButton } from "@/modules/shipments/list-create";
 import { periodHref, type PeriodDays } from "./aggregate";
 import { QuickActions, SetupCallout } from "./actions-panel";
 import { AttentionRegion } from "./attention";
+import { CaseAttentionRegion } from "./case-attention";
 import { requestNow } from "./load";
 import { RecentRegion } from "./recent";
 import { RegionSkeleton } from "./parts";
@@ -45,6 +46,11 @@ export async function DashboardPage({ periodDays }: { periodDays: PeriodDays }) 
           <StatsRegion tenantId={ws.tenant.id} periodDays={periodDays} sample={ws.isDemo} />
         </Suspense>
       </div>
+
+      {/* T-086 / UX-20 item 1: returns and open cases; renders nothing when there are none. */}
+      <Suspense fallback={null}>
+        <CaseAttentionRegion {...region} />
+      </Suspense>
 
       <Suspense fallback={<RegionSkeleton title="Tren pengiriman" lines={4} className="min-h-96" />}>
         <TrendRegion {...region} periodDays={periodDays} />

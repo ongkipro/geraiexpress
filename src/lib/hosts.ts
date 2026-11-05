@@ -108,7 +108,7 @@ export const ROUTE_FAMILIES: Readonly<Record<RouteFamily, PathRule>> = {
   tenant: {
     exact: ["/akses", "/pilih-gerai", "/undangan", "/api/mengantar/area"],
     // "/kas" is a prefix (T-087: /kas/laporan and its CSV) matched on a segment boundary.
-    prefixes: ["/daftar", "/pengiriman", "/kas", "/kontak", "/pengaturan", "/anggota"],
+    prefixes: ["/daftar", "/pengiriman", "/kas", "/kasus", "/kontak", "/pengaturan", "/anggota"],
   },
   // `/verifikasi-2fa` follows the platform class: the second factor protects the platform workspace.
   platform: { exact: ["/verifikasi-2fa"], prefixes: ["/admin"] },

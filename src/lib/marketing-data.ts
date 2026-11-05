@@ -78,6 +78,7 @@ const APP_PATHS_DISALLOWED = [
   "/lacak",
   "/pengiriman",
   "/kas",
+  "/kasus",
   "/kontak",
   "/pengaturan",
   "/anggota",

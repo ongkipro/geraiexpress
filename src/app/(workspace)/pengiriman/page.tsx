@@ -45,10 +45,12 @@ export default async function ShipmentsPage({
   let query = db
     .from("shipments")
     .select(
-      "id, reference, submission_state, recipient_name, recipient_area, awb, customer_charge_idr, is_cod, updated_at, is_simulated, quote:shipment_quotes!shipments_tenant_id_selected_quote_id_fkey(courier, service)",
+      // T-086 / UX-20 item 1: the provider return state and any non-closed case mark the row.
+      "id, reference, submission_state, delivery_state, recipient_name, recipient_area, awb, customer_charge_idr, is_cod, updated_at, is_simulated, quote:shipment_quotes!shipments_tenant_id_selected_quote_id_fkey(courier, service), cases:shipment_cases!shipment_cases_tenant_id_shipment_id_fkey(case_type, state)",
       { count: "exact" },
     )
     .eq("tenant_id", ws.tenant.id)
+    .neq("cases.state", "closed")
     .order("updated_at", { ascending: false })
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
   if (status) query = query.eq("submission_state", status);
