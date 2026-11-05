@@ -96,11 +96,12 @@ export function scopeForHost(host: string | null | undefined, env: Env = process
 // Route families. A family is a set of exact paths plus path prefixes matched on a segment
 // boundary (`/daftar` covers `/daftar` and `/daftar/gerai`, not `/daftarx`).
 type PathRule = { exact: readonly string[]; prefixes: readonly string[] };
-export type RouteFamily = "entry" | "marketing" | "robots" | "signin" | "tenant" | "platform" | "hook" | "health" | "asset" | "cron";
+export type RouteFamily = "entry" | "marketing" | "tracking" | "robots" | "signin" | "tenant" | "platform" | "hook" | "health" | "asset" | "cron";
 
 export const ROUTE_FAMILIES: Readonly<Record<RouteFamily, PathRule>> = {
   entry: { exact: ["/"], prefixes: [] },
   marketing: { exact: ["/fitur", "/simulasi", "/cara-kerja", "/hubungi-kami", "/sitemap.xml"], prefixes: [] },
+  tracking: { exact: [], prefixes: ["/lacak"] },
   robots: { exact: ["/robots.txt"], prefixes: [] },
   // Both the gerai sign-in and the platform sign-in (the second factor follows on /verifikasi-2fa).
   signin: { exact: ["/masuk"], prefixes: [] },
@@ -119,7 +120,7 @@ export const ROUTE_FAMILIES: Readonly<Record<RouteFamily, PathRule>> = {
 };
 
 export const AUDIENCE_FAMILIES: Readonly<Record<Audience, readonly RouteFamily[]>> = {
-  public: ["entry", "marketing", "robots", "health", "asset"],
+  public: ["entry", "marketing", "tracking", "robots", "health", "asset"],
   tenant: ["entry", "robots", "signin", "tenant", "health", "asset"],
   platform: ["entry", "robots", "signin", "platform", "health", "asset"],
   hooks: ["hook", "health"],

@@ -216,6 +216,7 @@ describe("Public marketing claims are approved and implemented (PR-35, T-036)", 
       userAgent: "*",
       allow: ["/", "/fitur", "/simulasi", "/cara-kerja", "/hubungi-kami"],
       disallow: [
+        "/lacak",
         "/pengiriman",
         "/kas",
         "/kontak",

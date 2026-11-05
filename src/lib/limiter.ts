@@ -96,6 +96,8 @@ export const LIMITS = {
   OTP_ACCOUNT_VISITOR_LIMITER: { limit: 5, periodSeconds: 60 },
   MFA_ACCOUNT_LIMITER: { limit: 10, periodSeconds: 60 },
   REFRESH_LIMITER: { limit: 10, periodSeconds: 60 },
+  TRACKING_LIMITER: { limit: 30, periodSeconds: 60 },
+  TRACKING_INVALID_LIMITER: { limit: 10, periodSeconds: 60 },
   MENGANTAR_AREA_LIMITER: { limit: 30, periodSeconds: 60 },
 } as const;
 

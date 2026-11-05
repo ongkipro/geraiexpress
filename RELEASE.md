@@ -90,7 +90,8 @@ by the app. Gates before a release is started:
    Never bake a secret into an image or commit one; `.dockerignore` is an allow-list and
    `pnpm check:bundle` refuses a baked secret value. `GX_ENV_FILE` is REQUIRED (no production fallback
    to `.env.container`). The env file carries `AUTH_JWT_SECRET` (also PostgREST's JWT secret) and
-   `AUTH_SECRET` (at least 32 bytes each, different), `PGRST_DB_URI` (the `authenticator` connection string,
+   `AUTH_SECRET` (at least 32 bytes each, different),
+   `TRACKING_TOKEN_SECRET` (independent random 32+ byte HMAC root; rotation changes re-derived links, so revoke/re-share deliberately), `PGRST_DB_URI` (the `authenticator` connection string,
    read by Compose for PostgREST), `POSTGRES_PASSWORD` only with the `db` profile, the Turnstile pair, `CRON_SECRET`
    (at least 32 characters) and the Mengantar and credential values; every configured secret must also be at
    least 32 characters and not a placeholder. Blank example values

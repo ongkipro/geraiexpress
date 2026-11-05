@@ -144,7 +144,7 @@ describe("fixed-window limiter", () => {
 });
 
 describe("named limiters", () => {
-  it("preserves the former auth binding limits and bounds live area fallback", () => {
+  it("preserves the former auth binding limits and bounds live area fallback and public tracking", () => {
     expect(LIMITS).toEqual({
       SIGN_IN_LIMITER: { limit: 10, periodSeconds: 60 },
       DEMO_LIMITER: { limit: 5, periodSeconds: 60 },
@@ -157,6 +157,8 @@ describe("named limiters", () => {
       MFA_ACCOUNT_LIMITER: { limit: 10, periodSeconds: 60 },
       REFRESH_LIMITER: { limit: 10, periodSeconds: 60 },
       MENGANTAR_AREA_LIMITER: { limit: 30, periodSeconds: 60 },
+      TRACKING_LIMITER: { limit: 30, periodSeconds: 60 },
+      TRACKING_INVALID_LIMITER: { limit: 10, periodSeconds: 60 },
     });
   });
 

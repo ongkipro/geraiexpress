@@ -82,10 +82,11 @@ describe("env files", () => {
 
   it("fail when a real environment lacks the auth, database or Turnstile configuration", () => {
     const s = staging();
-    for (const name of ["AUTH_JWT_SECRET", "PGRST_DB_URI", "TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"]) delete s.vars[name];
+    for (const name of ["AUTH_JWT_SECRET", "TRACKING_TOKEN_SECRET", "PGRST_DB_URI", "TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"]) delete s.vars[name];
     s.vars.AUTH_SECRET = "<REPLACE_WITH_OWN_SECRET>";
     expect(checkEnvFiles({ staging: s, production: production() })).toEqual(expect.arrayContaining([
       "staging: AUTH_JWT_SECRET is not set",
+      "staging: TRACKING_TOKEN_SECRET is not set",
       "staging: AUTH_SECRET is not set",
       "staging: PGRST_DB_URI is not set",
       "staging: TURNSTILE_SITE_KEY is not set",
@@ -201,7 +202,7 @@ describe("env files", () => {
     const read = (name: string) => ({ vars: parseEnv(readFileSync(new URL(`../../infra/env/${name}.env.example`, import.meta.url), "utf8")), template: true });
     expect(checkEnvFiles({ staging: read("staging"), production: read("production") })).toEqual([]);
     for (const template of [read("staging"), read("production")]) {
-      for (const name of ["POSTGREST_URL", "AUTH_JWT_SECRET", "AUTH_SECRET", "TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY", "PGRST_DB_URI"]) {
+      for (const name of ["POSTGREST_URL", "AUTH_JWT_SECRET", "AUTH_SECRET", "TRACKING_TOKEN_SECRET", "TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY", "PGRST_DB_URI"]) {
         expect(Object.keys(template.vars), name).toContain(name);
       }
       expect(Object.keys(template.vars).filter((name) => /SUPABASE|SEND_EMAIL_HOOK|AUTH_FORWARD/.test(name))).toEqual([]);
@@ -221,7 +222,7 @@ describe("env files", () => {
     s.vars.CRON_SECRET = "a".repeat(31);
     expect(checkEnvFiles({ staging: s })).toContain("staging: CRON_SECRET must contain at least 32 characters and must not be a placeholder");
     const t = { vars: { ...production().vars }, template: true };
-    for (const key of ["AUTH_JWT_SECRET", "AUTH_SECRET", "TURNSTILE_SECRET_KEY", "PGRST_DB_URI", "CREDENTIAL_KEYS", "CRON_SECRET"]) t.vars[key] = "<REPLACE_WITH_OWN_SECRET>";
+    for (const key of ["AUTH_JWT_SECRET", "AUTH_SECRET", "TRACKING_TOKEN_SECRET", "TURNSTILE_SECRET_KEY", "PGRST_DB_URI", "CREDENTIAL_KEYS", "CRON_SECRET"]) t.vars[key] = "<REPLACE_WITH_OWN_SECRET>";
     expect(checkEnvFiles({ production: t })).toEqual([]);
   });
 });

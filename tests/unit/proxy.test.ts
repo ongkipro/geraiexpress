@@ -16,6 +16,11 @@ const { auth, getAuth, withinLimit } = vi.hoisted(() => ({
 vi.mock("../../src/lib/auth/instance", () => ({ getAuth }));
 vi.mock("../../src/lib/rate-limit", () => ({ withinLimit, REFRESH_RETRY_AFTER_SECONDS: 60 }));
 
+vi.mock("../../src/modules/tracking/public-read", () => ({
+  readPublicTracking: vi.fn().mockResolvedValue({ kind: "missing" }),
+  TRACKING_PROJECTION_HEADER: "x-gx-public-tracking",
+}));
+
 const { proxy } = await import("../../src/proxy");
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -522,5 +527,48 @@ describe("nonce propagation and report-only script rollout", () => {
     expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(report);
     expect(cookieOf(response, "gx_at")).toContain("gx_at=rotated-access");
     expect(response.headers.get("Content-Security-Policy")).not.toContain("script-src");
+  });
+});
+
+describe("public tracking edge (SEC-8)", () => {
+  beforeEach(resetAuth);
+  it("sets apex noindex/no-store/CSP, strips cookies and overwrites a forged projection even on shared development hosts", async () => {
+    const { readPublicTracking } = await import("../../src/modules/tracking/public-read");
+    const projection = { gerai_label: null, courier: "JT", service: "REG", awb: "JP1234567890", status_label: "Status belum tersedia", timeline: [], destination_city: null, sender_initials: null, recipient_initials: "P. U.", created_at: "2026-11-05T00:00:00Z", issued_at: null } as const;
+    vi.mocked(readPublicTracking).mockResolvedValue({ kind: "found", projection: { ...projection, timeline: [] } });
+    for (const origin of ["https://geraiexpress.com", "http://localhost:3100"]) {
+      const res = await get(`${origin}/lacak/${"A".repeat(43)}`, { ...sessionCookies, "x-gx-public-tracking": "forged" });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("x-middleware-request-cookie")).toBeNull();
+      expect(res.headers.get("x-middleware-request-x-gx-public-tracking")).toBe(encodeURIComponent(JSON.stringify(projection)));
+      expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+      expect(res.headers.get("Cache-Control")).toBe("private, no-store");
+      expect(res.headers.get("Content-Security-Policy")).toBeTruthy();
+      expect(res.headers.getSetCookie()).toEqual([]);
+    }
+    expect(getAuth).not.toHaveBeenCalled();
+    vi.mocked(readPublicTracking).mockResolvedValue({ kind: "missing" });
+  });
+  it("returns the identical non-streamed 404 for unknown, malformed, revoked and expired tokens", async () => {
+    const { readPublicTracking } = await import("../../src/modules/tracking/public-read");
+    vi.mocked(readPublicTracking).mockResolvedValue({ kind: "missing" });
+    const bodies = [];
+    for (const token of ["bad", "U".repeat(43), "R".repeat(43), "E".repeat(43)]) {
+      const res = await get(`https://geraiexpress.com/lacak/${token}`);
+      expect(res.status).toBe(404);
+      expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+      bodies.push(await res.text());
+    }
+    expect(new Set(bodies).size).toBe(1);
+    expect(bodies[0]).toContain("Halaman tidak ditemukan");
+  });
+  it("answers 429 with Retry-After for an exhausted visitor, without cookies or a session", async () => {
+    const { readPublicTracking } = await import("../../src/modules/tracking/public-read");
+    vi.mocked(readPublicTracking).mockResolvedValueOnce({ kind: "limited" });
+    const res = await get(`https://geraiexpress.com/lacak/${"A".repeat(43)}`, sessionCookies);
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("60");
+    expect(res.headers.getSetCookie()).toEqual([]);
+    expect(getAuth).not.toHaveBeenCalled();
   });
 });

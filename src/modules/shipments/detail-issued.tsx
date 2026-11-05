@@ -6,6 +6,7 @@ import { createDraftAction, requestLabelAction } from "./actions";
 import { StickyActionBar } from "./detail-action-bar";
 import { AwbCopy } from "./detail-awb";
 import type { ShipmentRecord } from "./detail-types";
+import { TrackingShareCard } from "@/modules/tracking/share-card";
 
 // UX-14: what an issued shipment offers next. A real one prints its label (primary) and starts the next
 // shipment in one click; a demo one only shows its sample label and never claims a real print.
@@ -19,6 +20,7 @@ export function IssuedResult({ s }: { s: ShipmentRecord }) {
         {s.is_simulated ? "Resi contoh terbit" : "Resi terbit"}
       </p>
       {s.awb ? <AwbCopy awb={s.awb} /> : null}
+      {!s.is_simulated && s.awb ? <TrackingShareCard shipmentId={s.id} senderPhone={s.sender_phone} /> : null}
       {s.is_simulated ? (
         <p className="text-sm">Ini resi contoh dari mode simulasi; labelnya hanya untuk berlatih dan bukan label kurir.</p>
       ) : null}

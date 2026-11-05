@@ -30,6 +30,7 @@ const forbidden = [
   /PGRST_(JWT_SECRET|DB_URI)/,
   /MENGANTAR_[A-Z_]*(KEY|SECRET)/,
   /CRON_SECRET/,
+  /TRACKING_TOKEN_SECRET/,
   /GE_SERVER_ONLY_MARKER/,
 ];
 const jwt = /eyJ[\w-]+\.(eyJ[\w-]+)\.[\w-]+/g;
@@ -77,7 +78,7 @@ const SECRET_NAMES = new Set([
   "AUTH_JWT_SECRET", "AUTH_SECRET", "TURNSTILE_SECRET_KEY", "ANON_JWT", "SERVICE_ROLE_JWT",
   "PGRST_JWT_SECRET", "PGRST_DB_URI", "POSTGRES_PASSWORD", "AUTHENTICATOR_PASSWORD",
   "CREDENTIAL_KEY", "CREDENTIAL_KEYS", "MENGANTAR_PARTNER_SECRET",
-  "GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET", "CRON_SECRET",
+  "GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET", "CRON_SECRET", "TRACKING_TOKEN_SECRET",
 ]);
 const secretValues = new Map();
 // A short or empty value would match by chance; real secrets here are 32+ characters.

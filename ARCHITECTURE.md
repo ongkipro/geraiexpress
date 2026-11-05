@@ -80,6 +80,65 @@ evidence; local implementation is not proof of provider acceptance or release re
 Partner signing, onboarding, BYOK and API-key rotation are reused rather than reimplemented;
 callback-secret persistence/webhook readiness remain outside this slice (T-045/PR-19).
 
+## Public tracking and resi sharing (T-085, 2026-11-05)
+
+`src/modules/tracking` implements UX-18 / DATA-12 / SEC-8. An issued, non-simulated
+shipment's result banner includes the detail share controls: WhatsApp opens a prefilled
+`wa.me` message on the operator's device (never server sending), missing/invalid sender
+phone offers **Salin pesan**, and **Salin tautan** has an explicit manual-copy fallback.
+The display records that a link was prepared for sharing, not proof that a customer received it.
+A tenant administrator can confirm **Cabut tautan** from that same detail.
+
+The member-authorized prepare RPC locks the shipment and allocates one opaque `link_id`
+per sharing generation. The server derives `base64url(HMAC-SHA256(TRACKING_TOKEN_SECRET,
+link_id))` using `node:crypto`; only SHA-256 of the token is published. Repeated sharing
+returns the same link; revoke + re-share creates a new `link_id`, never reactivating the
+old token. Prepare/publish use separate calls, but publication names the exact generation,
+so a late publication after revocation fails closed. Creation, first publication and
+admin-only revocation are audited without token/hash/message/personal data. RLS permits
+member SELECT only; anon has no table privilege, and all API roles including service_role
+lack direct writes. `TRACKING_TOKEN_SECRET` is required at the sharing boundary (32+ bytes,
+no development default) through `src/lib/config.ts`; examples are blank placeholders.
+Compose passes it only to the app; local environment generation preserves its generated
+value, and the isolated test runner generates its own root. It is in both bundle-scan
+name/value lists and the per-environment required-secret/isolation gate. Root rotation is
+not a revocation mechanism: old hash-based lookups remain valid until explicitly revoked;
+a changed root cannot silently republish over an existing active hash.
+
+**Public trust boundary.** `/lacak/*` is a dedicated public audience family, 404 on app,
+owner, hooks and internal hosts (local shared mode is an explicit development exception).
+The proxy removes any visitor-supplied `x-gx-public-tracking`, never resolves a session,
+strips cookies before forwarding, and uses only the anonymous `track_shipment(token)` RPC.
+It resolves before rendering so malformed, unknown, expired and revoked links return an
+identical non-streamed Bahasa 404 with no token echo. Valid data is reconstructed from an
+explicit TypeScript allowlist, then forwarded to the server-rendered page in a proxy-owned
+request header; the page reconstructs that allowlist again. It never reads a session or
+raw shipment row. No personal/money/provider fields or arbitrary event JSON cross this edge.
+The public PostgREST service is not internet-exposed, so this is the only public data path.
+The ordinary CSP remains; tracking always sends `X-Robots-Tag: noindex, nofollow` and private,
+no-store, metadata noindex, and `/robots.txt` disallows `/lacak` even on the indexable apex.
+
+The visitor address is only `clientAddress` from the verified proxy header. Tracking fails
+closed without it in **all** environments. One in-process visitor budget permits 30 reads
+per 60 seconds; invalid lookups also spend a separate 10-per-60-second budget. Exhaustion
+answers 429 with `Retry-After: 60`, no cookie and no data. IPv6 uses the existing /56 grouping.
+This inherits the one-instance/restart limitations of the existing limiter; shared storage
+is still required before horizontal scaling. Tokens are never limiter keys or log fields.
+
+The projection includes full AWB (UX-18), courier/service, dates in WIB, catalogue city only,
+initials and the permitted gerai label. No free-text address/area is used as a city fallback.
+The latest label snapshot alone controls masking and printed-sender initials; no snapshot
+hides both gerai and sender initials. A masked latest snapshot always hides the gerai identity.
+There are no live tracking events yet: the only status is **Status belum tersedia**, with an
+empty timeline and a static courier tracking URL when known (no AWB in outbound tracking URLs).
+T-045 must provide reviewed event mapping, structured hub city and delivered/returned expiry;
+no fake status or expiry is inferred here. The public page is readable without JavaScript at
+390 px. Tests authored: `tests/unit/tracking-*.test.ts`, host/robots/proxy/environment guards,
+`tests/db/tracking-links.test.ts` plus the signature privilege allowlist, and
+`tests/e2e/tracking.spec.ts` (390 px anonymous no-JS privacy, latest masking, revoke/reshare,
+missing phone and `testInfo.outputPath` screenshots). Execution is pending the parent-run gates;
+this section is an implementation record, not a release-readiness claim.
+
 ## Canonical design
 
 The target architecture lives in [04-SYSTEM-ARCHITECTURE.md](docs/spec/04-SYSTEM-ARCHITECTURE.md)
@@ -236,8 +295,8 @@ flowchart LR
 
 ## System map
 
-The diagrams below describe implemented components; T-083 cash close is code-complete but runtime verification is pending. Dashed edges are
-target components from ARCH-1/ARCH-4 that do not exist yet.
+The diagrams below describe implemented components; executed evidence is recorded in STATUS.md.
+Dashed edges are target components from ARCH-1/ARCH-4 that do not exist yet.
 
 ### Runtime and trust boundaries (implemented)
 
@@ -255,6 +314,9 @@ flowchart LR
         PaymentActions["modules/payments<br/>detail payment and /struk receipt actions"]
         CashClose["/kas · cash-period-actions<br/>close: member · reopen: tenant admin<br/>T-083 runtime verification pending"]
         LogoActions["modules/tenants/logo-actions.ts<br/>settings · tenant-admin only"]
+        TrackingEdge["/lacak/token · apex only<br/>cookie-less · 30/min/IP · invalid 10/min/IP · noindex<br/>pre-render lookup and constant 404"]
+        TrackingPage["Server-rendered public tracking<br/>fixed projection only · no client JS needed"]
+        TrackingShare["modules/tracking · member share<br/>SITE_ORIGIN + HMAC(secret, link_id)<br/>admin-only audited revoke"]
         Health["/healthz (no-store)"]
         Hosts["lib/hosts.ts<br/>host table, route-family matrix, per-environment origins"]
         AuthMod["lib/auth/**<br/>scrypt · emailed code · refresh rotation · TOTP · Turnstile<br/>signs HS256 access tokens"]
@@ -266,6 +328,8 @@ flowchart LR
         CashRPC["close_cash_period / reopen_cash_period<br/>period row lock · active cash aggregate<br/>cash_period_events: RLS, append-only, RPC writes"]
         AreaRPC["search_mengantar_areas(query, limit)<br/>authenticated · active membership · max 30"]
         Areas["PostgreSQL: public.mengantar_areas<br/>shared provider reference data · no tenant ownership · RLS · no API table grants"]
+        TrackingRPC["track_shipment(token) · anon only<br/>hash lookup · latest label masking · fixed projection"]
+        TrackingLinks["public.tracking_links · member SELECT/RLS<br/>RPC-only mutations · per-shipment generation<br/>token hash only · revoked/expiry guard"]
         LogoVersions["private.gerai_logo_versions<br/>append-only raster versions"]
         LabelCapture["label_snapshots INSERT trigger<br/>captures frozen logo and gerai name"]
         Priv["private schema: helpers, triggers,<br/>quote_costs, seller_credentials,<br/>tenant_mengantar_onboarding (no API grants)"]
@@ -282,6 +346,14 @@ flowchart LR
     AreaRoute -->|user JWT via PostgREST| AreaRPC --> Areas
     AreaRoute -->|"empty catalogue + connected non-demo only: address/search"| Mengantar
     AreaLoader --> Areas
+    MW --> TrackingEdge
+    TrackingEdge -->|anon JWT via internal PostgREST| TrackingRPC
+    TrackingRPC --> TrackingLinks
+    TrackingRPC -->|public projection only| TrackingPage
+    TrackingPage --> UI
+    Actions --> TrackingShare
+    TrackingShare --> WS
+    TrackingShare -->|user JWT: prepare/publish/revoke RPCs| TrackingLinks
     MW --> Hosts
     UI -->|form posts| Actions
     Pages --> WS
@@ -310,8 +382,9 @@ flowchart LR
 
 Every user-driven read and write runs with the signed-in user's JWT, so every statement meets the same RLS and
 RPC checks whichever caller issues it (TEN-1); PostgREST is not published, so a browser cannot reach it directly.
-The one exception
-is the account dispatcher (DEC-010, T-022): it records Mengantar results through `dispatch_*`
+Public tracking is a separate bearer-capability exception: the cookie-less proxy uses an anon
+JWT for `track_shipment(token)`, never a shipment-table read or machine identity. The dispatcher
+is the privileged-write exception (DEC-010, T-022): it records Mengantar results through `dispatch_*`
 RPCs that only `service_role` may execute, so no user can forge a resi. Since T-023 the same
 machine identity (a static `service_role` JWT the app signs with the container environment secret `AUTH_JWT_SECRET`, never in the client bundle)
 serves `machine_seller_key` (the sealed key, opened only on the server) and
@@ -400,8 +473,9 @@ observed. Counts and executed checks are under "Verified counts and gates".
   all-audiences mode exists only on bare loopback names in a non-production build, or where
   `HOST_SHARED_MODE=1` (local `dev-env.sh` writes it for the container only; never staging/production). `*.workers.dev` hosts are no longer served (T-062); `internal.geraiexpress.local` is the fifth, internal-only name.
   `originFor` maps all four `*_ORIGIN` names and validates only the requested audience.
-  Current link callers read `APP_ORIGIN`: invitations through `appOrigin`, marketing through
-  `appHref`. `SITE_ORIGIN`, `OWNER_ORIGIN` and `HOOKS_ORIGIN` have no current application caller;
+  Link callers read `APP_ORIGIN`: invitations through `appOrigin`, marketing through
+  `appHref`; tracking links read per-environment `SITE_ORIGIN` through `originFor("public")`.
+  `OWNER_ORIGIN` and `HOOKS_ORIGIN` have no current application caller;
   the marketing `SITE_ORIGIN` constant is a fixed apex URL, not the environment variable.
   Missing `APP_ORIGIN` throws when a production-build link is built, including static marketing.
   The session cookies `gx_at` (access JWT) and `gx_rt` (refresh token) are written by `src/lib/db/session.ts` and rotated by
@@ -828,7 +902,7 @@ API.
 
 | Audience (host) | Routes served | Access |
 |---|---|---|
-| Public (apex `geraiexpress.com`, `staging.`) | `/` (marketing, without session resolution), `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`, `/robots.txt`, `/sitemap.xml`, `/healthz` | No session; the proxy resolves no session on this host |
+| Public (apex `geraiexpress.com`, `staging.`) | `/lacak/[token]` (non-marketing, anonymous fixed projection, noindex), `/` (marketing, without session resolution), `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`, `/robots.txt`, `/sitemap.xml`, `/healthz` | No session; the proxy resolves no session on this host |
 | Gerai application (`app.`, `app-staging.`) | `/` (gerai dashboard after account/workspace checks), `/masuk`, `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/undangan`, `/akses`, `/pilih-gerai`, `/api/mengantar/area`, `/robots.txt`, `/healthz`, and the workspace: `/pengiriman`, `/pengiriman/baru`, `/pengiriman/cetak`, `/pengiriman/[id]`, `/pengiriman/[id]/label`, `/pengiriman/[id]/invoice`, `/pengiriman/[id]/struk`, `/pengiriman/export.csv`, `/kas`, `/kontak`, `/kontak/[id]`, `/pengaturan`, `/anggota` | Workspace group: verified active membership; tenant from the `ge_tenant` selector validated against memberships; `/anggota` and the CSV export are tenant admin only |
 | Super Admin (`owner.`, `owner-staging.`) | `/`, `/masuk` (demo and registration hidden), `/verifikasi-2fa`, `/admin` (tenant directory with slug), `/admin/tenant/[id]` (masking control), `/admin/pengajuan`, `/admin/konfigurasi`, `/admin/pantau-pengajuan`, `/admin/pelanggan`, `/admin/pelanggan/[tenant]`, `/admin/integrasi`, `/admin/akses`, `/admin/audit`, `/admin/diskon`, `/admin/diskon/[tenant]`, `/robots.txt`, `/healthz` | Platform grant plus capability plus `aal2` with recent TOTP (`requirePlatform`) |
 | Hooks (`hooks.`, `hooks-staging.`) | the reserved prefix `/api/webhooks` (no route exists), `/healthz` | None today; cookies are stripped and none is set (the Send Email Hook route `/api/auth/send-email` was removed by T-066) |

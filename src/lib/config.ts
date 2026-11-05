@@ -24,9 +24,19 @@ export type ConfigName =
   // Mail transport for the emailed sign-in code, and the reverse proxy trust switch.
   | "MAIL_TRANSPORT" | "MAILPIT_URL" | "MAIL_FROM" | "TRUSTED_PROXY"
   // Scheduler secret for /api/internal/cron/*.
-  | "CRON_SECRET";
+  | "CRON_SECRET"
+  // Public tracking HMAC root, required (32+ bytes) when sharing in every environment.
+  | "TRACKING_TOKEN_SECRET";
 
 export function config(name: ConfigName): string | undefined {
   const value = process.env[name];
   return value?.trim() ? value : undefined;
+}
+
+// Required at the sharing boundary, never at build time. No development fallback: changing
+// the root unexpectedly would make repeat shares derive a different bearer capability.
+export function trackingTokenSecret(): string {
+  const value = config("TRACKING_TOKEN_SECRET");
+  if (!value || Buffer.byteLength(value) < 32) throw new Error("TRACKING_TOKEN_SECRET must contain at least 32 bytes");
+  return value;
 }

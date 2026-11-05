@@ -16,6 +16,8 @@ const ANON_EXECUTE = [
   // Returns one boolean (is self-registration open). The login page and the public landing flow
   // read it before a session exists; it exposes no tenant or identity data.
   "public.registration_open()",
+  // T-085: opaque bearer capability; fixed privacy projection, no table grant or shipment-id lookup.
+  "public.track_shipment(text)",
 ];
 
 // Functions the authenticated role may execute, full signatures `schema.name(argument types)`, ONE
@@ -84,6 +86,9 @@ const AUTHENTICATED_EXECUTE = [
   "public.platform_tenant_slugs()",
   "public.platform_tenant_summary(uuid)",
   "public.platform_tenants()",
+  // T-085: member-only generation reservation and hash publication, locked to one shipment.
+  "public.prepare_tracking_link(uuid)",
+  "public.publish_tracking_link(uuid,uuid,text)",
   "public.reconcile_shipment(uuid)",
   // Counter payment record (T-082); member, derived outlet/period, one active record per shipment.
   "public.record_counter_payment(uuid,text,bigint,bigint,text)",
@@ -101,6 +106,8 @@ const AUTHENTICATED_EXECUTE = [
   "public.reset_demo()",
   "public.review_unpaid_batch(uuid,uuid)",
   "public.revoke_invitation(uuid,integer)",
+  // T-085: tenant-admin-only revocation of the exact sharing generation, with audit.
+  "public.revoke_tracking_link(uuid,uuid)",
   "public.save_application(integer,text,text,text,text,text)",
   // T-100: bounded provider reference search, checked for active membership inside the RPC.
   "public.search_mengantar_areas(text,integer)",
