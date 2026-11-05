@@ -11,7 +11,7 @@ Independent-Review-Head: T-101 commit 0fd1be5 on top of merges ad326cb (T-082), 
 
 ## Wave 2: T-095, T-083, T-085 (PASS; integrated, not deployed)
 
-Three parallel worktrees, one ledger run each, migrations 20261105120000 (resi format lock),
+Three parallel worktrees, one passing ledger run each, migrations 20261105120000 (resi format lock),
 20261105130000 (cash period close) and 20261105140000 (tracking links); each passed its own gates and
 an independent GPT-6.1 Sol R3 digest review before merging in order T-095 (ffbb72f), T-083 (68d0b36),
 T-085 (e3d4de9).
