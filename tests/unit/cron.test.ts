@@ -39,7 +39,7 @@ vi.mock("@/lib/hosts", () => vi.importActual("../../src/lib/hosts"));
 vi.mock("@/lib/mengantar/scheduled", () => vi.importActual("../../src/lib/mengantar/scheduled"));
 vi.mock("@/lib/cron", () => vi.importActual("../../src/lib/cron"));
 
-const { runAuthPurge, runCleanup, runCredentialRewrap, runDemoCleanup, runDispatchSweep, scheduledFetch } = await import("../../src/lib/mengantar/scheduled");
+const { AUTH_PURGE_BATCH, AUTH_PURGE_MAX_BATCHES, runAuthPurge, runCleanup, runCredentialRewrap, runDemoCleanup, runDispatchSweep, scheduledFetch } = await import("../../src/lib/mengantar/scheduled");
 const { cleanupRpc } = await import("../../src/lib/mengantar/machine-deps");
 const { handleCron, resetCronLocks, secretMatches } = await import("../../src/lib/cron");
 const route = await import("../../src/app/api/internal/cron/[task]/route");
@@ -163,14 +163,58 @@ describe("demo cleanup (T-030 / T-051 / DIL-19)", () => {
   });
 });
 
-describe("auth purge and combined hourly cleanup (T-065 / T-066)", () => {
-  it("invokes auth_purge_expired and logs auth_purge counts", async () => {
+describe("auth purge and combined hourly cleanup (T-065 / T-066 / T-104)", () => {
+  it("invokes auth_purge_expired with the batch size and logs auth_purge counts", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    rpcMock.mockResolvedValueOnce({ data: { sessions: 7, otp_codes: 12 }, error: null });
+    rpcMock.mockResolvedValueOnce({ data: { sessions: 7, otp_codes: 12, remaining: false }, error: null });
     await expect(runAuthPurge(CLEANUP_ONLY)).resolves.toBe("done");
     expect(sweepMock).not.toHaveBeenCalled();
-    expect(rpcMock).toHaveBeenCalledExactlyOnceWith("auth_purge_expired", {});
-    expect(JSON.parse(String(log.mock.calls[0][0]))).toEqual({ event: "auth_purge", sessions: 7, otpCodes: 12, failed: false });
+    expect(rpcMock).toHaveBeenCalledExactlyOnceWith("auth_purge_expired", { p_limit: AUTH_PURGE_BATCH });
+    expect(JSON.parse(String(log.mock.calls[0][0]))).toEqual({ event: "auth_purge", sessions: 7, otpCodes: 12, hasMore: false, failed: false });
+  });
+
+  it("runs further batches while work remains, bounded per run, and sums the counts", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    rpcMock
+      .mockResolvedValueOnce({ data: { sessions: 1000, otp_codes: 3, remaining: true }, error: null })
+      .mockResolvedValueOnce({ data: { sessions: 5, otp_codes: 0, remaining: false }, error: null });
+    await expect(runAuthPurge(CLEANUP_ONLY)).resolves.toBe("done");
+    expect(rpcMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(log.mock.calls.at(-1)![0]))).toEqual({ event: "auth_purge", sessions: 1005, otpCodes: 3, hasMore: false, failed: false });
+
+    rpcMock.mockReset();
+    rpcMock.mockResolvedValue({ data: { sessions: 1000, otp_codes: 1000, remaining: true }, error: null });
+    await expect(runAuthPurge(CLEANUP_ONLY)).resolves.toBe("done");
+    expect(rpcMock).toHaveBeenCalledTimes(AUTH_PURGE_MAX_BATCHES);
+    expect(JSON.parse(String(log.mock.calls.at(-1)![0]))).toMatchObject({ hasMore: true, failed: false });
+  });
+
+  it("treats a null or malformed reply as failed, not as zero work", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    for (const data of [null, undefined, [], "ok", { sessions: 1, otp_codes: 2 }, { sessions: "1", otp_codes: 2, remaining: false },
+      { sessions: -1, otp_codes: 0, remaining: false }, { sessions: 0, otp_codes: null, remaining: false }]) {
+      rpcMock.mockResolvedValueOnce({ data, error: null });
+      await expect(runAuthPurge(CLEANUP_ONLY), JSON.stringify(data)).resolves.toBe("failed");
+      expect(JSON.parse(String(log.mock.calls.at(-1)![0]))).toMatchObject({ event: "auth_purge", failed: true });
+    }
+    // A failure after a successful batch keeps the counts already purged.
+    rpcMock
+      .mockResolvedValueOnce({ data: { sessions: 2, otp_codes: 3, remaining: true }, error: null })
+      .mockResolvedValueOnce({ data: { sessions: 2 }, error: null });
+    await expect(runAuthPurge(CLEANUP_ONLY)).resolves.toBe("failed");
+    expect(JSON.parse(String(log.mock.calls.at(-1)![0]))).toEqual({ event: "auth_purge", sessions: 2, otpCodes: 3, hasMore: true, failed: true });
+  });
+
+  it("stops before the next batch once the scheduled deadline aborted", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const controller = new AbortController();
+    rpcMock.mockImplementationOnce(async () => {
+      controller.abort(new DOMException("deadline", "TimeoutError"));
+      return { data: { sessions: 1000, otp_codes: 0, remaining: true }, error: null };
+    });
+    await expect(runAuthPurge(CLEANUP_ONLY, controller.signal)).resolves.toBe("failed");
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(log.mock.calls.at(-1)![0]))).toEqual({ event: "auth_purge", sessions: 1000, otpCodes: 0, hasMore: true, failed: true });
   });
 
   it("does nothing when the URL or the JWT secret is missing", async () => {
@@ -189,14 +233,14 @@ describe("auth purge and combined hourly cleanup (T-065 / T-066)", () => {
     await expect(runAuthPurge(VALID_BINDINGS)).resolves.toBe("failed");
     rpcMock.mockRejectedValueOnce(new Error("network"));
     await expect(runAuthPurge(VALID_BINDINGS)).resolves.toBe("failed");
-    expect(JSON.parse(String(log.mock.calls.at(-1)![0]))).toEqual({ event: "auth_purge", sessions: 0, otpCodes: 0, failed: true });
+    expect(JSON.parse(String(log.mock.calls.at(-1)![0]))).toEqual({ event: "auth_purge", sessions: 0, otpCodes: 0, hasMore: true, failed: true });
 
     rpcMock
       .mockResolvedValueOnce({ data: { deleted_tenants: 1, deleted_users: 1, has_more: false }, error: { message: "demo_err" } })
-      .mockResolvedValueOnce({ data: { sessions: 3, otp_codes: 4 }, error: null });
+      .mockResolvedValueOnce({ data: { sessions: 3, otp_codes: 4, remaining: false }, error: null });
     await expect(runCleanup(CLEANUP_ONLY)).resolves.toBe("failed");
     const events = log.mock.calls.map((c) => JSON.parse(String(c[0])));
-    expect(events.filter((e) => e.event === "auth_purge").at(-1)).toEqual({ event: "auth_purge", sessions: 3, otpCodes: 4, failed: false });
+    expect(events.filter((e) => e.event === "auth_purge").at(-1)).toEqual({ event: "auth_purge", sessions: 3, otpCodes: 4, hasMore: false, failed: false });
     // A cleanup-only configuration has no key ring: the rewrap step is disabled, not failed.
     expect(events.at(-1)).toEqual({ event: "credential_rewrap", disabled: true });
   });
@@ -242,7 +286,7 @@ describe("hourly credential rewrap (T-057, SEC-7)", () => {
     tenantPages.mockResolvedValueOnce({ data: [{ id: "00000000-0000-4000-a000-0000000000c1" }], error: null });
     rpcMock
       .mockResolvedValueOnce({ data: { deleted_tenants: 0, deleted_users: 0, has_more: false }, error: null })
-      .mockResolvedValueOnce({ data: { sessions: 0, otp_codes: 0 }, error: null })
+      .mockResolvedValueOnce({ data: { sessions: 0, otp_codes: 0, remaining: false }, error: null })
       .mockResolvedValueOnce({ data: null, error: { message: "boom" } });
     await expect(runCleanup(RING)).resolves.toBe("failed");
     expect(rpcMock).toHaveBeenLastCalledWith("machine_seller_key", { p_tenant: "00000000-0000-4000-a000-0000000000c1", p_env: "sandbox" });
@@ -265,7 +309,9 @@ describe("the internal cron route gates (T-062)", () => {
     vi.stubEnv("CREDENTIAL_KEY", VALID_BINDINGS.CREDENTIAL_KEY!);
     vi.stubEnv("MENGANTAR_ENV", "sandbox");
     sweepMock.mockResolvedValue(EMPTY_SWEEP);
-    rpcMock.mockResolvedValue({ data: { deleted_tenants: 0, deleted_users: 0, has_more: false }, error: null });
+    rpcMock.mockImplementation(async (fn) => fn === "auth_purge_expired"
+      ? { data: { sessions: 0, otp_codes: 0, remaining: false }, error: null }
+      : { data: { deleted_tenants: 0, deleted_users: 0, has_more: false }, error: null });
     vi.spyOn(console, "log").mockImplementation(() => {});
   });
 
@@ -324,7 +370,7 @@ describe("the internal cron route gates (T-062)", () => {
     expect(cleanup.status).toBe(200);
     expect(await cleanup.json()).toEqual({ task: "cleanup", result: "done" });
     expect(rpcMock).toHaveBeenNthCalledWith(1, "cleanup_expired_demos", { p_max_age_hours: 24 });
-    expect(rpcMock).toHaveBeenNthCalledWith(2, "auth_purge_expired", {});
+    expect(rpcMock).toHaveBeenNthCalledWith(2, "auth_purge_expired", { p_limit: AUTH_PURGE_BATCH });
     expect(sweepMock).toHaveBeenCalledTimes(1);
   });
 

@@ -81,25 +81,50 @@ export async function runDemoCleanup(env: MachineBindings, signal?: AbortSignal)
   }
 }
 
-// Hourly expired-auth purge (T-065 / T-066): removes sessions dead for > 7 days and OTP codes older
-// than 1 day. Like demo cleanup, needs only the PostgREST URL and the JWT secret.
+// T-104: auth_purge_expired deletes at most AUTH_PURGE_BATCH rows per table per call; one hourly run
+// drains at most AUTH_PURGE_MAX_BATCHES batches and leaves the rest (hasMore) to the next run.
+export const AUTH_PURGE_BATCH = 1000;
+export const AUTH_PURGE_MAX_BATCHES = 10;
+
+type AuthPurgeBatch = { sessions: number; otpCodes: number; remaining: boolean };
+
+// A missing or malformed reply is a failure, never "nothing to purge".
+function authPurgeBatch(data: unknown): AuthPurgeBatch | null {
+  const row: unknown = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== "object") return null;
+  const { sessions, otp_codes: otpCodes, remaining } = row as Record<string, unknown>;
+  const count = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
+  if (!count(sessions) || !count(otpCodes) || typeof remaining !== "boolean") return null;
+  return { sessions, otpCodes, remaining };
+}
+
+// Hourly expired-auth purge (T-065 / T-066 / T-104): removes sessions dead for > 7 days and OTP codes
+// older than 1 day in bounded batches. Like demo cleanup, needs only the PostgREST URL and the JWT secret.
 export async function runAuthPurge(env: MachineBindings, signal?: AbortSignal): Promise<TaskResult> {
   const rpc = cleanupRpc(env, scheduledFetch(signal));
   if (!rpc) return "disabled";
+  let sessions = 0;
+  let otpCodes = 0;
+  let hasMore = true;
+  const log = (failed: boolean) =>
+    console.log(JSON.stringify({ event: "auth_purge", sessions, otpCodes, hasMore, failed }));
   try {
-    const { data, error } = await rpc("auth_purge_expired", {});
-    const row: { sessions?: number; otp_codes?: number } | null | undefined = Array.isArray(data) ? data[0] : data;
-    console.log(
-      JSON.stringify({
-        event: "auth_purge",
-        sessions: row?.sessions ?? 0,
-        otpCodes: row?.otp_codes ?? 0,
-        failed: Boolean(error),
-      }),
-    );
-    return error ? "failed" : "done";
+    for (let batch = 0; hasMore && batch < AUTH_PURGE_MAX_BATCHES; batch++) {
+      signal?.throwIfAborted();
+      const { data, error } = await rpc("auth_purge_expired", { p_limit: AUTH_PURGE_BATCH });
+      const result = error ? null : authPurgeBatch(data);
+      if (!result) {
+        log(true);
+        return "failed";
+      }
+      sessions += result.sessions;
+      otpCodes += result.otpCodes;
+      hasMore = result.remaining;
+    }
+    log(false);
+    return "done";
   } catch {
-    console.log(JSON.stringify({ event: "auth_purge", sessions: 0, otpCodes: 0, failed: true }));
+    log(true);
     return "failed";
   }
 }

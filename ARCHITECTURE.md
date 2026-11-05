@@ -559,7 +559,8 @@ observed. Counts and executed checks are under "Verified counts and gates".
   claim; a 400/403 or readable zero-count answer is read back per order: all paid → paid,
   complete and none paid → rejected (`payment_not_applied` for zero), otherwise unknown.
   Count mismatches are audited; `private.payment_busy` treats sent/unknown as busy for two
-  minutes. Lock order: operations, shipments, membership, tenant, attempt. T-053 shows sent/unknown
+  minutes. Lock order: operations, shipments, membership, tenant, attempt (T-104 applies the same
+  shipment → membership order to `void_counter_payment`, `revoke_tracking_link` and `reconcile_shipment`). T-053 shows sent/unknown
   attempts as reconcile-only and hides payment; an admin close is still missing (T-056).
 - **Pickup (T-043).** `shipments.handover` (`dropoff` or `pickup`) with date, start hour, volume
   class and note is frozen at confirmation. Pickup runs `GET /time`, a stored `reserving` phase,
@@ -772,7 +773,24 @@ observed. Counts and executed checks are under "Verified counts and gates".
   (anon: `registration_open()` only; authenticated: user-callable functions; machine-only
   RPCs: `service_role`), rejects overloads, sweeps relations (RLS, no anon, views need
   `security_invoker`) and function bodies (`'40001'`, `serialization_failure`), and pins the
-  column-scoped writes. `db/seed.sql` refuses to run unless the database name starts with `gx` and the
+  column-scoped writes.
+- **Database hardening (T-104, `20261105180000_db_hardening.sql`).** `service_role` keeps exactly
+  one direct table privilege, SELECT on `public.tenants` (the credential rewrap's `listTenantIds`);
+  every other table privilege the foundation default ACL had granted it is revoked, so label history,
+  shipments and memberships are written only through SECURITY DEFINER RPCs (pinned in
+  `tests/db/privileges.test.ts`). `private.lock_member_shipment` rechecks `require_member` after its
+  `FOR UPDATE`, so a member deactivated while waiting is refused with `not_found` (P0002) and writes
+  nothing (payments, receipts, tracking, cases, labels). Every RPC that locks a shipment and
+  memberships locks the shipment first: `void_counter_payment` (memberships FOR UPDATE),
+  `revoke_tracking_link` (cheap admin check, shipment, then `require_tenant_admin_locked`),
+  `reconcile_shipment`, `close_ambiguous_pickup_reservation`, `close_unknown_batch_payment` and
+  `authorize_batch_payment` (own membership FOR SHARE). `pilot_report` inlines its scope CTE (`NOT
+  MATERIALIZED`) so the date predicates reach `shipments_issued_at_idx` (tenant, issued_at) and
+  `counter_payments_active_recorded_idx` (tenant, recorded_at, active rows). `auth_issue_otp` no longer
+  deletes other addresses' expired codes; `auth_purge_expired(p_limit)` purges in bounded,
+  lock-skipping batches (`otp_codes_created_idx`, `sessions_purge_idx`) and the hourly cleanup loops at
+  most 10 batches.
+  Tests: `tests/db/db-hardening.test.ts`, `auth-core`, `masking-acceptance`, `privileges`, `tests/unit/cron.test.ts`. `db/seed.sql` refuses to run unless the database name starts with `gx` and the
   marker `app.gx_local=on` (set only by `compose.db.yaml`) is present.
 - **Marketing (T-036).** No numeric commission, fee, payout or partnership copy; `/simulasi` is a
   neutral "Model layanan" page; couriers derive from `OFFERED_COURIERS` minus
