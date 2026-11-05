@@ -577,7 +577,18 @@ observed. Counts and executed checks are under "Verified counts and gates".
   `masking_allowed` (`platform_set_masking_allowed`, `tenant_governance`, `aal2`;
   T-053 screen `/admin/tenant/[id]` with `platform_tenant_masking`, reason and confirmation),
   append-only `label_snapshots` and `label_print_events`, `create_label_snapshot`,
-  `record_label_print`. The label page renders a 100x100 mm parcel in either format: `10x15`
+  `record_label_print(uuid, boolean)`. T-084 (`20261105150000_masking_acceptance.sql`, PR-46):
+  `private.masking_acceptance` per courier (missing row or NULL courier = `unverified`), member read
+  `masking_acceptance_for`, platform read/write `platform_masking_acceptance` /
+  `platform_set_masking_acceptance` (`integration_operations`, `aal2`, reason, evidence, 55000 stale
+  guard, audit `masking_acceptance.set`, screen on `/admin/integrasi`). The old
+  `record_label_print(uuid)` is dropped; the acknowledgement has no default, a masked print of a
+  not-verified courier without it is refused (`masking_acknowledgement_required`, 55000), and masked
+  label events store `acceptance_state`/`acknowledged` (NULL for unmasked labels and receipts).
+  Label, batch (one acknowledgement listing the couriers) and invoice views share
+  `src/modules/labels/masking-acceptance.tsx`; the screen-only return note comes from the pure
+  `src/modules/labels/return-destination.ts` with provinces from `label_return_routes(uuid[])`.
+  The label layout is unchanged. The label page renders a 100x100 mm parcel in either format: `10x15`
   (default) adds a detachable 100x50 mm customer slip below the cut line on one 100x150 mm page;
   `10x10` is parcel only. The slip has frozen gerai logo/name and courier/service on one row,
   then Code128 AWB bars and the AWB number, with no sender/recipient contacts or gerai WhatsApp.

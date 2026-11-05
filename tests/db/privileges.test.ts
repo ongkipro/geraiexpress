@@ -54,6 +54,10 @@ const AUTHENTICATED_EXECUTE = [
   "public.deactivate_member(uuid,uuid,integer)",
   "public.gerai_cost_for_quote(uuid,uuid)",
   "public.invite_member(uuid,text,text)",
+  // T-084: provinces of the caller's shipments for the return-destination note; membership-filtered.
+  "public.label_return_routes(uuid[])",
+  // T-084: one courier's masking acceptance for any active member; never the recorder.
+  "public.masking_acceptance_for(text)",
   "public.my_account_state()",
   "public.my_invitations()",
   "public.partner_onboarding_status(uuid)",
@@ -68,6 +72,8 @@ const AUTHENTICATED_EXECUTE = [
   "public.platform_discount_observations(uuid)",
   "public.platform_discount_overview()",
   "public.platform_integrations()",
+  // T-084: integration_operations at aal2 reads and changes per-courier masking acceptance (reason, audit).
+  "public.platform_masking_acceptance()",
   "public.platform_overview()",
   "public.platform_partner_config()",
   "public.platform_pending_applications()",
@@ -76,6 +82,7 @@ const AUTHENTICATED_EXECUTE = [
   "public.platform_set_billable_weight_rule(jsonb,text)",
   "public.platform_set_gerai_discount(uuid,integer,integer,date,text,text,text,text)",
   "public.platform_set_grant(text,text[],text)",
+  "public.platform_set_masking_acceptance(text,text,text,timestamp with time zone,text)",
   "public.platform_set_masking_allowed(uuid,boolean,text)",
   "public.platform_set_partner_id(text,text)",
   "public.platform_set_registration(boolean,text)",
@@ -93,7 +100,8 @@ const AUTHENTICATED_EXECUTE = [
   // Counter payment record (T-082); member, derived outlet/period, one active record per shipment.
   "public.record_counter_payment(uuid,text,bigint,bigint,text)",
   "public.record_export(uuid,text,jsonb,integer,boolean)",
-  "public.record_label_print(uuid)",
+  // T-084: the PR-46 acknowledgement is a required argument (no default); the old (uuid) is dropped.
+  "public.record_label_print(uuid,boolean)",
   // Receipt print request (T-082); member, active payment or COD with preview-checked frozen identity.
   "public.record_receipt_print(uuid,uuid,text,text,text)",
   "public.registration_open()",

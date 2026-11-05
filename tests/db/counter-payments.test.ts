@@ -356,7 +356,7 @@ describe("record_receipt_print (T-082)", () => {
       p_shipment: shipment, p_mask: true, p_size: "10x15", p_sender_name: "Toko Uji", p_sender_phone: "081311112222", p_sender_city: "Bandung",
     });
     expect(label.error).toBeNull();
-    expect((await operator.rpc("record_label_print", { p_snapshot: label.data })).error).toBeNull();
+    expect((await operator.rpc("record_label_print", { p_snapshot: label.data, p_acknowledged: true })).error).toBeNull();
     expect(sql(`select kind || '|' || size || '|' || (receipt_payment_id is null)
       from public.label_print_events where shipment_id = '${shipment}'`)).toBe("label|10x15|true");
     const actor = sql(`select id from auth.users where email = 'operator-a@geraiexpress.test'`);

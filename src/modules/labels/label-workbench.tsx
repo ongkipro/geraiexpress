@@ -16,10 +16,16 @@ import {
   type LabelChoice, type LabelFacts, type LabelSize, type LabelSnapshot, type SenderErrors, type SenderInput,
 } from "@/lib/label-content";
 import { printLabelAction } from "./actions";
-import { FORMAT_LOCKED, LABEL_UNKNOWN_RESULT, MASKING_DISABLED, RETENTION_NOTE, WHATSAPP_MISSING } from "./messages";
+import { FORMAT_LOCKED, LABEL_UNKNOWN_RESULT, MASKING_ACK_REQUIRED, MASKING_DISABLED, RETENTION_NOTE, WHATSAPP_MISSING } from "./messages";
+import { MaskingAcceptanceGate, ReturnDestinationNotes } from "./masking-acceptance";
+import { acceptanceHistoryLabel, acceptanceShortLabel, type AcceptanceState, type CourierAcceptance } from "./masking-acceptance-state";
 import { PendingLabel, PreviewDesk, ScaledSheet, SegmentedControl, ZOOM_OPTIONS, type Zoom } from "./print-ui";
 
-export type PrintHistoryEntry = { id: number; at: string; version: number; size: LabelSize; mask: boolean };
+export type PrintHistoryEntry = {
+  id: number; at: string; version: number; size: LabelSize; mask: boolean;
+  // PR-46: the courier's acceptance at print time and the operator's acknowledgement (NULL when unmasked).
+  acceptanceState: AcceptanceState | null; acknowledged: boolean | null;
+};
 
 const SIZE_OPTIONS = (Object.keys(LABEL_SIZES) as LabelSize[]).map((key) => ({ value: key, label: LABEL_SIZES[key].label }));
 
@@ -50,7 +56,7 @@ function writePreference(key: string, value: Preference) {
 // same facts the snapshot command reads; once printed, the sheet is rendered from the stored snapshot the
 // command returned, and a reprint of an unchanged choice is another print event on that same snapshot.
 export function LabelWorkbench({
-  shipmentId, facts, role, maskingAllowed, snapshots, history, preferenceKey, initialSender, lockedSize,
+  shipmentId, facts, role, maskingAllowed, snapshots, history, preferenceKey, initialSender, lockedSize, acceptance, returnNote,
 }: {
   shipmentId: string;
   facts: LabelFacts;
@@ -62,6 +68,9 @@ export function LabelWorkbench({
   preferenceKey: string;
   // T-094: the masked sender starts from the shipment's own sender and stays editable.
   initialSender: SenderInput;
+  // T-084 / PR-46: the courier's masking acceptance and the return-destination help text.
+  acceptance: CourierAcceptance;
+  returnNote: string;
 }) {
   const router = useRouter();
   const [mask, setMask] = useState(false);
@@ -75,6 +84,8 @@ export function LabelWorkbench({
   const [printed, setPrinted] = useState<LabelSnapshot | null>(null);
   const [printNonce, setPrintNonce] = useState(0);
   const [pending, startTransition] = useTransition();
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [ackError, setAckError] = useState(false);
   const fieldRefs = {
     name: useRef<HTMLInputElement>(null), phone: useRef<HTMLInputElement>(null),
     address: useRef<HTMLInputElement>(null), city: useRef<HTMLInputElement>(null),
@@ -90,6 +101,8 @@ export function LabelWorkbench({
   const content = reuse ? contentFromSnapshot(stored) : buildLabelContent(facts, choice);
   const whatsappBlocked = !effectiveMask && !facts.geraiWhatsapp;
   const hasSnapshot = snapshots.length > 0;
+  // PR-46: a masked print of a courier without recorded acceptance needs the explicit acknowledgement.
+  const needsAck = effectiveMask && acceptance.state !== "verified";
 
   // Restore the tab's remembered choice after hydration (the server render always shows the defaults).
   useEffect(() => {
@@ -111,6 +124,7 @@ export function LabelWorkbench({
     const value = { mask: next.mask ?? mask, size: next.size ?? size };
     setMask(value.mask);
     setSize(value.size);
+    if (!value.mask) { setAcknowledged(false); setAckError(false); }
     writePreference(preferenceKey, value);
     setFailure(null);
     setNotice(null);
@@ -140,14 +154,20 @@ export function LabelWorkbench({
         return;
       }
     }
+    if (needsAck && !acknowledged) {
+      setAckError(true);
+      document.getElementById("masking-ack")?.focus();
+      return;
+    }
     startTransition(async () => {
       try {
-        const result = await printLabelAction({ shipmentId, mask: effectiveMask, size, sender });
+        const result = await printLabelAction({ shipmentId, mask: effectiveMask, size, sender, acknowledged: effectiveMask && acknowledged });
         if (!result.ok) {
           setErrors(result.fieldErrors ?? {});
           setFailure(result.error);
           setReconcile(result.reconcile === true);
           if (result.error === FORMAT_LOCKED) router.refresh();
+          if (result.error === MASKING_ACK_REQUIRED) setAckError(true);
           return;
         }
         setPrinted(result.snapshot);
@@ -184,6 +204,9 @@ export function LabelWorkbench({
             <span className="flex min-w-0 flex-col">
               <span>Gunakan masking pengirim</span>
               <span data-testid="mask-state" className="text-sm text-muted-foreground">{effectiveMask ? "Aktif" : "Nonaktif"}</span>
+              {maskingAllowed && acceptance.state !== "verified" ? (
+                <span data-testid="mask-acceptance-state" className="text-sm text-warning">{acceptanceShortLabel(acceptance)}</span>
+              ) : null}
             </span>
             <input
               type="checkbox"
@@ -227,6 +250,18 @@ export function LabelWorkbench({
                 </div>
               ))}
             </div>
+          ) : null}
+          {effectiveMask ? (
+            <>
+              <MaskingAcceptanceGate
+                pending={needsAck ? [acceptance] : []}
+                acknowledged={acknowledged}
+                onAcknowledgedChange={(value) => { setAcknowledged(value); setAckError(false); setFailure(null); }}
+                disabled={pending}
+                error={ackError}
+              />
+              <ReturnDestinationNotes notes={[{ key: "single", text: returnNote }]} />
+            </>
           ) : null}
           {role === "tenant_admin" ? <p className="text-sm text-muted-foreground" data-testid="retention-note">{RETENTION_NOTE}</p> : null}
         </div>
@@ -300,7 +335,10 @@ export function LabelWorkbench({
           <ol data-testid="print-history" className="flex flex-col divide-y divide-border">
             {history.map((entry) => (
               <li key={entry.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-2 text-sm first:pt-0 last:pb-0">
-                <span>Versi {entry.version} · {LABEL_SIZES[entry.size].label} · {entry.mask ? "Masking pengirim" : "Identitas gerai"}</span>
+                <span>
+                  Versi {entry.version} · {LABEL_SIZES[entry.size].label} · {entry.mask ? "Masking pengirim" : "Identitas gerai"}
+                  {acceptanceHistoryLabel(entry.acceptanceState, entry.acknowledged) ? <> · {acceptanceHistoryLabel(entry.acceptanceState, entry.acknowledged)}</> : null}
+                </span>
                 <time dateTime={entry.at} className="tabular text-muted-foreground">{formatWib(entry.at)}</time>
               </li>
             ))}

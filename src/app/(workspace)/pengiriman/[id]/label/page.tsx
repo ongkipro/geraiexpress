@@ -6,6 +6,8 @@ import { dbServer } from "@/lib/db/server";
 import { requireWorkspace } from "@/lib/workspace";
 import { readGeraiLogo } from "@/lib/gerai-logo-server";
 import { LabelWorkbench, type PrintHistoryEntry } from "@/modules/labels/label-workbench";
+import { isAcceptanceState } from "@/modules/labels/masking-acceptance-state";
+import { returnDestinationNote } from "@/modules/labels/return-destination";
 import { PrintHeader } from "../print-header";
 import { PrintButton } from "./print-button";
 
@@ -30,22 +32,32 @@ export default async function LabelPage({ params }: { params: Promise<{ id: stri
 
   if (!s.is_simulated) {
     if (s.submission_state !== "issued" || !s.awb) redirect(`/pengiriman/${s.id}`);
-    const [{ data: tenant }, { data: snapshotRows }, { data: events }, { data: firstSnapshot, error: formatError }] = await Promise.all([
+    const courier = quote?.courier ?? null;
+    const [{ data: tenant }, { data: snapshotRows }, { data: events }, { data: firstSnapshot, error: formatError }, acceptance, routes] = await Promise.all([
       db.from("tenants").select("name, contact_whatsapp, masking_allowed").eq("id", ws.tenant.id).maybeSingle(),
       db.from("label_snapshots").select(SNAPSHOT_COLUMNS).eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id)
         .order("version", { ascending: false }).limit(20),
-      db.from("label_print_events").select("id, snapshot_id, size, created_at").eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id).eq("kind", "label")
+      db.from("label_print_events").select("id, snapshot_id, size, created_at, acceptance_state, acknowledged").eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id).eq("kind", "label")
         .order("id", { ascending: false }).limit(20),
       db.from("label_snapshots").select("size").eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id)
         .order("version", { ascending: true }).limit(1).maybeSingle(),
+      // PR-46: a NULL courier is `unverified` without asking the database.
+      courier ? db.rpc("masking_acceptance_for", { p_courier: courier }) : Promise.resolve({ data: null, error: null }),
+      db.rpc("label_return_routes", { p_shipments: [s.id] }),
     ]);
     if (formatError) throw new Error("Format resi belum bisa dimuat. Muat ulang halaman.");
+    // A failed read is treated as unverified (fail closed: the acknowledgement is asked for).
+    const acceptanceState = (acceptance.data as { state?: unknown } | null)?.state;
+    const route = ((routes.data ?? []) as { origin_province: string | null; destination_province: string | null }[])[0];
     if (!tenant) notFound();
     const snapshots = (snapshotRows ?? []) as unknown as LabelSnapshot[];
     const byId = new Map(snapshots.map((snapshot) => [snapshot.id, snapshot]));
     const history: PrintHistoryEntry[] = (events ?? []).flatMap((e) => {
       const snapshot = byId.get(e.snapshot_id);
-      return snapshot ? [{ id: e.id, at: e.created_at, version: snapshot.version, size: snapshot.size, mask: snapshot.mask_sender }] : [];
+      return snapshot ? [{
+        id: e.id, at: e.created_at, version: snapshot.version, size: snapshot.size, mask: snapshot.mask_sender,
+        acceptanceState: isAcceptanceState(e.acceptance_state) ? e.acceptance_state : null, acknowledged: e.acknowledged ?? null,
+      }] : [];
     });
     const logo = await readGeraiLogo(ws.tenant.id);
     const facts: LabelFacts = {
@@ -71,6 +83,9 @@ export default async function LabelPage({ params }: { params: Promise<{ id: stri
           history={history}
           preferenceKey={`gx:label-choice:${ws.tenant.id}:${ws.userId}`}
           initialSender={senderFromShipment(s)}
+          acceptance={{ courier, state: isAcceptanceState(acceptanceState) && !acceptance.error ? acceptanceState : "unverified" }}
+          returnNote={returnDestinationNote(courier, { originProvince: route?.origin_province ?? null, destinationProvince: route?.destination_province ?? null },
+            pickup.address ?? ws.outlet.pickupAddress)}
         />
       </div>
     );

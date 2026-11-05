@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { printBatchLabelsAction } from "../../src/modules/labels/batch-actions";
-import { FORMAT_LOCKED, LABEL_UNKNOWN_RESULT } from "../../src/modules/labels/messages";
+import { FORMAT_LOCKED, LABEL_UNKNOWN_RESULT, MASKING_ACK_REQUIRED } from "../../src/modules/labels/messages";
 
 const id = "00000000-0000-4000-b000-000000000001";
 const otherId = "00000000-0000-4000-b000-000000000002";
 const tenantId = "00000000-0000-4000-b000-000000000003";
-const input = { ids: [id], mask: false, size: "10x15", city: "" };
+const input = { ids: [id], mask: false, size: "10x15", city: "", acknowledged: false };
 const row = { id, reference: "GX1", submission_state: "issued", awb: "JP12345678", is_simulated: false };
 const rpc = vi.fn();
 const eq = vi.fn();
@@ -31,6 +31,7 @@ describe("printBatchLabelsAction", () => {
     { ...input, ids: ["bad"] }, { ...input, ids: [`${id},${otherId}`] },
     { ...input, ids: Array(51).fill(id) }, { ...input, mask: "true" },
     { ...input, size: "A4" }, { ...input, city: null }, { ...input, city: "x".repeat(101) },
+    { ...input, acknowledged: undefined }, { ...input, acknowledged: "yes" },
   ])("rejects malformed payload %# before DB access", async (payload) => {
     expect(await printBatchLabelsAction(payload as typeof input)).toEqual({ snapshots: [], error: "Pilihan label tidak valid." });
     expect(from).not.toHaveBeenCalled();
@@ -67,5 +68,24 @@ describe("printBatchLabelsAction", () => {
     expect(await printBatchLabelsAction(input)).toEqual({ snapshots: [], error: `GX1: ${LABEL_UNKNOWN_RESULT}`, reconcile: true });
     expect(rpc).toHaveBeenCalledTimes(2);
     expect(eq.mock.calls.filter(([column]) => column === "tenant_id")).toEqual([["tenant_id", tenantId], ["tenant_id", tenantId]]);
+  });
+
+  // T-084 / PR-46: one acknowledgement per batch.
+  const maskedRow = { ...row, sender_name: "Toko Uji", sender_phone: "081311112222", sender_address: null, sender_area: "Bandung", quote: { courier: "JT" } };
+
+  it("refuses an unacknowledged masked batch with an unverified courier before any snapshot or print", async () => {
+    rows.mockResolvedValue({ data: [maskedRow], error: null });
+    rpc.mockImplementation(async (name: string) => ({ data: name === "masking_acceptance_for" ? { state: "unverified" } : null, error: null }));
+    expect(await printBatchLabelsAction({ ...input, mask: true })).toEqual({ snapshots: [], error: MASKING_ACK_REQUIRED });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("masking_acceptance_for", { p_courier: "JT" });
+  });
+
+  it("passes the batch acknowledgement to every masked record_label_print", async () => {
+    rows.mockResolvedValue({ data: [maskedRow], error: null });
+    maybeSingle.mockResolvedValueOnce({ data: { contact_whatsapp: "081234567890", masking_allowed: true }, error: null })
+      .mockResolvedValueOnce({ data: { id: otherId }, error: null });
+    expect(await printBatchLabelsAction({ ...input, mask: true, acknowledged: true })).toEqual({ snapshots: [{ id: otherId }] });
+    expect(rpc).not.toHaveBeenCalledWith("masking_acceptance_for", expect.anything());
+    expect(rpc).toHaveBeenCalledWith("record_label_print", { p_snapshot: otherId, p_acknowledged: true });
   });
 });

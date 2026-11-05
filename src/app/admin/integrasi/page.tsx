@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { AlertCircle, CheckCircle2, ChevronDown, FlaskConical, HelpCircle, Plug, Rocket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatWib } from "@/lib/format";
+import { COURIER_NAME, formatWib } from "@/lib/format";
+import { OFFERED_COURIERS } from "@/lib/mengantar/public-api";
 import { platformTitle, requirePlatform } from "@/lib/platform";
 import { dbServer } from "@/lib/db/server";
 import { keyMaterialFromReader } from "@/lib/credential-crypto";
@@ -12,8 +13,16 @@ import { PartnerIdForm } from "@/modules/credentials/forms";
 import { Notice } from "@/components/notice";
 import { EmptyState, LifecycleBadge, PageHeader, RT, SectionHeader } from "../ui";
 import { LoadError } from "@/components/notice";
+import { MaskingAcceptanceForm } from "./masking-acceptance-form";
 
 export const generateMetadata = (): Promise<Metadata> => platformTitle("Integrasi Mengantar · Super Admin", ["integration_operations"]);
+
+type AcceptanceRow = { courier: string; state: "unverified" | "verified" | "refused"; evidence_ref: string | null; recorded_at: string; recorded_by_email: string | null };
+const ACCEPTANCE: Record<AcceptanceRow["state"], { label: string; ok: boolean | null }> = {
+  unverified: { label: "Belum terverifikasi", ok: null },
+  verified: { label: "Terverifikasi", ok: true },
+  refused: { label: "Ditolak kurir", ok: false },
+};
 
 type Row = { tenant_id: string; tenant_name: string; lifecycle: string; configured: boolean; mode: string | null; hint: string | null; version: number | null; stored_at: string | null };
 
@@ -40,16 +49,20 @@ const ENVIRONMENT_NOTE: Record<string, string> = {
 export default async function IntegrationsPage() {
   await requirePlatform("integration_operations");
   const db = await dbServer();
-  const [{ data: partnerConfig, error: pe }, { data: raw, error: re }] = await Promise.all([
+  const [{ data: partnerConfig, error: pe }, { data: raw, error: re }, { data: acceptanceRaw, error: ae }] = await Promise.all([
     db.rpc("platform_partner_config"),
     db.rpc("platform_integrations"),
+    db.rpc("platform_masking_acceptance"),
   ]);
-  if (pe || re) return <LoadError title="Integrasi Mengantar" what="Konfigurasi Partner atau daftar akun penjual" />;
+  if (pe || re || ae) return <LoadError title="Integrasi Mengantar" what="Konfigurasi Partner atau daftar akun penjual" />;
   const partnerId = ((partnerConfig ?? []) as { partner_id: string | null }[])[0]?.partner_id ?? null;
   const secretPresent = Boolean(config("MENGANTAR_PARTNER_SECRET"));
   const sealingPresent = Boolean(keyMaterialFromReader(config));
   const environment = config("MENGANTAR_ENV");
   const rows = (raw ?? []) as Row[];
+  // PR-46: every offered courier is listed; a courier without a recorded row is "belum terverifikasi".
+  const recorded = new Map(((acceptanceRaw ?? []) as AcceptanceRow[]).map((r) => [r.courier, r]));
+  const acceptance = [...new Set([...OFFERED_COURIERS, ...recorded.keys()])].map((courier) => ({ courier, row: recorded.get(courier) ?? null }));
 
   const settings = [
     {
@@ -102,6 +115,31 @@ export default async function IntegrationsPage() {
               <div className="mt-3 max-w-[560px]"><PartnerIdForm current={partnerId} /></div>
             </details>
           </li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="acceptance-heading" className="flex flex-col gap-4">
+        <SectionHeader id="acceptance-heading" title="Penerimaan label masking per kurir"
+          description="Bukti bahwa kurir menerima label masking yang dicetak gerai (PR-46). Selain terverifikasi, operator wajib mencentang konfirmasi sebelum mencetak label masking, dan konfirmasinya dicatat di riwayat cetak." />
+        <ul className="divide-y divide-border rounded-lg bg-card ring-1 ring-border">
+          {acceptance.map(({ courier, row }) => {
+            const state = ACCEPTANCE[row?.state ?? "unverified"];
+            const label = COURIER_NAME[courier] ?? courier;
+            return (
+              <li key={courier} data-testid="masking-acceptance-row" className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 md:p-5">
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="font-semibold">{label}</span>
+                  <span className="text-sm break-words text-muted-foreground">
+                    {row ? <>Bukti: {row.evidence_ref ?? "—"} · dicatat {formatWib(row.recorded_at)}{row.recorded_by_email ? ` oleh ${row.recorded_by_email}` : ""}</> : "Belum ada catatan; dianggap belum terverifikasi."}
+                  </span>
+                </span>
+                <span className="flex flex-col items-start gap-2 sm:items-end">
+                  <StateBadge ok={state.ok} label={state.label} />
+                  <MaskingAcceptanceForm courier={courier} courierLabel={label} state={row?.state ?? "unverified"} evidenceRef={row?.evidence_ref ?? null} recordedAt={row?.recorded_at ?? null} />
+                </span>
+              </li>
+            );
+          })}
         </ul>
       </section>
 

@@ -301,8 +301,8 @@ describe("create_label_snapshot (TD-13, DATA-10)", () => {
     const first = (await operator.rpc("create_label_snapshot", { p_shipment: id, p_mask: false })).data as string;
     const again = (await owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: false })).data as string;
     expect(again).toBe(first);
-    expect((await operator.rpc("record_label_print", { p_snapshot: first })).error).toBeNull();
-    expect((await owner.rpc("record_label_print", { p_snapshot: first })).error).toBeNull();
+    expect((await operator.rpc("record_label_print", { p_snapshot: first, p_acknowledged: false })).error).toBeNull();
+    expect((await owner.rpc("record_label_print", { p_snapshot: first, p_acknowledged: false })).error).toBeNull();
     expect(count("label_snapshots", `shipment_id = '${id}'`)).toBe(1);
     const events = JSON.parse(sql(`select json_agg(json_build_object('snapshot', snapshot_id, 'size', size, 'actor', actor, 'shipment', shipment_id) order by id)
       from public.label_print_events where shipment_id = '${id}'`)) as { snapshot: string; size: string; actor: string; shipment: string }[];
@@ -393,16 +393,16 @@ describe("create_label_snapshot (TD-13, DATA-10)", () => {
       const other = realShipment();
       expect((await owner.rpc("create_label_snapshot", { p_shipment: other, p_mask: true, ...fields })).error?.message).toBe("masking_disabled");
       expect((await owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: true, ...fields, p_sender_city: "Cimahi" })).error?.message).toBe("masking_disabled");
-      expect((await owner.rpc("record_label_print", { p_snapshot: masked })).error?.message).toBe("masking_disabled");
+      expect((await owner.rpc("record_label_print", { p_snapshot: masked, p_acknowledged: true })).error?.message).toBe("masking_disabled");
       expect(count("label_snapshots", `shipment_id = '${other}'`)).toBe(0);
       // The gerai-identity label stays available.
       const off = await owner.rpc("create_label_snapshot", { p_shipment: other, p_mask: false });
       expect(off.error).toBeNull();
-      expect((await owner.rpc("record_label_print", { p_snapshot: off.data as string })).error).toBeNull();
+      expect((await owner.rpc("record_label_print", { p_snapshot: off.data as string, p_acknowledged: false })).error).toBeNull();
     } finally {
       await admin.rpc("platform_set_masking_allowed", { p_tenant: IDS.tenantA, p_allowed: true, p_reason: "Pulihkan uji" });
     }
-    expect((await owner.rpc("record_label_print", { p_snapshot: masked })).error).toBeNull();
+    expect((await owner.rpc("record_label_print", { p_snapshot: masked, p_acknowledged: true })).error).toBeNull();
   });
 
   it("snapshots hold their content after the tenant, outlet or WhatsApp is edited", async () => {
@@ -428,7 +428,7 @@ describe("snapshots and history cannot be rewritten (DATA-10)", () => {
     const owner = await signIn("owner-a@geraiexpress.test");
     const id = realShipment();
     const snap = (await owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: false })).data as string;
-    const event = (await owner.rpc("record_label_print", { p_snapshot: snap })).data as number;
+    const event = (await owner.rpc("record_label_print", { p_snapshot: snap, p_acknowledged: false })).data as number;
     const forged: Record<string, Record<string, unknown>> = {
       label_snapshots: { tenant_id: IDS.tenantA, shipment_id: id, version: 9, size: "10x15", mask_sender: false },
       label_print_events: { tenant_id: IDS.tenantA, shipment_id: id, snapshot_id: snap, size: "10x15", actor: OWNER_A },
@@ -462,7 +462,7 @@ describe("snapshots and history cannot be rewritten (DATA-10)", () => {
     const owner = await signIn("owner-a@geraiexpress.test");
     const id = realShipment();
     const snap = (await owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: false })).data as string;
-    await owner.rpc("record_label_print", { p_snapshot: snap });
+    await owner.rpc("record_label_print", { p_snapshot: snap, p_acknowledged: false });
     sql(`update public.shipments set selected_quote_id = null where id = '${id}'; delete from public.shipments where id = '${id}'`);
     expect(count("label_snapshots", `id = '${snap}'`)).toBe(0);
     expect(count("label_print_events", `snapshot_id = '${snap}'`)).toBe(0);
@@ -476,15 +476,15 @@ describe("tenant isolation of labels (TEN-1)", () => {
     const snap = (await owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: false })).data as string;
     const otherAdmin = await signIn("owner-b@geraiexpress.test");
     expect((await otherAdmin.rpc("create_label_snapshot", { p_shipment: id, p_mask: false })).error?.message).toBe("not_found");
-    expect((await otherAdmin.rpc("record_label_print", { p_snapshot: snap })).error?.message).toBe("not_found");
-    expect((await otherAdmin.rpc("record_label_print", { p_snapshot: randomUUID() })).error?.message).toBe("not_found");
+    expect((await otherAdmin.rpc("record_label_print", { p_snapshot: snap, p_acknowledged: false })).error?.message).toBe("not_found");
+    expect((await otherAdmin.rpc("record_label_print", { p_snapshot: randomUUID(), p_acknowledged: false })).error?.message).toBe("not_found");
     for (const table of ["label_snapshots", "label_print_events"]) {
       expect((await otherAdmin.from(table).select("tenant_id").eq("shipment_id", id)).data).toEqual([]);
       expect((await client().from(table).select("tenant_id")).error?.code).toBe("42501");
     }
     const anon = client();
     expect((await anon.rpc("create_label_snapshot", { p_shipment: id, p_mask: false })).error?.code).toBe("42501");
-    expect((await anon.rpc("record_label_print", { p_snapshot: snap })).error?.code).toBe("42501");
+    expect((await anon.rpc("record_label_print", { p_snapshot: snap, p_acknowledged: false })).error?.code).toBe("42501");
     // A suspended-membership or non-member sees nothing; tenant B's own real shipment is isolated from A.
     sql(`update public.tenants set contact_whatsapp = '081366660000' where id = '${IDS.tenantB}'`);
     const own = realShipment({ tenant: IDS.tenantB, outlet: IDS.outletB });
@@ -493,6 +493,6 @@ describe("tenant isolation of labels (TEN-1)", () => {
     expect(bSnap.error).toBeNull();
     expect(snapshotRow(bSnap.data as string)).toMatchObject({ tenant_id: IDS.tenantB, printed_sender_name: "Gerai Uji B", printed_sender_phone: "081366660000" });
     expect((await owner.from("label_snapshots").select("id").eq("shipment_id", own)).data).toEqual([]);
-    expect((await owner.rpc("record_label_print", { p_snapshot: bSnap.data as string })).error?.message).toBe("not_found");
+    expect((await owner.rpc("record_label_print", { p_snapshot: bSnap.data as string, p_acknowledged: false })).error?.message).toBe("not_found");
   });
 });

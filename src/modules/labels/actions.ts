@@ -8,7 +8,9 @@ import { LABEL_UNKNOWN_RESULT, WHATSAPP_SAVED, labelError, labelPrintError } fro
 
 // No provider call is made here or anywhere in the label path (DEC-017): the snapshot and the print
 // history are database commands that re-check membership, the shipment's state and the masking policy.
-export type PrintInput = { shipmentId: string; mask: boolean; size: string; sender: SenderInput };
+// `acknowledged`: the operator ticked the PR-46 acknowledgement for a courier without recorded masking
+// acceptance. record_label_print enforces it for masked snapshots and stores it in the print history.
+export type PrintInput = { shipmentId: string; mask: boolean; size: string; sender: SenderInput; acknowledged: boolean };
 export type PrintResult =
   | { ok: true; snapshot: LabelSnapshot }
   | { ok: false; error: string; fieldErrors?: SenderErrors; reconcile?: boolean };
@@ -17,7 +19,7 @@ export async function printLabelAction(input: PrintInput): Promise<PrintResult> 
   const ws = await requireWorkspace();
   if (!input || typeof input !== "object" || Array.isArray(input)
     || typeof input.shipmentId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.shipmentId)
-    || typeof input.mask !== "boolean" || !isLabelSize(input.size)
+    || typeof input.mask !== "boolean" || typeof input.acknowledged !== "boolean" || !isLabelSize(input.size)
     || (input.mask && (!input.sender || typeof input.sender !== "object" || Array.isArray(input.sender)
       || ![input.sender.name, input.sender.phone, input.sender.city, input.sender.address].every((value) => typeof value === "string")))) {
     return { ok: false, error: labelError({ message: "invalid_input" }) };
@@ -40,7 +42,7 @@ export async function printLabelAction(input: PrintInput): Promise<PrintResult> 
     const message = labelPrintError(error);
     return { ok: false, error: message, reconcile: message === LABEL_UNKNOWN_RESULT };
   }
-  const printed = await db.rpc("record_label_print", { p_snapshot: id });
+  const printed = await db.rpc("record_label_print", { p_snapshot: id, p_acknowledged: input.acknowledged });
   if (printed.error) {
     const message = labelPrintError(printed.error);
     return { ok: false, error: message, reconcile: message === LABEL_UNKNOWN_RESULT };

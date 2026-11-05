@@ -215,3 +215,25 @@ export async function tenantCustomersAction(prev: TenantCustomersState, form: Fo
   const page = data as { tenant_name: string; total: number; rows: TenantCustomerRow[] };
   return { reason, tenantName: page.tenant_name, total: page.total, rows: more ? [...(prev.rows ?? []), ...page.rows] : page.rows };
 }
+
+// T-084 / PR-46: the per-courier masking acceptance record. The RPC re-checks integration_operations at
+// aal2, requires the reason (and evidence for verified/refused), refuses a stale view (55000) and audits.
+export async function setMaskingAcceptanceAction(_: FormState, form: FormData): Promise<FormState> {
+  const scope = await requestScope();
+  if (scope !== "platform" && scope !== "shared") return { error: "Tidak ditemukan." };
+  const seen = String(form.get("expected_recorded_at") ?? "");
+  const db = await dbServer();
+  const { data, error } = await db.rpc("platform_set_masking_acceptance", {
+    p_courier: String(form.get("courier") ?? ""),
+    p_state: String(form.get("state") ?? ""),
+    p_evidence_ref: String(form.get("evidence_ref") ?? ""),
+    p_expected_recorded_at: seen === "" ? null : seen,
+    p_reason: String(form.get("reason") ?? ""),
+  });
+  if (error) {
+    if (error.message === "evidence_required") return { error: "Isi referensi bukti (uji scan kurir atau hasil sinkronisasi Mengantar) untuk status terverifikasi atau ditolak." };
+    return { error: friendlyError(error) };
+  }
+  revalidatePath("/admin/integrasi");
+  return { ok: `Status penerimaan label masking disimpan: ${data === "verified" ? "terverifikasi" : data === "refused" ? "ditolak kurir" : "belum terverifikasi"}.` };
+}
