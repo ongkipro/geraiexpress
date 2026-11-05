@@ -434,6 +434,23 @@ Built state (Observed 2026-10-28): `public.label_snapshots` holds tenant, shipme
 
 Gerai logo (Observed locally, T-096, `db/migrations/20261104130000_gerai_logos.sql`): `private.gerai_logo_versions` (tenant, `version`, `mime`, `bytes`, creator, time) is append-only under `private.label_history_guard`, has no API grants, and keeps one current logo as the latest version; a NULL payload is a removal version. `private.gerai_logo_mime` accepts only PNG, JPEG or WebP by magic bytes, 1-204800 bytes (SVG refused). `tenant_logo(tenant)` (member) returns `{revision, logo}`; `set_tenant_logo(tenant, mime, base64, expected_revision)` (tenant admin, audited) requires the current revision (stale: 55000) and both NULL means remove. `label_snapshots.gerai_logo` (jsonb `{version, mime, base64}` or NULL) and `gerai_logo_revision` are captured only on snapshot INSERT by `private.capture_label_logo` under a tenant SHARE lock and enter the content digest, so a replaced or removed logo never rewrites a printed label; older rows keep NULL and print the frozen `true_tenant_name`. Owner decision 2026-11-05 (DEC-017 amendment): masked and unmasked parcels both print the frozen logo, or the gerai name, while a masked parcel still prints no gerai WhatsApp/contact.
 
+Resi formats (owner 2026-11-03/04, T-095): `10x15` is one 100x150 mm page with the
+100x100 mm parcel above a cut line and a 100x50 mm customer slip below; `10x10` is parcel only.
+The slip projects only snapshot-frozen gerai logo/name, courier/service and AWB (Code128 bars then
+number). No sender/recipient names, phones, addresses or gerai WhatsApp are slip inputs. Masking
+never removes the gerai branding (owner 2026-11-05) and never adds gerai WhatsApp to a masked print.
+The first snapshot's size locks all later snapshot creation for that shipment. Migration
+`20261105120000_resi_format_lock.sql` keeps the seven-argument command/grants and existing reuse
+semantics; after acquiring the shipment FOR UPDATE lock it compares against the first version and
+refuses another size with `label_format_locked` (SQLSTATE 55000, a definite refusal, not a retryable
+40001). Concurrent different-format first prints serialize: exactly one creates a snapshot. Changing
+masking or sender fields within the locked size still creates a version; unchanged choices reuse the
+latest snapshot. No historical rows are rewritten; if older history contains several sizes, the first
+version remains authoritative for future creation. Individual UI reads that first size separately from
+the latest-20 history; batches exclude other-format shipments with a Bahasa reason. Local unit/DB/e2e
+regressions are in `label-sheet.test.ts`, `masked-label.test.ts`, `label.spec.ts` and `gerai-logo.spec.ts`;
+execution and print artifacts must be verified by the task's delivery run, not inferred from this note.
+
 ### Masking acceptance per courier (amendment to DATA-10 for PR-46)
 - Proposal (T-084): `private.masking_acceptance` with `courier`, `state` (`unverified`, `verified`, `refused`), `evidence_ref`, `recorded_by`, `recorded_at`; a missing row or a NULL `label_snapshots.courier` counts as `unverified`. Members read the state through a security-definer RPC `masking_acceptance_for(courier)`. `label_print_events` gains nullable `acceptance_state` and `acknowledged` columns (its update guard stays) and `record_label_print` gains an acknowledgement parameter; the privilege allowlists are updated with the new signatures. Only a platform capability writes the acceptance rows.
 

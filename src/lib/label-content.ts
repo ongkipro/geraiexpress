@@ -14,6 +14,8 @@ export const LABEL_SIZES: Record<LabelSize, { widthMm: number; heightMm: number;
   "10x15": { widthMm: 100, heightMm: 150, label: "10 × 15 cm (standar)" },
   "10x10": { widthMm: 100, heightMm: 100, label: "10 × 10 cm" },
 };
+export const PARCEL_HEIGHT_MM = 100;
+export const CUSTOMER_SLIP_HEIGHT_MM = 50;
 export const DEFAULT_LABEL_SIZE: LabelSize = "10x15";
 export const isLabelSize = (value: unknown): value is LabelSize => value === "10x15" || value === "10x10";
 
@@ -101,6 +103,12 @@ export type LabelContent = {
   cod: { amountIdr: number | null } | null;
   itemDescription: string | null;
 };
+
+// A deliberately narrow projection: the detachable slip cannot receive party contacts or addresses.
+export type CustomerSlipContent = Pick<LabelContent, "geraiName" | "geraiLogo" | "courierLine" | "awb">;
+export function customerSlipContent(content: LabelContent): CustomerSlipContent {
+  return { geraiName: content.geraiName, geraiLogo: content.geraiLogo, courierLine: content.courierLine, awb: content.awb };
+}
 
 const courierLine = (courier: string | null, service: string | null) =>
   [courier ? courierName(courier) : null, service].filter(Boolean).join(" ") || "—";

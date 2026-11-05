@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { geraiLogoDataUrl, type GeraiLogo } from "@/lib/gerai-logo";
+import { geraiLogoDataUrl, type GeraiLogo } from "../../lib/gerai-logo";
 
-// T-095 seam: pass snapshot.true_tenant_name / snapshot.gerai_logo to render the immutable identity
-// on the future 10x5 slip. Never resolve a live logo here. The name remains visible even if an image
+// Parcel and customer slip use snapshot.true_tenant_name / snapshot.gerai_logo for immutable identity.
+// Never resolve a live logo here. The name remains visible even if an image
 // fails during printing; alt text alone is not a reliable printed fallback.
 export function GeraiIdentity({ name, logo }: { name: string; logo?: GeraiLogo | null }) {
   const src = geraiLogoDataUrl(logo);

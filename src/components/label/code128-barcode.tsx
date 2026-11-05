@@ -1,4 +1,4 @@
-import { code128Bars, code128Width, encodeCode128 } from "@/lib/label-code128";
+import { code128Bars, code128Width, encodeCode128 } from "../../lib/label-code128";
 
 // The AWB as vector bars with quiet zones (UI-6): one path, so print scaling never blurs it. The text
 // alternative carries the AWB for assistive technology; the printed AWB below the bars is rendered by the

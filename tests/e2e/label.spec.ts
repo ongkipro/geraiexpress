@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { expectNoHorizontalOverflow, expectTouchTargets, localSql, signIn } from "./helpers";
 import { CODE128_PATTERNS, CODE128_QUIET_MODULES, CODE128_STOP } from "../../src/lib/label-code128";
@@ -87,8 +87,8 @@ const sizeRadio = (page: Page, size: "10 × 15" | "10 × 10") => page.getByRole(
 
 // Reads the bars the label really draws (the SVG path), not a data attribute, and decodes the Code128
 // symbols back to text: start, data (sets B and C), check symbol and stop.
-async function decodeBarcode(page: Page): Promise<string> {
-  const svg = page.getByTestId("label-barcode");
+async function decodeBarcode(page: Page, barcode?: Locator): Promise<string> {
+  const svg = barcode ?? page.getByTestId("label-sheet").getByTestId("label-barcode");
   const d = (await svg.locator("path").getAttribute("d"))!;
   const width = Number((await svg.getAttribute("viewBox"))!.split(" ")[2]);
   const cells = Array.from({ length: width }, () => "0");
@@ -119,16 +119,47 @@ async function decodeBarcode(page: Page): Promise<string> {
 // What the browser would print to a page: Chromium's print-to-PDF honours the @page rule, so its page size
 // and count are the print preview geometry (1 mm = 72/25.4 pt).
 async function printedPages(page: Page) {
-  const pdf = (await page.pdf({ preferCSSPageSize: true, printBackground: true })).toString("latin1");
+  const pdf = (await page.pdf({ path: test.info().outputPath(`label-${randomUUID()}.pdf`), preferCSSPageSize: true, printBackground: true })).toString("latin1");
   const box = /\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/.exec(pdf);
   expect(box, "PDF page size").not.toBeNull();
   return { widthMm: (Number(box![1]) * 25.4) / 72, heightMm: (Number(box![2]) * 25.4) / 72, pages: (pdf.match(/\/Type\s*\/Page(?![a-z])/g) ?? []).length };
 }
 
 async function evidence(page: Page, name: string) {
+  await page.screenshot({ path: test.info().outputPath(`${name}.png`), fullPage: true });
   if (!EVIDENCE) return;
   mkdirSync(EVIDENCE, { recursive: true });
   await page.screenshot({ path: join(EVIDENCE, `${name}-${test.info().project.name}.png`), fullPage: true });
+}
+
+// Physical geometry is read in print media; screen fit transforms intentionally change CSS px.
+async function expectFormat(page: Page, scope: Locator, size: "10x15" | "10x10", awb: string) {
+  const parcel = scope.getByTestId("label-sheet");
+  const slip = scope.getByTestId("customer-slip");
+  await expect(parcel).toHaveCount(1);
+  await expect(slip).toHaveCount(size === "10x15" ? 1 : 0);
+  const parcelBox = await parcel.boundingBox();
+  expect(parcelBox!.width / (96 / 25.4)).toBeCloseTo(100, 0);
+  expect(parcelBox!.height / (96 / 25.4)).toBeCloseTo(100, 0);
+  if (size === "10x10") return;
+  await expect(slip).toContainText("Gerai Uji A");
+  await expect(slip).toContainText("J&T Express REG");
+  await expect(slip.getByTestId("slip-awb")).toHaveText(awb);
+  for (const privateValue of [WHATSAPP, "Pengirim Asli", "Penerima Uji", "081200000099", "081234567890", "Jl. Tujuan", "Jl. Pickup"]) await expect(slip).not.toContainText(privateValue);
+  expect(await decodeBarcode(page, slip.getByTestId("label-barcode"))).toBe(awb);
+  const boxes = await slip.evaluate((element) => {
+    const box = (node: Element) => { const r = node.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, width: r.width, height: r.height }; };
+    const row = element.querySelector('[data-testid="slip-identity-row"]')!;
+    return { slip: box(element), row: box(row), identity: box(row.children[0]), courier: box(row.children[1]),
+      barcode: box(element.querySelector("svg")!), awb: box(element.querySelector('[data-testid="slip-awb"]')!) };
+  });
+  expect(boxes.slip.height / (96 / 25.4)).toBeCloseTo(50, 0);
+  expect(boxes.slip.top).toBeCloseTo(parcelBox!.y + parcelBox!.height, 0);
+  expect(boxes.identity.top).toBeLessThan(boxes.courier.bottom); // Same row, no stacking.
+  expect(boxes.courier.top).toBeLessThan(boxes.identity.bottom);
+  expect(boxes.row.bottom).toBeLessThanOrEqual(boxes.barcode.top);
+  expect(boxes.barcode.bottom).toBeLessThanOrEqual(boxes.awb.top);
+  expect(boxes.awb.bottom).toBeLessThanOrEqual(boxes.slip.bottom);
 }
 
 test("a real issued shipment offers Cetak label, prints a decodable local label and reprints on the same snapshot", async ({ page }) => {
@@ -238,7 +269,7 @@ test("masking on needs all three sender fields, previews them, keeps the true id
   await expect(page.getByTestId("label-sender-phone")).toHaveText("081311112222");
   await expect(page.getByTestId("label-sender-place")).toHaveText("Bandung");
   const sender = (await page.getByTestId("label-sender").innerText()).replace(/\s+/g, " ");
-  await expect(page.getByTestId("gerai-identity")).toContainText("Gerai Uji A");
+  await expect(page.getByTestId("label-sheet").getByTestId("gerai-identity")).toContainText("Gerai Uji A");
   for (const gerai of [WHATSAPP, "Jl. Pickup Nyata No. 5", PICKUP_NAME]) expect(sender).not.toContain(gerai);
   await expect(page.getByTestId("label-sheet")).not.toContainText(WHATSAPP);
   await expect(page.getByTestId("label-sheet").locator('a[href*="wa.me"], a[href^="tel:"]')).toHaveCount(0);
@@ -276,26 +307,27 @@ test("masking on needs all three sender fields, previews them, keeps the true id
 
 test("the print preview is exactly the chosen size, one label per page, with no chrome and no clipping", async ({ page }) => {
   resetTenant();
-  const id = realShipment({
+  const makeShipment = () => realShipment({
     cod: 99000, awb: "SPXID012345678901", name: "Penerima Dengan Nama Yang Sangat Panjang Sekali Untuk Menguji Tampilan Label",
     address: `Jl. Contoh Panjang Sekali ${"Perumahan Contoh Asri Blok C2 No. 14 RT 004 RW 009 ".repeat(4)}`.trim(),
   });
   await signIn(page, "operator-a@geraiexpress.test");
-  await page.goto(`/pengiriman/${id}/label`);
-  await expect(sizeRadio(page, "10 × 15")).toBeChecked();
   for (const [size, label, widthMm, heightMm] of [["10 × 15", "10x15", 100, 150], ["10 × 10", "10x10", 100, 100]] as const) {
     await page.emulateMedia({ media: "screen" });
+    await page.goto(`/pengiriman/${makeShipment()}/label`);
     await sizeRadio(page, size).check();
     await expect(page.getByTestId("label-sheet")).toHaveAttribute("data-size", label);
     await expect.poll(() => pageRule(page)).toContain(`size: ${widthMm}mm ${heightMm}mm`);
     // Print output exists for a stored snapshot only: store this size first, then read it in print media.
     await storeThenPrintMedia(page);
-    const box = await page.getByTestId("label-sheet").evaluate((el) => {
+    await expectFormat(page, page.getByTestId("label-page"), label, "SPXID012345678901");
+    const box = await page.getByTestId("label-page").evaluate((el) => {
       const r = el.getBoundingClientRect();
       return { w: r.width, h: r.height, scrollH: el.scrollHeight, clientH: el.clientHeight, scrollW: el.scrollWidth, clientW: el.clientWidth };
     });
     expect(box.w / (96 / 25.4), `${label} width mm`).toBeCloseTo(widthMm, 0);
     expect(box.h / (96 / 25.4), `${label} height mm`).toBeCloseTo(heightMm, 0);
+    await expect(page.getByTestId("customer-slip")).toHaveCount(label === "10x15" ? 1 : 0);
     // Long names and addresses wrap or shrink inside the sheet; nothing is clipped.
     expect(box.scrollH, `${label} vertical clipping`).toBeLessThanOrEqual(box.clientH);
     expect(box.scrollW, `${label} horizontal clipping`).toBeLessThanOrEqual(box.clientW);
@@ -306,23 +338,59 @@ test("the print preview is exactly the chosen size, one label per page, with no 
     expect(pdf.widthMm).toBeCloseTo(widthMm, 0);
     expect(pdf.heightMm).toBeCloseTo(heightMm, 0);
     await evidence(page, `label-print-${label}`);
+    await page.emulateMedia({ media: "screen" });
+    await expect(sizeRadio(page, size)).toBeChecked();
+    await expect(sizeRadio(page, "10 × 10")).toBeDisabled();
+    await expect(sizeRadio(page, "10 × 15")).toBeDisabled();
+    await expect(page.getByTestId("format-locked")).toContainText("sejak cetak pertama");
+    await page.reload();
+    await expect(sizeRadio(page, size)).toBeChecked();
+    await expect(sizeRadio(page, size)).toBeDisabled();
+    await evidence(page, `label-locked-${label}`);
   }
+});
+
+// T-095 review: the longest AWB the database accepts (40 alphanumerics, no break opportunity) stays
+// fully inside the 10x5 slip: the number shrinks/wraps instead of clipping and the bars still decode.
+test("a maximum-length AWB fits the customer slip without clipping", async ({ page }) => {
+  resetTenant();
+  const awb = "W".repeat(40);
+  const id = realShipment({ awb });
+  await signIn(page, "operator-a@geraiexpress.test");
+  await page.goto(`/pengiriman/${id}/label`);
+  await sizeRadio(page, "10 × 15").check();
+  await storeThenPrintMedia(page);
+  const slip = page.getByTestId("customer-slip");
+  await expect(slip.getByTestId("slip-awb")).toHaveText(awb);
+  const fit = await slip.evaluate((element) => {
+    const awbBox = element.querySelector('[data-testid="slip-awb"]')!.getBoundingClientRect();
+    const box = element.getBoundingClientRect();
+    return { scrollW: element.scrollWidth, clientW: element.clientWidth, scrollH: element.scrollHeight, clientH: element.clientHeight,
+      awbLeft: awbBox.left - box.left, awbRight: box.right - awbBox.right, awbBottom: box.bottom - awbBox.bottom };
+  });
+  expect(fit.scrollW).toBeLessThanOrEqual(fit.clientW);
+  expect(fit.scrollH).toBeLessThanOrEqual(fit.clientH);
+  expect(fit.awbLeft).toBeGreaterThanOrEqual(0);
+  expect(fit.awbRight).toBeGreaterThanOrEqual(0);
+  expect(fit.awbBottom).toBeGreaterThanOrEqual(0);
+  expect(await decodeBarcode(page, slip.getByTestId("label-barcode"))).toBe(awb);
+  await evidence(page, "label-slip-max-awb");
 });
 
 // The barcode block (bars, AWB text, reference) must always be fully inside the sheet and below every
 // text block, however long the name, address and item are (B-T044b).
 test("worst case: COD, a 100-character name, a 460-character address and a 200-character item keep the barcode inside both sizes", async ({ page }) => {
   resetTenant();
-  const id = realShipment({
+  const makeShipment = () => realShipment({
     cod: 1234567, awb: "SPXID012345678901",
     name: "Penerima Dengan Nama Panjang ".repeat(5).slice(0, 100).trim(),
     address: "Jl. Contoh Panjang Sekali Perumahan Contoh Asri Blok C2 No. 14 RT 004 RW 009 ".repeat(8).slice(0, 460).trim(),
     item: "Buku pelajaran dan alat tulis lengkap ".repeat(6).slice(0, 200).trim(),
   });
   await signIn(page, "operator-a@geraiexpress.test");
-  await page.goto(`/pengiriman/${id}/label`);
-  for (const [size, label, minBarcodeMm] of [["10 × 15", "10x15", 19], ["10 × 10", "10x10", 11.5]] as const) {
+  for (const [size, label, minBarcodeMm] of [["10 × 15", "10x15", 11.5], ["10 × 10", "10x10", 11.5]] as const) {
     await page.emulateMedia({ media: "screen" });
+    await page.goto(`/pengiriman/${makeShipment()}/label`);
     await sizeRadio(page, size).check();
     await expect(page.getByTestId("label-sheet")).toHaveAttribute("data-size", label);
     await expect(page.getByTestId("label-cod")).toBeVisible();
@@ -373,9 +441,12 @@ test("Ctrl+P on an unsaved preview prints no sheet; a stored snapshot prints", a
   expect(count("label_snapshots", id)).toBe(1);
   await page.emulateMedia({ media: "print" });
   await expect(page.getByTestId("label-sheet")).toBeVisible();
-  // Changing the choice makes the preview unsaved again: nothing prints until it is stored.
+  // The format is locked, but changing masking still requires storing a new snapshot.
   await page.emulateMedia({ media: "screen" });
-  await sizeRadio(page, "10 × 10").check();
+  await expect(sizeRadio(page, "10 × 10")).toBeDisabled();
+  await expect(sizeRadio(page, "10 × 15")).toBeChecked();
+  await expect(page.getByTestId("format-locked")).toContainText("sejak cetak pertama");
+  await maskSwitch(page).check();
   await page.emulateMedia({ media: "print" });
   await expect(page.getByTestId("label-sheet")).toBeHidden();
 });
@@ -491,16 +562,60 @@ test("batch queue prints selected labels and excludes unavailable shipments", as
   await expect(page.getByText("Isi kecamatan / kota pengirim.").first()).toBeVisible();
   await page.getByLabel("Kecamatan / kota pengirim untuk kiriman yang belum mengisinya").fill("Bandung");
   await page.getByRole("radio", { name: "10 × 10 cm" }).click();
+  await expect(page.getByTestId("label-sheet")).toHaveCount(0);
+  await expect(page.getByText(/Format resi terkunci pada 10 × 15 cm/)).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Cetak 0 label" })).toBeDisabled();
+  await page.getByRole("radio", { name: "10 × 15 cm" }).click();
   await page.getByRole("button", { name: "Cetak 2 label" }).click();
   await expect.poll(() => prints(page)).toBe(2);
   expect(localSql(`select printed_sender_city from public.label_snapshots where shipment_id = '${first}' order by version desc limit 1`)).toBe("Bandung");
   await page.emulateMedia({ media: "print" });
   const square = await printedPages(page);
   expect(square.pages).toBe(2);
-  expect(square.heightMm).toBeCloseTo(100, 0);
+  expect(square.heightMm).toBeCloseTo(150, 0);
   await page.context().clearCookies();
   await signIn(page, "owner-b@geraiexpress.test");
   expect((await page.goto(`/pengiriman/cetak?ids=${first}`))?.status()).toBe(404);
   // A repeated parameter arrives as an array: not-found, never a server error.
   expect((await page.goto(`/pengiriman/cetak?ids=${first}&ids=${second}`))?.status()).toBe(404);
 });
+
+// Each format gets new shipments; changing the batch size must exclude already locked shipments.
+for (const size of ["10x15", "10x10"] as const) {
+  test(`batch ${size} prints parcel/slip geometry and excludes the other locked format`, async ({ page }) => {
+    resetTenant();
+    const first = realShipment(), second = realShipment();
+    await signIn(page, "owner-a@geraiexpress.test");
+    await page.goto(`/pengiriman/cetak?ids=${first},${second}`);
+    const chosen = size === "10x15" ? "10 × 15 cm" : "10 × 10 cm";
+    const other = size === "10x15" ? "10 × 10 cm" : "10 × 15 cm";
+    await page.getByRole("radio", { name: chosen, exact: true }).click();
+    await expect(page.getByTestId("customer-slip")).toHaveCount(size === "10x15" ? 2 : 0);
+    await expectNoHorizontalOverflow(page);
+    await evidence(page, `batch-${size}-preview`);
+    await page.getByRole("button", { name: "Cetak 2 label", exact: true }).click();
+    await expect.poll(() => prints(page)).toBe(1);
+    await page.emulateMedia({ media: "print" });
+    for (const sheet of await page.getByTestId("label-page").all()) await expectFormat(page, sheet, size, "JP1234567890");
+    const pdf = await printedPages(page);
+    expect(pdf.pages).toBe(2);
+    expect(pdf.widthMm).toBeCloseTo(100, 0);
+    expect(pdf.heightMm).toBeCloseTo(size === "10x15" ? 150 : 100, 0);
+    await evidence(page, `batch-${size}-print`);
+    await page.emulateMedia({ media: "screen" });
+    await page.getByRole("radio", { name: other, exact: true }).click();
+    await expect(page.getByTestId("label-page")).toHaveCount(0);
+    await expect(page.getByText(/Format resi terkunci pada/)).toHaveCount(2);
+    await expect(page.getByRole("button", { name: "Cetak 0 label", exact: true })).toBeDisabled();
+    await evidence(page, `batch-${size}-locked-exclusion`);
+    // A mixed queue keeps the other-format shipment excluded but still prints a fresh eligible one.
+    const fresh = realShipment();
+    await page.goto(`/pengiriman/cetak?ids=${first},${fresh}`);
+    await expect(page.getByTestId("label-page")).toHaveCount(1);
+    await expect(page.getByText(/Format resi terkunci pada/)).toHaveCount(1);
+    await page.getByRole("button", { name: "Cetak 1 label", exact: true }).click();
+    await expect.poll(() => prints(page)).toBe(1); // Navigation resets the stub counter.
+    expect(count("label_print_events", first)).toBe(1);
+    expect(count("label_print_events", fresh)).toBe(1);
+  });
+}

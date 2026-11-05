@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { courierName, formatIdr, formatWeight, formatWib } from "@/lib/format";
-import { SNAPSHOT_COLUMNS, senderFromShipment, type LabelFacts, type LabelSnapshot } from "@/lib/label-content";
+import { SNAPSHOT_COLUMNS, senderFromShipment, type LabelFacts, type LabelSize, type LabelSnapshot } from "@/lib/label-content";
 import { dbServer } from "@/lib/db/server";
 import { requireWorkspace } from "@/lib/workspace";
 import { readGeraiLogo } from "@/lib/gerai-logo-server";
@@ -30,13 +30,16 @@ export default async function LabelPage({ params }: { params: Promise<{ id: stri
 
   if (!s.is_simulated) {
     if (s.submission_state !== "issued" || !s.awb) redirect(`/pengiriman/${s.id}`);
-    const [{ data: tenant }, { data: snapshotRows }, { data: events }] = await Promise.all([
+    const [{ data: tenant }, { data: snapshotRows }, { data: events }, { data: firstSnapshot, error: formatError }] = await Promise.all([
       db.from("tenants").select("name, contact_whatsapp, masking_allowed").eq("id", ws.tenant.id).maybeSingle(),
       db.from("label_snapshots").select(SNAPSHOT_COLUMNS).eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id)
         .order("version", { ascending: false }).limit(20),
       db.from("label_print_events").select("id, snapshot_id, size, created_at").eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id).eq("kind", "label")
         .order("id", { ascending: false }).limit(20),
+      db.from("label_snapshots").select("size").eq("tenant_id", ws.tenant.id).eq("shipment_id", s.id)
+        .order("version", { ascending: true }).limit(1).maybeSingle(),
     ]);
+    if (formatError) throw new Error("Format resi belum bisa dimuat. Muat ulang halaman.");
     if (!tenant) notFound();
     const snapshots = (snapshotRows ?? []) as unknown as LabelSnapshot[];
     const byId = new Map(snapshots.map((snapshot) => [snapshot.id, snapshot]));
@@ -64,6 +67,7 @@ export default async function LabelPage({ params }: { params: Promise<{ id: stri
           role={ws.role}
           maskingAllowed={tenant.masking_allowed}
           snapshots={snapshots}
+          lockedSize={(firstSnapshot?.size as LabelSize | undefined) ?? null}
           history={history}
           preferenceKey={`gx:label-choice:${ws.tenant.id}:${ws.userId}`}
           initialSender={senderFromShipment(s)}

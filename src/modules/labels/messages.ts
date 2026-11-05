@@ -9,7 +9,10 @@ export const MASKING_DISABLED =
   "Masking pengirim dinonaktifkan untuk gerai ini oleh administrator platform. Label dicetak dengan identitas gerai. Hubungi administrator gerai untuk informasi lebih lanjut.";
 export const RETENTION_NOTE = "Identitas asli gerai dan alamat pickup tetap tersimpan pada setiap label, juga saat masking aktif, dan disimpan selama masa retensi audit.";
 
+export const FORMAT_LOCKED = "Format resi terkunci sejak cetak pertama. Cetak ulang memakai ukuran yang sama.";
+
 const MESSAGES: Record<string, string> = {
+  label_format_locked: FORMAT_LOCKED,
   whatsapp_missing: WHATSAPP_MISSING,
   invalid_whatsapp: WHATSAPP_INVALID,
   masking_disabled: MASKING_DISABLED,
@@ -27,7 +30,7 @@ export const LABEL_UNKNOWN_RESULT =
 // Only stable refusals from the label commands prove that the write did not happen.
 // Transport errors and unrecognized responses require reconciliation, never a blind retry.
 export function labelPrintError(error: { message?: string; code?: string } | null | undefined): string {
-  const refusals = ["not_found", "invalid_input", "simulated_shipment", "no_awb", "masking_disabled", "sender_fields_required", "whatsapp_missing"];
+  const refusals = ["label_format_locked", "not_found", "invalid_input", "simulated_shipment", "no_awb", "masking_disabled", "sender_fields_required", "whatsapp_missing"];
   return error?.message && refusals.includes(error.message) ? labelError(error) : LABEL_UNKNOWN_RESULT;
 }
 

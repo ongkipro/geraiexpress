@@ -314,7 +314,7 @@ describe("create_label_snapshot (TD-13, DATA-10)", () => {
     expect((await operator.from("label_print_events").select("id").eq("shipment_id", id)).data).toHaveLength(2);
   });
 
-  it("masking on requires all three sender fields; a change of switch, fields or size adds a version and leaves the earlier one untouched", async () => {
+  it("masking on requires all three sender fields; a change of switch or fields adds a version within the locked format and leaves the earlier one untouched", async () => {
     const owner = await signIn("owner-a@geraiexpress.test");
     const id = realShipment();
     const off = (await owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: false })).data as string;
@@ -340,18 +340,46 @@ describe("create_label_snapshot (TD-13, DATA-10)", () => {
       true_tenant_name: "Gerai Uji A", true_tenant_slug: "gerai-uji-a", true_pickup_name: "Pickup Mengantar Rahasia",
       true_pickup_address: "Jl. Pickup Nyata No. 5", true_pickup_area: "Kec. Pickup, Kota Nyata",
     });
-    // The same masked choice is a reprint; a different city, or a different size, is a new version.
+    // The same masked choice is a reprint; a different city makes a version in the same format.
     expect((await owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: true, ...fields, p_sender_phone: "081311112222" })).data).toBe(on);
     const otherCity = (await owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: true, ...fields, p_sender_city: "Cimahi" })).data as string;
     expect(snapshotRow(otherCity)).toMatchObject({ version: 3, printed_sender_city: "Cimahi" });
-    const smaller = (await owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: true, ...fields, p_sender_city: "Cimahi", p_size: "10x10" })).data as string;
-    expect(snapshotRow(smaller)).toMatchObject({ version: 4, size: "10x10" });
+    const smaller = await owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: true, ...fields, p_sender_city: "Cimahi", p_size: "10x10" });
+    expect(smaller.error).toMatchObject({ message: "label_format_locked", code: "55000" });
+    expect((await owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: true, ...fields, p_sender_city: "Cimahi" })).data).toBe(otherCity);
     expect(sql(`select row_to_json(s) from public.label_snapshots s where id = '${off}'`)).toBe(before);
-    expect(count("label_snapshots", `shipment_id = '${id}'`)).toBe(4);
+    expect(count("label_snapshots", `shipment_id = '${id}'`)).toBe(3);
     // The masked snapshot audit names the outcome and carries no sender or recipient data.
     const audit = sql(`select string_agg(outcome, ',' order by id) from public.audit_events where action = 'label.snapshot' and detail ->> 'shipment' = '${id}'`);
-    expect(audit).toBe("gerai_identity,masked,masked,masked");
+    expect(audit).toBe("gerai_identity,masked,masked");
     expect(sql(`select detail::text from public.audit_events where action = 'label.snapshot' and detail ->> 'snapshot' = '${on}'`)).not.toMatch(/Toko Pelanggan|0813|Bandung|Penerima/);
+  });
+
+  it.each(["10x15", "10x10"])("first %s locks the format and same-size reprints reuse it", async (size) => {
+    const owner = await signIn("owner-a@geraiexpress.test");
+    const id = realShipment();
+    const args = { p_shipment: id, p_mask: false, p_size: size };
+    const first = await owner.rpc("create_label_snapshot", args);
+    expect(first.error).toBeNull();
+    expect((await owner.rpc("create_label_snapshot", args)).data).toBe(first.data);
+    const refused = await owner.rpc("create_label_snapshot", { ...args, p_size: size === "10x15" ? "10x10" : "10x15" });
+    expect(refused.error).toMatchObject({ message: "label_format_locked", code: "55000" });
+    expect(count("label_snapshots", `shipment_id = '${id}'`)).toBe(1);
+  });
+
+  it("concurrent different-size first prints serialize: exactly one wins, the other is definitively refused", async () => {
+    const owner = await signIn("owner-a@geraiexpress.test");
+    const operator = await signIn("operator-a@geraiexpress.test");
+    const id = realShipment();
+    const results = await Promise.all([
+      owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: false, p_size: "10x15" }),
+      operator.rpc("create_label_snapshot", { p_shipment: id, p_mask: false, p_size: "10x10" }),
+    ]);
+    expect(results.filter((result) => !result.error)).toHaveLength(1);
+    expect(results.find((result) => result.error)?.error).toMatchObject({ message: "label_format_locked", code: "55000" });
+    expect(count("label_snapshots", `shipment_id = '${id}'`)).toBe(1);
+    const winner = snapshotRow(results.find((result) => !result.error)!.data as string);
+    expect((await owner.rpc("create_label_snapshot", { p_shipment: id, p_mask: false, p_size: winner.size })).data).toBe(winner.id);
   });
 
   it("a tenant with masking disabled gets no masked snapshot, even by a direct RPC call, and its masked snapshot is not reprinted", async () => {
