@@ -375,3 +375,89 @@ test.describe("CSV export", () => {
     localSql(`delete from public.shipments where reference like 'CAPE2E-${tag}-%'`);
   });
 });
+
+// T-084 / PR-46 / UX-9: the "Resi + invoice" view of a stored masked label shows the acknowledgement gate
+// only for a courier that is not verified, and the return-destination help whenever the label is masked;
+// neither appears for an unmasked label, and neither is part of the printout.
+test.describe("masking acceptance on the Resi + invoice view (PR-46)", () => {
+  const ackBox = (page: Page) => page.getByRole("checkbox", { name: /Saya mengerti penerimaannya belum terverifikasi/ });
+  const setJt = (state: "verified" | null) => localSql(state === null ? `delete from private.masking_acceptance where courier = 'JT'`
+    : `insert into private.masking_acceptance (courier, state, evidence_ref, recorded_by)
+        values ('JT', '${state}', 'Uji scan e2e', '00000000-0000-4000-a000-0000000000f1')
+        on conflict (courier) do update set state = excluded.state, evidence_ref = excluded.evidence_ref`);
+  test.afterEach(() => { setJt(null); });
+
+  // Stores the label in the label view (the only place a snapshot is made), masked or not.
+  async function storeLabel(page: Page, id: string, masked: boolean) {
+    await page.goto(`/pengiriman/${id}/label`);
+    if (masked) {
+      await page.getByRole("switch", { name: /Gunakan masking pengirim/ }).check();
+      await page.getByLabel("Kecamatan / kota pengirim").fill("Bandung");
+      if (await ackBox(page).count()) await ackBox(page).check();
+    }
+    await page.getByRole("button", { name: /^(Cetak label|Cetak ulang label)$/ }).click();
+    await expect.poll(() => count("label_print_events", id)).toBe(1);
+  }
+
+  test("masked + unverified: gate and return note; the acknowledgement is required and recorded; neither prints", async ({ page }) => {
+    setJt(null);
+    const id = realShipment();
+    await signIn(page, "owner-a@geraiexpress.test");
+    await storeLabel(page, id, true);
+    await page.goto(`/pengiriman/${id}/invoice`);
+    await expect(page.getByTestId("label-source")).toBeVisible();
+    await expect(page.getByTestId("masking-acceptance")).toContainText("Belum terverifikasi untuk J&T Express");
+    const note = page.getByTestId("return-destination");
+    await expect(note).toContainText("alamat pickup (Jl. Pickup Nyata No. 5)");
+    await expect(note).toContainText("bukan ke pengirim yang tercetak di label");
+    await expectNoHorizontalOverflow(page);
+    await expectTouchTargets(page);
+    await evidence(page, "invoice-masked-unverified");
+
+    await page.getByRole("radio", { name: "Resi saja" }).click();
+    await page.getByRole("button", { name: "Cetak resi" }).click();
+    await expect(page.getByText("Centang konfirmasi bahwa penerimaan label masking oleh kurir belum terverifikasi sebelum mencetak.")).toBeVisible();
+    expect(await prints(page)).toBe(0);
+    expect(count("label_print_events", id)).toBe(1);
+    await ackBox(page).check();
+    await page.getByRole("button", { name: "Cetak resi" }).click();
+    await expect.poll(() => prints(page)).toBe(1);
+    expect(localSql(`select acceptance_state || '|' || acknowledged from public.label_print_events where shipment_id = '${id}' order by id desc limit 1`))
+      .toBe("unverified|true");
+
+    // Screen help only: absent in print media while the stored label itself prints.
+    await page.emulateMedia({ media: "print" });
+    await expect(page.getByTestId("return-destination")).toBeHidden();
+    await expect(page.getByTestId("masking-acceptance")).toBeHidden();
+    await expect(page.getByTestId("label-sheet")).toBeVisible();
+    await expect(page.getByTestId("label-sheet")).not.toContainText("alamat pickup");
+    await page.emulateMedia({ media: "screen" });
+  });
+
+  test("masked + verified: no gate, the return note is still shown", async ({ page }) => {
+    setJt("verified");
+    const id = realShipment();
+    await signIn(page, "owner-a@geraiexpress.test");
+    await storeLabel(page, id, true);
+    await page.goto(`/pengiriman/${id}/invoice`);
+    await expect(page.getByTestId("label-source")).toBeVisible();
+    await expect(page.getByTestId("masking-acceptance")).toHaveCount(0);
+    await expect(page.getByTestId("return-destination")).toContainText("alamat pickup (Jl. Pickup Nyata No. 5)");
+    await expectNoHorizontalOverflow(page);
+    await evidence(page, "invoice-masked-verified");
+    await page.emulateMedia({ media: "print" });
+    await expect(page.getByTestId("return-destination")).toBeHidden();
+    await page.emulateMedia({ media: "screen" });
+  });
+
+  test("unmasked: neither the gate nor the return note", async ({ page }) => {
+    setJt(null);
+    const id = realShipment();
+    await signIn(page, "owner-a@geraiexpress.test");
+    await storeLabel(page, id, false);
+    await page.goto(`/pengiriman/${id}/invoice`);
+    await expect(page.getByTestId("label-source")).toBeVisible();
+    await expect(page.getByTestId("masking-acceptance")).toHaveCount(0);
+    await expect(page.getByTestId("return-destination")).toHaveCount(0);
+  });
+});

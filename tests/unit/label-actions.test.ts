@@ -5,7 +5,7 @@ import { LABEL_UNKNOWN_RESULT, labelError } from "../../src/modules/labels/messa
 const shipmentId = "00000000-0000-4000-b000-000000000001";
 const tenantId = "00000000-0000-4000-b000-000000000003";
 const snapshotId = "00000000-0000-4000-b000-000000000004";
-const input: PrintInput = { shipmentId, mask: false, size: "10x15", sender: { name: "Budi", phone: "081234567890", city: "Bandung", address: "" } };
+const input: PrintInput = { shipmentId, mask: false, size: "10x15", sender: { name: "Budi", phone: "081234567890", city: "Bandung", address: "" }, acknowledged: false };
 const rpc = vi.fn();
 const eq = vi.fn();
 const maybeSingle = vi.fn();
@@ -41,13 +41,15 @@ describe("printLabelAction", () => {
     expect(eq).toHaveBeenCalledWith("id", snapshotId);
     expect(from).toHaveBeenCalledWith("label_snapshots");
     expect(maybeSingle.mock.invocationCallOrder[0]).toBeLessThan(rpc.mock.invocationCallOrder[0]);
-    expect(rpc).toHaveBeenCalledWith("record_label_print", { p_snapshot: snapshotId });
+    expect(rpc).toHaveBeenCalledWith("record_label_print", { p_snapshot: snapshotId, p_acknowledged: false });
   });
 
   it.each([
     null, undefined, [], "bad", {},
     { ...input, shipmentId: 123 }, { ...input, shipmentId: "-".repeat(36) },
     { ...input, mask: "true" }, { ...input, size: "A4" },
+    // T-084: the PR-46 acknowledgement is an explicit boolean, never inferred.
+    { ...input, acknowledged: undefined }, { ...input, acknowledged: "true" },
     { ...input, mask: true, sender: null }, { ...input, mask: true, sender: [] },
     { ...input, mask: true, sender: {} },
     ...["name", "phone", "city", "address"].map((key) => ({ ...input, mask: true, sender: { ...input.sender, [key]: 123 } })),
@@ -66,6 +68,19 @@ describe("printLabelAction", () => {
       .mockResolvedValueOnce({ data: null, error: { message: "read failed" } });
     expect(await printLabelAction(input)).toEqual({ ok: false, error: LABEL_UNKNOWN_RESULT, reconcile: true });
     expect(rpc).toHaveBeenCalledTimes(4); // No hidden write retry.
+  });
+
+  it("forwards the PR-46 acknowledgement to record_label_print and reports its refusal without reconciliation", async () => {
+    const masked: PrintInput = { ...input, mask: true, acknowledged: true };
+    maybeSingle.mockResolvedValueOnce({ data: { id: shipmentId }, error: null })
+      .mockResolvedValueOnce({ data: { id: snapshotId }, error: null });
+    expect(await printLabelAction(masked)).toEqual({ ok: true, snapshot: { id: snapshotId } });
+    expect(rpc).toHaveBeenCalledWith("record_label_print", { p_snapshot: snapshotId, p_acknowledged: true });
+    rpc.mockResolvedValueOnce({ data: snapshotId, error: null })
+      .mockResolvedValueOnce({ error: { message: "masking_acknowledgement_required", code: "55000" } });
+    expect(await printLabelAction({ ...masked, acknowledged: false })).toEqual({
+      ok: false, error: labelError({ message: "masking_acknowledgement_required" }), reconcile: false,
+    });
   });
 
   it.each(["masking_disabled", "label_format_locked"])("keeps definite RPC refusal %s recoverable instead of treating it as unknown", async (message) => {

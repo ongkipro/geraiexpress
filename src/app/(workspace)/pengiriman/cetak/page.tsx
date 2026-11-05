@@ -7,6 +7,8 @@ import { readGeraiLogo } from "@/lib/gerai-logo-server";
 import { SNAPSHOT_COLUMNS, type LabelFacts, type LabelSize, type LabelSnapshot } from "@/lib/label-content";
 import { parseBatchIds, type BatchCandidate } from "@/modules/labels/batch-selection";
 import { BatchWorkbench, type BatchEntry } from "@/modules/labels/batch-workbench";
+import { isAcceptanceState } from "@/modules/labels/masking-acceptance-state";
+import { returnDestinationNote } from "@/modules/labels/return-destination";
 
 export const metadata: Metadata = { title: "Cetak label massal" };
 
@@ -15,7 +17,7 @@ export default async function BatchLabelPage({ searchParams }: { searchParams: P
   const ids = parseBatchIds((await searchParams).ids);
   if (!ids) notFound();
   const db = await dbServer();
-  const [{ data: rows, error }, { data: tenant }, { data: snapshotRows, error: snapshotError }, { data: firstRows, error: formatError }] = await Promise.all([
+  const [{ data: rows, error }, { data: tenant }, { data: snapshotRows, error: snapshotError }, { data: firstRows, error: formatError }, routes] = await Promise.all([
     db.from("shipments").select("id, reference, submission_state, awb, is_simulated, sender_name, sender_phone, sender_address, sender_area, recipient_name, recipient_phone, recipient_address, recipient_area, recipient_postal_code, item_description, weight_grams, is_cod, cod_amount_idr, pickup_snapshot, quote:shipment_quotes!shipments_tenant_id_selected_quote_id_fkey(courier, service)").eq("tenant_id", ws.tenant.id).in("id", ids),
     db.from("tenants").select("name, contact_whatsapp, masking_allowed").eq("id", ws.tenant.id).maybeSingle(),
     // Newest first: the first row per shipment is the one create_label_snapshot compares against.
@@ -23,6 +25,8 @@ export default async function BatchLabelPage({ searchParams }: { searchParams: P
       .order("version", { ascending: false }),
     // One first version per shipment: do not infer the lock from a paginated latest-history read.
     db.from("label_snapshots").select("shipment_id, size").eq("tenant_id", ws.tenant.id).in("shipment_id", ids).eq("version", 1),
+    // PR-46: provinces for the return-destination note (member-scoped; NULL = route unknown).
+    db.rpc("label_return_routes", { p_shipments: ids }),
   ]);
   if (error || snapshotError || formatError) throw new Error("Daftar label belum bisa dimuat.");
   if (!tenant || !rows?.length) notFound();
@@ -32,6 +36,15 @@ export default async function BatchLabelPage({ searchParams }: { searchParams: P
     if (!latest.has(snapshot.shipment_id)) latest.set(snapshot.shipment_id, snapshot);
   }
   const logo = await readGeraiLogo(ws.tenant.id);
+  const routeById = new Map(((routes.data ?? []) as { shipment_id: string; origin_province: string | null; destination_province: string | null }[])
+    .map((route) => [route.shipment_id, route]));
+  // One acceptance read per distinct courier; a NULL courier or a failed read stays `unverified` (fail closed).
+  const couriers = [...new Set(rows.map((row) => (row.quote as unknown as { courier: string } | null)?.courier).filter((c): c is string => Boolean(c)))];
+  const acceptanceByCourier = new Map(await Promise.all(couriers.map(async (courier) => {
+    const { data, error: acceptanceError } = await db.rpc("masking_acceptance_for", { p_courier: courier });
+    const state = (data as { state?: unknown } | null)?.state;
+    return [courier, !acceptanceError && isAcceptanceState(state) ? state : "unverified"] as const;
+  })));
   const byId = new Map(rows.map((row) => [row.id, row]));
   const entries: BatchEntry[] = ids.flatMap((id) => {
     const row = byId.get(id);
@@ -45,7 +58,14 @@ export default async function BatchLabelPage({ searchParams }: { searchParams: P
       geraiName: tenant.name, geraiLogo: logo?.logo ?? null, geraiWhatsapp: tenant.contact_whatsapp,
       pickupAddress: pickup.address ?? ws.outlet.pickupAddress, pickupArea: pickup.area ?? ws.outlet.pickupArea,
     };
-    return [{ row: row as BatchCandidate, facts, latest: latest.get(row.id) ?? null, lockedSize: lockedSizes.get(row.id) ?? null }];
+    const courier = quote?.courier ?? null;
+    const route = routeById.get(row.id);
+    return [{
+      row: row as BatchCandidate, facts, latest: latest.get(row.id) ?? null, lockedSize: lockedSizes.get(row.id) ?? null,
+      acceptance: { courier, state: (courier && acceptanceByCourier.get(courier)) || "unverified" },
+      returnNote: returnDestinationNote(courier, { originProvince: route?.origin_province ?? null, destinationProvince: route?.destination_province ?? null },
+        pickup.address ?? ws.outlet.pickupAddress),
+    }];
   });
   return <div className="flex flex-col gap-6"><Link href="/pengiriman" className="inline-flex min-h-11 items-center self-start text-primary print:hidden">← Kembali ke pengiriman</Link><BatchWorkbench entries={entries} maskingAllowed={tenant.masking_allowed} whatsapp={tenant.contact_whatsapp} preferenceKey={`gx:label-choice:${ws.tenant.id}:${ws.userId}`} /></div>;
 }

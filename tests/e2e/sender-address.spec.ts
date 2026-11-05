@@ -118,6 +118,8 @@ test("a masked label starts from the shipment's sender, prints its address, and 
   await signIn(page, "operator-a@geraiexpress.test");
   await page.goto(`/pengiriman/${id}/label`);
   await page.getByRole("switch", { name: /Gunakan masking pengirim/ }).check();
+  // T-084 / PR-46: JT has no recorded masking acceptance, so the masked print needs the acknowledgement.
+  await page.getByRole("checkbox", { name: /Saya mengerti penerimaannya belum terverifikasi/ }).check();
   await expect(page.getByLabel("Nama pengirim")).toHaveValue("Toko Pelanggan");
   await expect(page.getByLabel("No. HP pengirim")).toHaveValue("081311112222");
   await expect(page.getByLabel("Alamat pengirim (opsional)")).toHaveValue("Jl. Kenanga No. 3");

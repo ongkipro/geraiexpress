@@ -79,6 +79,8 @@ async function storeThenPrintMedia(page: Page) {
   await page.emulateMedia({ media: "print" });
 }
 const maskSwitch = (page: Page) => page.getByRole("switch", { name: /Gunakan masking pengirim/ });
+// T-084 / PR-46: the acknowledgement asked for a masked print of a courier that is not verified.
+const ackBox = (page: Page) => page.getByRole("checkbox", { name: /Saya mengerti penerimaannya belum terverifikasi/ });
 const printButton = (page: Page) => page.getByRole("button", { name: /^(Cetak label|Cetak ulang label)$/ });
 // The @page rule the sheet ships (Playwright's text matching skips <style> elements, so read the CSS rules).
 const pageRule = (page: Page) => page.evaluate(() =>
@@ -278,6 +280,8 @@ test("masking on needs all three sender fields, previews them, keeps the true id
   await expectTouchTargets(page);
   await evidence(page, "label-masked-screen");
 
+  // T-084 / PR-46: JT has no recorded masking acceptance, so the masked print needs the acknowledgement.
+  await ackBox(page).check();
   await printButton(page).click();
   await expect.poll(() => prints(page)).toBe(1);
   await expect(page.getByTestId("preview-source")).toContainText("Label tersimpan versi 1");
@@ -561,6 +565,8 @@ test("batch queue prints selected labels and excludes unavailable shipments", as
   await page.getByRole("switch", { name: "Gunakan masking pengirim" }).check();
   await expect(page.getByText("Isi kecamatan / kota pengirim.").first()).toBeVisible();
   await page.getByLabel("Kecamatan / kota pengirim untuk kiriman yang belum mengisinya").fill("Bandung");
+  // T-084 / PR-46: one acknowledgement for the masked batch (JT is not verified); shown once labels are included.
+  await ackBox(page).check();
   await page.getByRole("radio", { name: "10 × 10 cm" }).click();
   await expect(page.getByTestId("label-sheet")).toHaveCount(0);
   await expect(page.getByText(/Format resi terkunci pada 10 × 15 cm/)).toHaveCount(2);
@@ -619,3 +625,92 @@ for (const size of ["10x15", "10x10"] as const) {
     expect(count("label_print_events", fresh)).toBe(1);
   });
 }
+
+// T-084 / PR-46 / UX-9 acceptance gate: the notice, the required acknowledgement recorded in the history,
+// the return-destination help text (never on the printout), and the batch acknowledgement.
+test.describe("masking acceptance gate (PR-46)", () => {
+  test.afterEach(() => { localSql(`delete from private.masking_acceptance where courier = 'JT'`); });
+
+  test("an unverified courier needs the acknowledgement, which is recorded in the print history with the return note", async ({ page }) => {
+    resetTenant();
+    localSql(`delete from private.masking_acceptance where courier = 'JT'`);
+    const id = realShipment();
+    await signIn(page, "operator-a@geraiexpress.test");
+    await page.goto(`/pengiriman/${id}/label`);
+    await expect(page.getByTestId("mask-acceptance-state")).toHaveText("Belum terverifikasi untuk J&T Express");
+    await expect(page.getByTestId("masking-acceptance")).toHaveCount(0);
+    await maskSwitch(page).check();
+    const gate = page.getByTestId("masking-acceptance");
+    await expect(gate).toContainText("Belum terverifikasi untuk J&T Express");
+    await expect(ackBox(page)).not.toBeChecked();
+    const note = page.getByTestId("return-destination");
+    await expect(note).toContainText("alamat pickup (Jl. Pickup Nyata No. 5)");
+    await expect(note).toContainText("bukan ke pengirim yang tercetak di label");
+    await page.getByLabel("Kecamatan / kota pengirim").fill("Bandung");
+    await expectNoHorizontalOverflow(page);
+    await expectTouchTargets(page);
+    await evidence(page, "label-masking-acceptance-gate");
+
+    // Without the acknowledgement nothing is printed or recorded.
+    await printButton(page).click();
+    await expect(page.getByText("Centang konfirmasi bahwa penerimaan label masking oleh kurir belum terverifikasi sebelum mencetak.")).toBeVisible();
+    await expect(ackBox(page)).toBeFocused();
+    expect(await prints(page)).toBe(0);
+    expect(count("label_snapshots", id)).toBe(0);
+
+    await ackBox(page).check();
+    await printButton(page).click();
+    await expect.poll(() => prints(page)).toBe(1);
+    expect(localSql(`select acceptance_state || '|' || acknowledged from public.label_print_events where shipment_id = '${id}'`)).toBe("unverified|true");
+    await expect(page.getByTestId("print-history")).toContainText("Belum terverifikasi, dikonfirmasi operator");
+    // The gate and the return note are screen help only: absent from the printout.
+    await page.emulateMedia({ media: "print" });
+    await expect(page.getByTestId("masking-acceptance")).toBeHidden();
+    await expect(page.getByTestId("return-destination")).toBeHidden();
+    await expect(page.getByTestId("label-sheet")).not.toContainText("terverifikasi");
+    await page.emulateMedia({ media: "screen" });
+    await evidence(page, "label-masking-acceptance-history");
+  });
+
+  test("a verified courier prints masked without the acknowledgement", async ({ page }) => {
+    resetTenant();
+    localSql(`insert into private.masking_acceptance (courier, state, evidence_ref, recorded_by)
+      values ('JT', 'verified', 'Uji scan e2e', '00000000-0000-4000-a000-0000000000f1') on conflict (courier) do update set state = 'verified'`);
+    const id = realShipment();
+    await signIn(page, "owner-a@geraiexpress.test");
+    await page.goto(`/pengiriman/${id}/label`);
+    await expect(page.getByTestId("mask-acceptance-state")).toHaveCount(0);
+    await maskSwitch(page).check();
+    await expect(page.getByTestId("masking-acceptance")).toHaveCount(0);
+    await expect(page.getByTestId("return-destination")).toBeVisible();
+    await page.getByLabel("Kecamatan / kota pengirim").fill("Bandung");
+    await printButton(page).click();
+    await expect.poll(() => prints(page)).toBe(1);
+    expect(localSql(`select acceptance_state || '|' || acknowledged from public.label_print_events where shipment_id = '${id}'`)).toBe("verified|false");
+  });
+
+  test("a masked batch asks once, listing the unverified couriers, and records the acknowledgement on every label", async ({ page }) => {
+    resetTenant();
+    localSql(`delete from private.masking_acceptance where courier = 'JT'`);
+    const first = realShipment(), second = realShipment();
+    await signIn(page, "owner-a@geraiexpress.test");
+    await page.goto(`/pengiriman/cetak?ids=${first},${second}`);
+    await page.getByRole("switch", { name: "Gunakan masking pengirim" }).check();
+    await page.getByLabel("Kecamatan / kota pengirim untuk kiriman yang belum mengisinya").fill("Bandung");
+    const gate = page.getByTestId("masking-acceptance");
+    await expect(gate.getByTestId("masking-acceptance-couriers").getByRole("listitem")).toHaveCount(1);
+    await expect(gate).toContainText("Belum terverifikasi untuk J&T Express");
+    await expect(page.getByTestId("return-destination").getByRole("listitem")).toHaveCount(2);
+    await expectNoHorizontalOverflow(page);
+    await evidence(page, "batch-masking-acceptance-gate");
+    await page.getByRole("button", { name: "Cetak 2 label" }).click();
+    await expect(page.getByText("Centang konfirmasi bahwa penerimaan label masking oleh kurir belum terverifikasi sebelum mencetak.")).toBeVisible();
+    expect(await prints(page)).toBe(0);
+    expect(count("label_print_events", first) + count("label_print_events", second)).toBe(0);
+    await ackBox(page).check();
+    await page.getByRole("button", { name: "Cetak 2 label" }).click();
+    await expect.poll(() => prints(page)).toBe(1);
+    expect(localSql(`select string_agg(acceptance_state || '|' || acknowledged, ',') from public.label_print_events
+      where shipment_id in ('${first}', '${second}')`)).toBe("unverified|true,unverified|true");
+  });
+});

@@ -23,11 +23,12 @@ export async function issueInvoiceAction(shipmentId: string): Promise<InvoiceAct
 }
 
 // Appends the print request of the stored label snapshot to its print history through the existing label
-// command (it records that a print was requested, never that paper came out).
-export async function recordLabelPrintAction(snapshotId: string): Promise<InvoiceActionResult> {
+// command (it records that a print was requested, never that paper came out). `acknowledged` is the PR-46
+// acknowledgement for a masked label of a courier without recorded acceptance; the command enforces it.
+export async function recordLabelPrintAction(snapshotId: string, acknowledged: boolean): Promise<InvoiceActionResult> {
   await requireWorkspace();
-  if (!UUID.test(snapshotId)) return { ok: false, error: invoiceError({ message: "not_found" }) };
+  if (!UUID.test(snapshotId) || typeof acknowledged !== "boolean") return { ok: false, error: invoiceError({ message: "not_found" }) };
   const db = await dbServer();
-  const { error } = await db.rpc("record_label_print", { p_snapshot: snapshotId });
+  const { error } = await db.rpc("record_label_print", { p_snapshot: snapshotId, p_acknowledged: acknowledged });
   return error ? { ok: false, error: invoiceError(error) } : { ok: true };
 }

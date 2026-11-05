@@ -131,7 +131,7 @@ it.each([false, true])("freezes logo bytes, version and gerai name on the label,
   expect((await c.rpc("set_tenant_logo", args(null, null, revision()))).error).toBeNull();
   sql(`update public.tenants set name='Gerai Setelah Ganti' where id='${tenant}'`);
   expect((await create(masked)).data).toBe(first.data);
-  expect((await c.rpc("record_label_print", { p_snapshot: first.data })).error).toBeNull();
+  expect((await c.rpc("record_label_print", { p_snapshot: first.data, p_acknowledged: masked })).error).toBeNull();
   expect(sql(`select row_to_json(s) from public.label_snapshots s where id='${first.data}'`)).toBe(before);
   const next = await create(!masked); expect(next.error).toBeNull();
   const removed = JSON.parse(sql(`select row_to_json(s) from public.label_snapshots s where id='${next.data}'`));
@@ -140,5 +140,5 @@ it.each([false, true])("freezes logo bytes, version and gerai name on the label,
   expect(removed.content_digest).not.toBe(saved.content_digest);
   const outsider = await signIn("owner-b@geraiexpress.test");
   expect((await outsider.from("label_snapshots").select("gerai_logo, true_tenant_name").eq("id", first.data)).data).toEqual([]);
-  expect((await outsider.rpc("record_label_print", { p_snapshot: first.data })).error).not.toBeNull();
+  expect((await outsider.rpc("record_label_print", { p_snapshot: first.data, p_acknowledged: masked })).error).not.toBeNull();
 });

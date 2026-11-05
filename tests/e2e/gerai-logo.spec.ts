@@ -160,6 +160,8 @@ for (const size of ["10x10", "10x15"] as const) {
       await page.goto(`/pengiriman/cetak?ids=${ids.join(",")}`);
       // Choices are sessionStorage-backed; never inherit the prior masked test's choice.
       await page.getByRole("switch", { name: "Gunakan masking pengirim", exact: true }).setChecked(masked);
+      // T-084 / PR-46: these fixtures have no quote (NULL courier = unverified), so a masked batch needs the acknowledgement.
+      if (masked) await page.getByRole("checkbox", { name: /Saya mengerti penerimaannya belum terverifikasi/ }).check();
       await page.getByRole("radio", { name: size === "10x10" ? "10 × 10 cm" : "10 × 15 cm", exact: true }).click();
       await expect(page.getByTestId("label-sheet")).toHaveCount(ids.length);
       for (const id of ids) await expect(sheet(id)).toHaveAttribute("data-size", size);
@@ -309,6 +311,8 @@ for (const size of ["10x10", "10x15"] as const) {
     async function open(id: string, bytes: Buffer | null) {
       await page.goto(`/pengiriman/${id}/label`);
       await page.getByRole("switch", { name: /Gunakan masking pengirim/ }).setChecked(true);
+      // T-084 / PR-46: NULL courier (no quote) is unverified, so the masked print needs the acknowledgement.
+      await page.getByRole("checkbox", { name: /Saya mengerti penerimaannya belum terverifikasi/ }).check();
       const sizeOption = page.getByRole("radio", { name: size === "10x10" ? "10 × 10 cm" : "10 × 15 cm (standar)", exact: true });
       if (await sizeOption.isEnabled()) await sizeOption.check();
       else await expect(sizeOption).toBeChecked();

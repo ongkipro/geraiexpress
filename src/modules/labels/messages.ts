@@ -11,8 +11,13 @@ export const RETENTION_NOTE = "Identitas asli gerai dan alamat pickup tetap ters
 
 export const FORMAT_LOCKED = "Format resi terkunci sejak cetak pertama. Cetak ulang memakai ukuran yang sama.";
 
+// T-084 / PR-46 / UX-9 acceptance gate: a masked label of a courier without recorded scan acceptance.
+export const MASKING_ACK_REQUIRED =
+  "Centang konfirmasi bahwa penerimaan label masking oleh kurir belum terverifikasi sebelum mencetak.";
+
 const MESSAGES: Record<string, string> = {
   label_format_locked: FORMAT_LOCKED,
+  masking_acknowledgement_required: MASKING_ACK_REQUIRED,
   whatsapp_missing: WHATSAPP_MISSING,
   invalid_whatsapp: WHATSAPP_INVALID,
   masking_disabled: MASKING_DISABLED,
@@ -30,7 +35,7 @@ export const LABEL_UNKNOWN_RESULT =
 // Only stable refusals from the label commands prove that the write did not happen.
 // Transport errors and unrecognized responses require reconciliation, never a blind retry.
 export function labelPrintError(error: { message?: string; code?: string } | null | undefined): string {
-  const refusals = ["label_format_locked", "not_found", "invalid_input", "simulated_shipment", "no_awb", "masking_disabled", "sender_fields_required", "whatsapp_missing"];
+  const refusals = ["label_format_locked", "not_found", "invalid_input", "simulated_shipment", "no_awb", "masking_disabled", "sender_fields_required", "whatsapp_missing", "masking_acknowledgement_required"];
   return error?.message && refusals.includes(error.message) ? labelError(error) : LABEL_UNKNOWN_RESULT;
 }
 

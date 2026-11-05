@@ -30,7 +30,7 @@ it("a masked label with sender street and frozen logo and a receipt coexist on o
   const label = await owner.rpc("create_label_snapshot", { p_shipment: shipment, p_mask: true, p_size: "10x15",
     p_sender_name: "Pengirim Gabungan", p_sender_phone: "081311112222", p_sender_city: "Kota Pengirim", p_sender_address: "Jl. Pengirim Gabungan 5" });
   expect(label.error).toBeNull();
-  expect((await owner.rpc("record_label_print", { p_snapshot: label.data })).error).toBeNull();
+  expect((await owner.rpc("record_label_print", { p_snapshot: label.data, p_acknowledged: true })).error).toBeNull();
   const snapshotBefore = sql(`select row_to_json(s) from public.label_snapshots s where id = '${label.data}'`);
   expect(JSON.parse(snapshotBefore)).toMatchObject({ mask_sender: true, printed_sender_address: "Jl. Pengirim Gabungan 5",
     true_tenant_name: "Gerai Gabungan", gerai_logo: { mime: "image/png", base64: png } });

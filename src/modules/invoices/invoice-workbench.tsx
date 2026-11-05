@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { LabelContent } from "@/lib/label-content";
 import { PendingLabel, PreviewDesk, ScaledSheet, SegmentedControl, ZOOM_OPTIONS, type Zoom } from "@/modules/labels/print-ui";
+import { MaskingAcceptanceGate, ReturnDestinationNotes } from "@/modules/labels/masking-acceptance";
+import type { CourierAcceptance } from "@/modules/labels/masking-acceptance-state";
 import { issueInvoiceAction, recordLabelPrintAction } from "./actions";
 import type { InvoiceSnapshot } from "./invoice-content";
 
@@ -30,13 +32,17 @@ const PRINT_LABEL: Record<Scope, string> = { both: "Cetak resi lalu invoice", la
 // one print dialog for the label and then one for the invoice, each with only its own sheet in print.
 // Printing records one print request on the label's history when the label is part of it.
 export function InvoiceWorkbench({
-  shipmentId, shipmentRef, labelSnapshotId, label, invoice,
+  shipmentId, shipmentRef, labelSnapshotId, label, invoice, labelAcceptance, returnNote,
 }: {
   shipmentId: string;
   shipmentRef: string;
   labelSnapshotId: string | null;
   label: LabelContent | null;
   invoice: InvoiceSnapshot | null;
+  // T-084 / PR-46: set only for a stored masked label; null for an unmasked label or none.
+  labelAcceptance: CourierAcceptance | null;
+  // UX-9: the screen-only return destination; set whenever the stored label is masked.
+  returnNote: string | null;
 }) {
   const router = useRouter();
   const [scope, setScope] = useState<Scope>(label ? "both" : "invoice");
@@ -46,9 +52,12 @@ export function InvoiceWorkbench({
   const [jobs, setJobs] = useState<Job[]>([]);
   const [issuing, startIssue] = useTransition();
   const [printing, startPrint] = useTransition();
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [ackError, setAckError] = useState(false);
 
   const showLabel = label !== null && scope !== "invoice";
   const showInvoice = invoice !== null && scope !== "label";
+  const needsAck = showLabel && labelAcceptance !== null && labelAcceptance.state !== "verified";
   const printable = (scope === "label" ? label !== null : scope === "invoice" ? invoice !== null : label !== null && invoice !== null);
   // What is in print right now: the running job, otherwise the first sheet of the scope (so Ctrl+P on
   // "Keduanya" also prints the label alone, never both sheets in one job).
@@ -77,9 +86,14 @@ export function InvoiceWorkbench({
     setFailure(null);
     setNotice(null);
     if (!printable) return;
+    if (needsAck && !acknowledged) {
+      setAckError(true);
+      document.getElementById("invoice-masking-ack")?.focus();
+      return;
+    }
     startPrint(async () => {
       if (showLabel && labelSnapshotId) {
-        const result = await recordLabelPrintAction(labelSnapshotId);
+        const result = await recordLabelPrintAction(labelSnapshotId, labelAcceptance !== null && acknowledged);
         if (!result.ok) {
           setFailure(result.error);
           return;
@@ -128,6 +142,11 @@ export function InvoiceWorkbench({
             ) : (
               <p className="text-sm text-muted-foreground" data-testid="label-source">Label tersimpan dipakai apa adanya (dibuat di halaman label).</p>
             )}
+            {needsAck && labelAcceptance ? (
+              <MaskingAcceptanceGate id="invoice-masking-ack" pending={[labelAcceptance]} acknowledged={acknowledged} disabled={printing}
+                error={ackError} onAcknowledgedChange={(value) => { setAcknowledged(value); setAckError(false); setFailure(null); }} />
+            ) : null}
+            {label !== null && returnNote ? <ReturnDestinationNotes notes={[{ key: "label", text: returnNote }]} /> : null}
           </div>
           <div className="flex flex-col gap-2 border-t border-border p-5">
             <div className="flex items-center justify-between gap-3">
