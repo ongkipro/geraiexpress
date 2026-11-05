@@ -455,7 +455,7 @@ execution and print artifacts must be verified by the task's delivery run, not i
 - Proposal (T-084): `private.masking_acceptance` with `courier`, `state` (`unverified`, `verified`, `refused`), `evidence_ref`, `recorded_by`, `recorded_at`; a missing row or a NULL `label_snapshots.courier` counts as `unverified`. Members read the state through a security-definer RPC `masking_acceptance_for(courier)`. `label_print_events` gains nullable `acceptance_state` and `acknowledged` columns (its update guard stays) and `record_label_print` gains an acknowledgement parameter; the privilege allowlists are updated with the new signatures. Only a platform capability writes the acceptance rows.
 
 ## DATA-11 — Counter payment records and cash periods
-- Status: T-082 implemented, behaviorally verified and integrated locally (not deployed); verification recorded in STATUS.md; T-083 close/reopen is implemented with verification pending; T-087 remains proposed. Receipt content/identity accepted by the owner on 2026-11-05 (DEC-026).
+- Status: T-082 implemented, behaviorally verified and integrated locally (not deployed); verification recorded in STATUS.md; T-083 close/reopen is implemented and verified locally (not deployed); T-087 remains proposed. Receipt content/identity accepted by the owner on 2026-11-05 (DEC-026).
 - Owner: Engineering owner
 - Source: PR-38, PR-39, PR-45; DEC-023, DEC-026.
 - Statement: Payments taken at the counter shall be tenant-owned, append-only records bound to one shipment and one outlet cash period, with the amount in whole rupiah, the method, the collecting member, the expected charge from the confirmation snapshot and any difference with its reason; cash periods shall total those records and store counted cash and variance when closed.
@@ -474,7 +474,7 @@ execution and print artifacts must be verified by the task's delivery run, not i
 | Access | RLS on for all three tables (`counter_payments`, `cash_periods`, `cash_period_events`); member-scoped reads via `private.is_member(tenant_id)`. For `counter_payments`, grant column SELECT only for payment/receipt facts, not whole-table SELECT: the stored `expected_idr`, `difference_reason` and `void_reason` are tenant-admin-only through a membership- and admin-checked read RPC (IAM-1, UX-17). Members may read the actual amount, method, collecting member/time and active/voided fact for operations and receipts; possible inference from the shipment tariff does not authorize the stored administrative payload. `cash_periods` and `cash_period_events` remain member-readable. No INSERT/UPDATE/DELETE grants; writes only through security-definer RPCs; privilege-catalog allowlists updated with each new RPC. |
 
 ## DATA-12 — Public tracking links
-- Status: Implemented locally in T-085; independent validation pending; T-045 live events and delivered/returned expiry remain open.
+- Status: Implemented and independently reviewed locally in T-085 (not deployed); T-045 live events and delivered/returned expiry remain open.
 - Owner: Engineering owner
 - Source: PR-40, PR-12; DEC-023.
 - Statement: A tracking link shall be a revocable, unguessable token bound to one shipment, and the public read shall return only a fixed projection of status data and initials.

@@ -569,7 +569,7 @@ registration state and invitation sign-in links work without app-sent mail.
 - Evidence: Tenant `/` renders the gerai dashboard after account/workspace checks (`src/app/page.tsx`); dashboard modules supply the attention list, stats, trend, breakdowns and recent shipments. The workspace frame supplies the app header (T-079). Verification is recorded in STATUS.md. Public apex `/` remains marketing without session resolution.
 
 ## UX-17 — Counter money: payment record, receipt, day close and pilot report
-- Status: Receipt content/identity accepted 2026-11-05 (DEC-026); T-082 implemented and behaviorally verified locally; verification recorded in STATUS.md. T-083 cash closing is implemented with verification pending; pilot reporting remains proposed (PR-45; T-087); DEC-023 allows development before the Mengantar sync.
+- Status: Receipt content/identity accepted 2026-11-05 (DEC-026); T-082 implemented and behaviorally verified locally; verification recorded in STATUS.md. T-083 cash closing is implemented and verified locally (not deployed); pilot reporting remains proposed (PR-45; T-087); DEC-023 allows development before the Mengantar sync.
 - Owner: Paduka Ongki
 - Source: PR-38, PR-39, PR-45; gap analysis J5, J6, J13; lane C INDOPAKET "counter charged more than app quote" reviews; BI QRIS MDR rule (no surcharge to the consumer); UX-5, UX-13, UX-14, UX-16; DEC-026.
 - Statement: After a shipment is confirmed, the operator shall record how the customer paid in one step from the detail page, print or share a receipt whose amounts equal the accepted quote, close the outlet's day with a cash count, and the tenant administrator shall see a pilot report of the measures in PR-45.
@@ -586,7 +586,7 @@ registration state and invitation sign-in links work without app-sent mail.
 | `/kas` pilot report (admin) | Unduh CSV | Data timestamp shown; unknown cost shown as "tidak diketahui", never 0 |
 
 ## UX-18 — Share resi and public tracking page
-- Status: T-085 implemented locally; independent validation pending. Depends on T-045 for live status and delivered/returned expiry.
+- Status: T-085 implemented and independently reviewed locally (not deployed). Depends on T-045 for live status and delivered/returned expiry.
 - Owner: Paduka Ongki
 - Source: PR-40, PR-12; gap analysis J9, J10 and section 1 (tracking-page privacy benchmark); lane C section 3; SEC-8, DATA-12.
 - Statement: The operator shall send the resi to the sender in one action, and anyone holding the link shall see shipment progress without exposing personal data.

@@ -674,7 +674,8 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** none
 - **Done when:** `counter_payments` and `cash_periods` (table, one-open-per-outlet index and auto-open inside `record_counter_payment`) exist with record and void RPCs; payment requires a confirmed shipment with a known charge (`charge_unknown` otherwise); COD shipments never count the courier-collected shipping charge as counter cash (`cod_collected_by_courier`); `reopen_shipment` is refused while an active payment exists; one active record per shipment; difference requires a reason; the counter state is shown apart from the Mengantar payment state; void is admin-only with a reason and keeps the row; the 58 mm and 80 mm receipt print views and the WhatsApp receipt message are generated only from the confirmation snapshot and the payment record and contain no net cost, discount or remainder (unit test on the rendered text); DB tests for uniqueness, void rules and cross-tenant denial; e2e at 390, 768 and 1280 including double-click; demo amounts labelled "contoh".
 
-### [ ] T-083 — Cash periods and day close (PR-39)
+### [x] T-083 — Cash periods and day close (PR-39)
+- **Result (2026-11-05):** run `RUN-20261105T004846Z-14825ced` PASS; R3 approval e3516ec7; commit 81f85f3, merged 68d0b36. Operators/admins close; admin-only reopen with reason and audit; `period_open_exists` refusal; bounded open-period lookup lets a payment racing a close land in a fresh period. Not deployed.
 - **Primary requirement:** PR-39
 - **Constraints:** UX-17 item 5; DATA-11; IAM-1 counter rows
 - **Risk Level:** R3
@@ -690,7 +691,8 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** none
 - **Done when:** `private.masking_acceptance` treats a missing row or NULL courier as `unverified`; members read it through `masking_acceptance_for(courier)`; `label_print_events` gains nullable `acceptance_state` and `acknowledged`, `record_label_print` gains the acknowledgement parameter and the privilege allowlists follow; the print view shows the unverified notice, requires and records an acknowledgement in the print history, and states the return destination: for JNE, SiCepat and SAP the seller return address applies only when origin and destination are both on Java; otherwise, and for every API order where no return address can be sent, the parcel returns to the provider pickup address shown on the shipment detail (help 14715369); whether a web-setting return address applies to API orders is shown as "belum terverifikasi"; a unit test covers the Java/non-Java × courier matrix; only a platform capability changes acceptance state; DB and e2e tests; marketing tests still prove no masking claim (PR-35).
 
-### [ ] T-085 — Share resi and public tracking page (PR-40)
+### [x] T-085 — Share resi and public tracking page (PR-40)
+- **Result (2026-11-05):** run `RUN-20261105T022423Z-2127ba49` PASS (fresh run; the first run closed BLOCKED only because the ledger rejects any historical FAIL on scope expansions); R3 approval 73f2fe22; merged e3d4de9. HMAC token over an opaque link id, only SHA-256 stored, atomic hash reservation (retired hashes never revive), constant styled 404, apex-only, noindex, no-store, rate limited. Live statuses still wait for T-045. Not deployed.
 - **Primary requirement:** PR-40
 - **Constraints:** UX-18, DATA-12, SEC-8, PR-36, PR-12; no automated WhatsApp sending
 - **Risk Level:** R3
@@ -801,7 +803,8 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** T-094
 - **Done when:** Pengaturan lets a tenant admin upload, replace and remove the gerai logo with a preview and Bahasa errors for wrong type, oversize and failed read; operators and other gerai are refused at the RPC; the label and the 10x5 slip print the logo when present and the gerai name otherwise; DB tests for type/size/magic-byte refusal, tenant isolation and audit; e2e at 390 and 1280.
 
-### [ ] T-095 — Resi print formats 10x15 (10x10 parcel + 10x5 customer slip) and 10x10, locked (owner, 2026-11-03)
+### [x] T-095 — Resi print formats 10x15 (10x10 parcel + 10x5 customer slip) and 10x10, locked (owner, 2026-11-03)
+- **Result (2026-11-05):** run `RUN-20261105T004845Z-ada98d30` PASS; R3 approval 6b4f6fa6; commit 7460cd8, merged ffbb72f. 10x15 = 100x100 parcel + 100x50 slip; first print locks the format in the DB; long AWBs wrap on the slip. Not deployed; physical print unproved.
 - **Primary requirement:** PR-34
 - **Constraints:** DEC-017. Owner (2026-11-04): one shipment = one resi (sender and recipient on the same resi); two print formats: **10x15** = 10x10 parcel label + **10x5** slip for the sender/customer, and **10x10** = parcel label only. The 10x5 slip layout (owner revision 2026-11-04), top to bottom: gerai identity (small logo when one exists, otherwise the gerai name, always legible) and the courier/expedition name on one row; then the resi Code128 barcode; then the resi number printed under the barcode. Sender and recipient names are not on the slip. The format chosen at the first print is locked for that shipment; reprints use the same format.
 - **Risk Level:** R2

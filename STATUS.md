@@ -9,6 +9,28 @@ Independent-Review: T-082, T-096, T-100 and T-101 source runs closed PASS after 
 Independent-Reviewer: separate reviewer per run (T-082 decba79d, T-096 708b2380, T-100 1ff03b98, T-101 c28062b3)
 Independent-Review-Head: T-101 commit 0fd1be5 on top of merges ad326cb (T-082), b41b7df (T-096), 45d7534 (T-100); this handoff is a separate docs-only run.
 
+## Wave 2: T-095, T-083, T-085 (PASS; integrated, not deployed)
+
+Three parallel worktrees, one ledger run each, migrations 20261105120000 (resi format lock),
+20261105130000 (cash period close) and 20261105140000 (tracking links); each passed its own gates and
+an independent GPT-6.1 Sol R3 digest review before merging in order T-095 (ffbb72f), T-083 (68d0b36),
+T-085 (e3d4de9).
+- T-095: review P1 (a 40-character AWB clipped on the 10x5 slip) fixed with wrapping/shrinking and a
+  maximum-length print regression; visual PASS at 390/1280.
+- T-083: parent found raw/duplicate user-id prefixes for staff on /kas in the reviewer's screenshots;
+  members now read "Petugas 1 (Anda)" / "Petugas 2" and the close line "oleh Anda"; no UUIDs shown.
+- T-085: review found two P1s, both fixed with DB regressions: a member could republish a revoked
+  token's hash under a new generation (now a private hash registry; retired hashes never activate),
+  and a cross-shipment race between hash check and activation (now an atomic insert-first reservation
+  with a locked owner check; two-connection test). Malformed tokens never match; the 404 is one
+  constant styled page. The first ledger run closed BLOCKED because `delivery-ledger` refuses any
+  historical FAIL for scope-expanded paths even after a later PASS; a fresh run carried the same
+  surface. That rule differs from the documented "resolved, not unblemished" policy: a dotfiles
+  follow-up, not changed here.
+Integrated verification (RUN-20261105T032827Z-a76cd8bc): typecheck, 1,237 unit, 551 full DB,
+108 upgrade-replay DB tests over the affected files, 202 e2e at 390/1280 (2 skipped by design),
+ledger verify. Logs `/data/tmp/wave2/int/`.
+
 ## T-101 Whole-repo review remediation (PASS; committed, not deployed)
 
 Run `RUN-20261104T213403Z-eb091d80` (R3) on `feat/counter-ops-2026-11` after the T-082/T-096/T-100

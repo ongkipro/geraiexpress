@@ -312,7 +312,7 @@ flowchart LR
         WS["lib/workspace.ts<br/>tenant = active membership<br/>(ge_tenant cookie is only a selector)"]
         AreaRoute["GET /api/mengantar/area<br/>workspace member · local first (T-100)"]
         PaymentActions["modules/payments<br/>detail payment and /struk receipt actions"]
-        CashClose["/kas · cash-period-actions<br/>close: member · reopen: tenant admin<br/>T-083 runtime verification pending"]
+        CashClose["/kas · cash-period-actions<br/>close: member · reopen: tenant admin<br/>T-083 verified locally"]
         LogoActions["modules/tenants/logo-actions.ts<br/>settings · tenant-admin only"]
         TrackingEdge["/lacak/token · apex only<br/>cookie-less · 30/min/IP · invalid 10/min/IP · noindex<br/>pre-render lookup and constant 404"]
         TrackingPage["Server-rendered public tracking<br/>fixed projection only · no client JS needed"]
@@ -598,7 +598,7 @@ observed. Counts and executed checks are under "Verified counts and gates".
   `export.shipments`, and hides invoice snapshots from the default audit list (explicit filter
   still returns them). Invoice COD copy says goods value plus customer shipping charge, including
   the COD fee. Only Chromium print-to-PDF exists; courier acceptance remains unproven.
-- **Cash periods and day close (T-083, implementation present; runtime verification pending).**
+- **Cash periods and day close (T-083, verified locally; not deployed).**
   Tenant-host `/kas` lists every outlet's open period, active payment totals by method and
   `recorded_by` identity (stored label "Petugas", never an inferred staff name), expected cash and
   the last 20 closed periods. Rupiah/WIB formatters are shared with shipment payments; all demo

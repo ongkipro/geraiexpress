@@ -1,14 +1,23 @@
 {
-  "activeRun": null,
+  "activeRun": "RUN-20261105T035533Z-a148601a",
+  "activeTask": "WAVE2-HANDOFF",
+  "capability": "unattributed",
+  "job": "implementation",
   "lastRun": {
     "finishedAt": "2026-11-05T03:55:24Z",
     "result": "PASS",
     "runId": "RUN-20261105T032827Z-a76cd8bc"
   },
-  "observedHead": "e3d4de9e5f373aacda3f0857741b4f658fb18be9",
+  "model": "cx/gpt-6.1-sol",
+  "observedHead": "173a37acc6a4779880dffa62c2d2d190030c0417",
   "observedState": "INTEGRATING",
   "project": "geraiexpress",
+  "provider": "9router-fantastico",
+  "reasoningEffort": "medium",
+  "requirement": "PR-34",
+  "risk": "R1",
   "schemaVersion": 1,
   "statusAuthority": "STATUS.md",
-  "updatedAt": "2026-11-05T03:55:24Z"
+  "updatedAt": "2026-11-05T03:55:34Z",
+  "worker": "pi-parent-01a1a300"
 }
