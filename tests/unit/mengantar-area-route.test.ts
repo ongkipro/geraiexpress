@@ -5,6 +5,7 @@ vi.mock("@/lib/workspace", () => ({ loadWorkspace: mocks.workspace }));
 vi.mock("@/lib/db/server", () => ({ dbServer: async () => ({ rpc: mocks.rpc }) }));
 vi.mock("@/lib/mengantar/tenant", () => ({ tenantMengantar: mocks.tenant, mengantarFailure: () => "mengantar_unavailable" }));
 import { GET } from "../../src/app/api/mengantar/area/route";
+import { resetLimiters } from "../../src/lib/limiter";
 
 const area = { id: "5fc63169f8f44b34aa4c2ee1", province: "JAWA BARAT", city: "DEPOK", district: "TAPOS", subdistrict: "SUKATANI", postal_code: "16454" };
 const ready = (isDemo = false) => mocks.workspace.mockResolvedValue({ kind: "ready", workspace: { isDemo, tenant: { id: "tenant-verified" } } });
@@ -12,6 +13,7 @@ const get = (q = "Sukatani") => GET(new Request(`http://app.test/api/mengantar/a
 
 beforeEach(() => {
   vi.resetAllMocks();
+  resetLimiters();
   ready();
   mocks.rpc.mockResolvedValue({ data: [], error: null });
   mocks.tenant.mockResolvedValue({ ok: true, client: { searchAreas: mocks.search } });
@@ -38,6 +40,31 @@ describe("GET /api/mengantar/area catalogue-first", () => {
     expect(mocks.search).toHaveBeenCalledWith("Sukatani");
     expect(mocks.rpc.mock.invocationCallOrder[0]).toBeLessThan(mocks.tenant.mock.invocationCallOrder[0]);
     expect(await result.json()).toEqual({ source: "mengantar", areas: Array.from({ length: 30 }, () => ({ id: "provider-id" })) });
+  });
+
+  it("limits live fallback per tenant with no-store and Retry-After, without another provider call", async () => {
+    for (let i = 0; i < 30; i++) expect((await get(`miss-${i}`)).status).toBe(200);
+    const result = await get("another-miss");
+    expect(result.status).toBe(429);
+    expect(result.headers.get("Retry-After")).toBe("60");
+    expect(result.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(await result.json()).toEqual({ error: "rate_limited" });
+    expect(mocks.search).toHaveBeenCalledTimes(30);
+    mocks.workspace.mockResolvedValue({ kind: "ready", workspace: { isDemo: false, tenant: { id: "another-tenant" } } });
+    expect((await get()).status).toBe(200);
+    expect(mocks.search).toHaveBeenCalledTimes(31);
+  });
+
+  it("never spends or enforces the live budget for catalogue hits", async () => {
+    mocks.rpc.mockResolvedValue({ data: [area], error: null });
+    for (let i = 0; i < 31; i++) expect((await get()).status).toBe(200);
+    expect(mocks.tenant).not.toHaveBeenCalled();
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    for (let i = 0; i < 30; i++) expect((await get()).status).toBe(200);
+    expect((await get()).status).toBe(429);
+    mocks.rpc.mockResolvedValue({ data: [area], error: null });
+    expect((await get()).status).toBe(200); // Catalogue still works after live exhaustion.
+    expect(mocks.search).toHaveBeenCalledTimes(30);
   });
 
   it("never falls back for a demo miss", async () => {

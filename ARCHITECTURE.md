@@ -53,11 +53,11 @@ Executed evidence and remaining release gates are recorded in STATUS.md and RELE
 Older sections below preserve implementation history; this amendment governs the current
 hosting, readiness, environment delivery and migration behavior.
 
-## Staged cargo transport (T-080, 2026-11-03)
+## Non-COD cargo transport (T-080, 2026-11-03)
 
-The Public API adapter supports explicit non-COD cargo transport preparation without
-activating cargo in the shipment workflow. `estimate(..., includeCargo: true)` is a local
-parse opt-in, never a provider query flag; the default remains regular-only. Known cargo
+The Public API adapter supports non-COD cargo in the shipment workflow.
+`estimate(..., includeCargo: true)` is a local parse opt-in, never a provider query flag;
+the adapter default remains regular-only, while the non-COD workflow opts into cargo. Known cargo
 response keys map to base couriers plus service class. Cargo tariff/net/discount/ETA come
 only from cargo-specific fields, with a positive integer-gram route minimum. Missing or
 inconsistent fields are dropped. Cargo COD is excluded during parsing and refused locally
@@ -73,14 +73,12 @@ on uncertainty without retry. Read-back preserves a Boolean mode when supplied; 
 malformed mode stays unknown rather than becoming false. The original transport allowlist,
 redirect refusal, time/size bounds and secret-safe failures remain unchanged.
 
-The real shipment actions still supply regular services only. No schema, historical SQL,
-UI, authorization, credential mapping or dispatcher activation is changed here. Full T-080
-still needs verified GeraiExpress seller/route/order evidence, a new sourced cargo-limit
-configuration correction, authoritative confirmation snapshots and end-to-end cargo UI,
-dispatch/reconciliation proof. Tests with public/synthetic responses are not seller terms,
-provider entitlement, live-order agreement or release readiness. Existing Partner signing,
-onboarding, BYOK and API-key rotation are reused rather than reimplemented; callback-secret
-persistence/webhook readiness remain outside this slice (T-045/PR-19).
+Non-COD JNE, SiCepat and iDexpress cargo are wired through quoting, confirmation and dispatch
+under the sourced rules added by `20261103100000_cargo_noncod.sql`. Cargo COD and SAP cargo
+remain excluded. Full T-080 remains open for the outstanding authenticated provider/route/order
+evidence; local implementation is not proof of provider acceptance or release readiness. Existing
+Partner signing, onboarding, BYOK and API-key rotation are reused rather than reimplemented;
+callback-secret persistence/webhook readiness remain outside this slice (T-045/PR-19).
 
 ## Canonical design
 
@@ -251,9 +249,11 @@ flowchart LR
     subgraph Worker["Application server — Next.js 16.4.3 (self-hosted container, DEC-020)"]
         MW["proxy.ts (Node runtime)<br/>host → audience 404 matrix · session cookie rotation · host-only cookies<br/>Cache-Control: private, no-store · CSP + security headers"]
         Pages["App Router pages<br/>public, auth, workspace and /admin routes<br/>(full list: Runtime route map)"]
-        Actions["Server actions<br/>auth · contacts · credentials · shipments · labels · invoices · pricing"]
+        Actions["Server actions<br/>auth · contacts · credentials · shipments · labels · invoices · payments · tenant logos · pricing"]
         WS["lib/workspace.ts<br/>tenant = active membership<br/>(ge_tenant cookie is only a selector)"]
         AreaRoute["GET /api/mengantar/area<br/>workspace member · local first (T-100)"]
+        PaymentActions["modules/payments<br/>detail payment and /struk receipt actions"]
+        LogoActions["modules/tenants/logo-actions.ts<br/>settings · tenant-admin only"]
         Health["/healthz (no-store)"]
         Hosts["lib/hosts.ts<br/>host table, route-family matrix, per-environment origins"]
         AuthMod["lib/auth/**<br/>scrypt · emailed code · refresh rotation · TOTP · Turnstile<br/>signs HS256 access tokens"]
@@ -263,7 +263,9 @@ flowchart LR
         AuthDb["auth schema: users · sessions · otp_codes · mfa_factors<br/>(no API grants) · 14 machine-only auth_* functions<br/>before_user_created gate blocks public signup<br/>anonymous identities locked to demo"]
         DB["public schema: RLS on every table<br/>composite same-tenant FKs<br/>column-level grants"]
         AreaRPC["search_mengantar_areas(query, limit)<br/>authenticated · active membership · max 30"]
-        Areas["PostgreSQL: public.mengantar_areas<br/>provider reference data · RLS · no API table grants"]
+        Areas["PostgreSQL: public.mengantar_areas<br/>shared provider reference data · no tenant ownership · RLS · no API table grants"]
+        LogoVersions["private.gerai_logo_versions<br/>append-only raster versions"]
+        LabelCapture["label_snapshots INSERT trigger<br/>captures frozen logo and gerai name"]
         Priv["private schema: helpers, triggers,<br/>quote_costs, seller_credentials,<br/>tenant_mengantar_onboarding (no API grants)"]
     end
     Sim["Simulated provider<br/>(SQL, demo tenants only)"]
@@ -275,13 +277,19 @@ flowchart LR
     UI --> MW --> Pages
     UI --> AreaRoute
     AreaRoute -->|user JWT via PostgREST| AreaRPC --> Areas
-    AreaRoute -->|empty catalogue + connected non-demo only: address/search| Mengantar
+    AreaRoute -->|"empty catalogue + connected non-demo only: address/search"| Mengantar
     AreaLoader --> Areas
     MW --> Hosts
     UI -->|form posts| Actions
     Pages --> WS
     Actions --> WS
     WS -->|user JWT| PgRest
+    Pages --> PaymentActions
+    Pages --> LogoActions
+    PaymentActions & LogoActions --> WS
+    PaymentActions & LogoActions -->|user JWT| PgRest
+    PgRest -->|set_tenant_logo RPC| LogoVersions
+    LogoVersions --> LabelCapture --> DB
     Actions -->|user JWT| PgRest
     MW --> AuthMod
     Actions --> AuthMod
@@ -289,7 +297,7 @@ flowchart LR
     PgRest --> DB
     DB --> AuthDb
     DB --> Priv
-    DB -->|request_quotes / confirm_shipment<br/>is_demo only| Sim
+    DB -->|"request_quotes / confirm_shipment<br/>is_demo only"| Sim
     Dispatcher -->|"dispatch_claim / dispatch_record<br/>service_role only"| DB
     Dispatcher -->|seller key opened in the app server| Mengantar
     Actions --> Dispatcher
@@ -338,9 +346,11 @@ DATA-14's explicit fallback retains exact actual grams and NULL volume when dime
 formula are missing. Complete dimensions apply the sourced tolerance to the heavier raw
 weight; below 1 kg, positive raw grams are retained at integer-gram precision without a
 provider-wide minimum or half-fare. Only fictional demo tariff pricing retains its existing
-whole-kg pricing minimum. Published cargo ranges are dated evidence, not executable route
-constraints. The live adapter remains regular-only even if a cargo rule is appended; cargo
-route minima and order support remain open under T-080. Intake shows all three weights,
+whole-kg pricing minimum. The original cargo ranges are dated evidence; the forward
+`20261103100000_cargo_noncod.sql` migration adds the sourced executable rules for non-COD
+JNE, SiCepat and iDexpress cargo. Quoting, confirmation and dispatch use those rules; cargo COD
+and SAP cargo stay excluded, and authenticated provider/route/order evidence remains T-080.
+Intake shows all three weights,
 admin source/date and the reweigh/seller-balance warning. Nullable provider reweigh storage
 and presentation do not implement T-045 ingestion. Current verification and independent
 review are recorded in STATUS.md and the T-080 review report; full task/release acceptance
@@ -433,8 +443,8 @@ observed. Counts and executed checks are under "Verified counts and gates".
   recovers through `sellers/api-key` (get); `API_KEY_DISABLED` and `SELLER_DEACTIVATED` set
   `provider_restricted` without retry; a BYOK key is never touched; `callbackSecret` is ignored.
   Unverified: every Partner response shape beyond the recorded sandbox fixtures. Open: bindings
-  written before T-032 are not re-verified, Partner `retry_after` and restriction states are still
-  wiped by the next `begin` (T-054).
+  written before T-032 are not re-verified. T-054 preserves durable Partner stops/retry windows
+  and fences onboarding outcomes during `rotation_unknown`.
   F1's `private.operation_credential` lets original operations reconcile after regeneration using
   the active same-tenant, same-environment Partner key; superseded BYOK keys and mode changes
   never cross versions. Begin and complete onboarding refuse `rotation_unknown` (55000).
@@ -443,11 +453,13 @@ observed. Counts and executed checks are under "Verified counts and gates".
   (`sandbox`/`production`, default sandbox; backfill assumes no production rows), one active
   credential per tenant/environment and seller-id uniqueness per environment. Machine key reads
   and claims take the environment; reconcile payloads derive it from the operation and the Worker
-  checks the caller environment (SQL `p_env` is still T-057). `CREDENTIAL_KEYS` JSON and
+  checks the caller environment; T-057 also enforces SQL `p_env`. `CREDENTIAL_KEYS` JSON and
   `CREDENTIAL_KEY_CURRENT` select the sealing key; opening uses stored `key_version`; single
   `CREDENTIAL_KEY` remains v1. `reencryptCredentials`, `listTenantIds` and machine-only
   `rewrap_seller_credential` exist, fenced/audited without changing credential identity or
-  active/superseded state; F1 permits only increasing key versions. No cron/route invokes rewrap.
+  active/superseded state; F1 permits only increasing key versions. The hourly
+  `/api/internal/cron/cleanup` invokes environment-scoped rewrap (T-057), emitting
+  `credential_rewrap` counts or disabled/failure state; retain old keys until completion is verified.
   `pnpm check:environments` refuses secret values shared between environments, a production
   provider in non-production and Turnstile disabled outside local; it checks the committed templates
   by default and the real files when given. The deploy scripts of the Worker era are gone (T-062); a separate
@@ -609,7 +621,7 @@ observed. Counts and executed checks are under "Verified counts and gates".
 ```mermaid
 flowchart TB
     subgraph app["src/app (routes)"]
-        entry["page.tsx → redirect by session state"]
+        entry["page.tsx → apex marketing · tenant dashboard after account/workspace checks"]
         masuk["masuk/ · akses/ · pilih-gerai/"]
         subgraph ws["(workspace)/ — layout requires a workspace"]
             q["pengiriman/ (queue, attention list, search, pages)"]
@@ -617,11 +629,13 @@ flowchart TB
             det["pengiriman/[id] (intake form ⇄ frozen detail)"]
             lab["pengiriman/[id]/label (stored snapshot, masked label, print)"]
             invc["pengiriman/[id]/invoice · pengiriman/export.csv"]
+            receipt["pengiriman/[id]/struk · receipt print and WhatsApp"]
+            batch["pengiriman/cetak · batch label workbench"]
             kon["kontak/ · kontak/[id]"]
             set["pengaturan/ (capability readiness)"]
             ang["anggota/ (tenant admin: members, invitations)"]
         end
-        subgraph adm["admin/ — layout requires grant + aal2"]
+        subgraph adm["admin/ — layout requires grant + aal2 + recent TOTP"]
             adt["admin (tenant directory, lifecycle)"]
             adk["admin/akses (platform grants)"]
             ada["admin/audit (append-only history)"]
@@ -641,6 +655,8 @@ flowchart TB
         conF["contacts/forms.tsx (client)"]
         labM["labels/ · invoices/ · exports/ · pricing/ (actions, forms, content)"]
         credR["credentials/rotation-actions.ts · partner-deps.ts · partner-config.ts"]
+        payM["payments/ · payment record, void and receipt actions"]
+        logoM["tenants/logo-actions.ts · tenant-admin versioned logo"]
     end
     subgraph lib["src/lib"]
         authA["auth-actions.ts"]
@@ -652,6 +668,7 @@ flowchart TB
         err["errors.ts · format.ts"]
         hostsL["hosts.ts · csp.ts · auth-errors.ts · db/cookies.ts · db/session.ts · db/refresh.ts"]
         authM["auth/ (service · jwt · password · otp · totp · turnstile · store · instance)"]
+        logoRead["gerai-logo-server.ts · tenant_logo RPC for new previews"]
         mn["mengantar/: dispatcher · public-api · partner-api · partner-onboarding · partner-key-rotation · pickup"]
     end
     ui["src/components (+ ui/ shadcn radix-rhea, UI-2 tokens)"]
@@ -669,7 +686,16 @@ flowchart TB
     kon --> conF --> conA
     shipA & conA --> shipD
     shipA & conA & authA & wsL --> sb
-    lab & invc --> labM --> sb
+    lab & batch & invc --> labM --> sb
+    det & receipt --> payM --> sb
+    set --> logoM --> sb
+    lab & batch --> logoRead --> sb
+    area["api/mengantar/area/route.ts"] --> areaRPC["PostgREST · search_mengantar_areas · member JWT"]
+    areaRPC --> catalogue["public.mengantar_areas · shared reference data"]
+    area -->|empty local result only| mn
+    areaLoad["scripts/load-mengantar-areas.mjs · owner-approved load"] --> catalogue
+    logoStore["private.gerai_logo_versions"] --> capture["label_snapshots INSERT capture"] --> snapshots["public.label_snapshots · frozen logo/name"]
+    sb -->|set_tenant_logo RPC| logoStore
     set & adi --> credR --> sb
     shipA --> mn
     app --> hostsL
@@ -699,20 +725,40 @@ erDiagram
     tenants ||--o| tenant_mengantar_onboarding : "private Partner onboarding state"
     tenants ||--o{ gerai_discount_terms : "append-only versions"
     shipments ||--o{ label_snapshots : "append-only"
-    label_snapshots ||--o{ label_print_events : "append-only"
+    label_snapshots |o--o{ label_print_events : "required for label kind only"
+    shipments ||--o{ label_print_events : "owns label and receipt requests"
+    counter_payments |o--o{ label_print_events : "optional receipt payment"
+    shipments ||--o{ counter_payments : "active or voided records"
+    outlets ||--o{ cash_periods : "one open period"
+    outlets ||--o{ counter_payments : "payment outlet"
+    cash_periods ||--o{ counter_payments : "payment period"
+    tenants ||--o{ gerai_logo_versions : "private append-only versions"
+    mengantar_areas {
+        text id PK
+        text dataset_version
+        text search
+    }
     shipments ||--o{ invoice_snapshots : "append-only"
     shipments ||--o{ batch_payment_attempts : "private, one open per batch"
 ```
 
 `platform_grants` (capabilities per identity) and `audit_events` are platform-only: no PostgREST
-writes, reads need the capability and an `aal2` session, and audit rows cannot be updated,
+writes, reads need the capability and an `aal2` session with recent TOTP, and audit rows cannot be updated,
 deleted or truncated.
 
 `quote_costs`, `seller_credentials`, `tenant_mengantar_onboarding`, `batch_payment_attempts`,
-`batch_payment_authorizations`, `reference_counters` and `invoice_counters` live in the `private`
-schema with RLS enabled and no API-role grants. Every
+`batch_payment_authorizations`, `reference_counters`, `invoice_counters` and `gerai_logo_versions`
+live in the `private` schema with RLS enabled and no API-role grants. Every
 child table carries `tenant_id` and references its parent through a composite
 `(tenant_id, id)` foreign key, so cross-tenant reparenting fails in the database.
+
+`mengantar_areas` is shared provider reference data, without tenant ownership; only the
+member-checked search RPC exposes it, and its owner-approved load is separate from migrations.
+`label_print_events.snapshot_id` is optional overall and required only for `kind = 'label'`;
+receipt events require it to be NULL. `receipt_payment_id` is optional for receipts (NULL for COD)
+and NULL for label events. Each event belongs to a shipment and proves an application print
+request, not paper output. Snapshot INSERT captures the current private logo version and gerai
+name; later logo edits never rewrite stored labels. `/kas` and the separate 10x5 slip are not built.
 
 ### Primary flow — demo counter issuance
 
@@ -736,7 +782,7 @@ sequenceDiagram
     W->>DB: rpc request_label(id) → existing completed job reused
 ```
 
-## Runtime route map (implemented, from `src/app`, 2026-10-28)
+## Runtime route map (implemented, from `src/app`)
 
 Observed: one container serves every host. `src/lib/hosts.ts` maps the Host header to an audience and
 `src/proxy.ts` (the former `src/middleware.ts`, Node runtime) answers 404 (plain Bahasa text, no redirect) for a path outside that audience
@@ -746,14 +792,14 @@ API.
 
 | Audience (host) | Routes served | Access |
 |---|---|---|
-| Public (apex `geraiexpress.com`, `staging.`) | `/` (signed-in users are redirected to `/pengiriman`, `/pilih-gerai`, `/akses` or `/admin`), `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`, `/robots.txt`, `/sitemap.xml`, `/healthz` | No session; the proxy resolves no session on this host |
-| Gerai application (`app.`, `app-staging.`) | `/` (redirects), `/masuk`, `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/undangan`, `/akses`, `/pilih-gerai`, `/api/mengantar/area`, `/robots.txt`, `/healthz`, and the workspace: `/pengiriman`, `/pengiriman/baru`, `/pengiriman/[id]`, `/pengiriman/[id]/label`, `/pengiriman/[id]/invoice`, `/pengiriman/[id]/struk`, `/pengiriman/export.csv`, `/kontak`, `/kontak/[id]`, `/pengaturan`, `/anggota` | Workspace group: verified active membership; tenant from the `ge_tenant` selector validated against memberships; `/anggota` and the CSV export are tenant admin only |
-| Super Admin (`owner.`, `owner-staging.`) | `/`, `/masuk` (demo and registration hidden), `/verifikasi-2fa`, `/admin` (tenant directory with slug), `/admin/tenant/[id]` (masking control), `/admin/pengajuan`, `/admin/integrasi`, `/admin/akses`, `/admin/audit`, `/admin/diskon`, `/admin/diskon/[tenant]`, `/robots.txt`, `/healthz` | Platform grant plus capability plus `aal2` (`requirePlatform`) |
+| Public (apex `geraiexpress.com`, `staging.`) | `/` (marketing, without session resolution), `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`, `/robots.txt`, `/sitemap.xml`, `/healthz` | No session; the proxy resolves no session on this host |
+| Gerai application (`app.`, `app-staging.`) | `/` (gerai dashboard after account/workspace checks), `/masuk`, `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/undangan`, `/akses`, `/pilih-gerai`, `/api/mengantar/area`, `/robots.txt`, `/healthz`, and the workspace: `/pengiriman`, `/pengiriman/baru`, `/pengiriman/cetak`, `/pengiriman/[id]`, `/pengiriman/[id]/label`, `/pengiriman/[id]/invoice`, `/pengiriman/[id]/struk`, `/pengiriman/export.csv`, `/kontak`, `/kontak/[id]`, `/pengaturan`, `/anggota` | Workspace group: verified active membership; tenant from the `ge_tenant` selector validated against memberships; `/anggota` and the CSV export are tenant admin only |
+| Super Admin (`owner.`, `owner-staging.`) | `/`, `/masuk` (demo and registration hidden), `/verifikasi-2fa`, `/admin` (tenant directory with slug), `/admin/tenant/[id]` (masking control), `/admin/pengajuan`, `/admin/konfigurasi`, `/admin/pantau-pengajuan`, `/admin/pelanggan`, `/admin/pelanggan/[tenant]`, `/admin/integrasi`, `/admin/akses`, `/admin/audit`, `/admin/diskon`, `/admin/diskon/[tenant]`, `/robots.txt`, `/healthz` | Platform grant plus capability plus `aal2` with recent TOTP (`requirePlatform`) |
 | Hooks (`hooks.`, `hooks-staging.`) | the reserved prefix `/api/webhooks` (no route exists), `/healthz` | None today; cookies are stripped and none is set (the Send Email Hook route `/api/auth/send-email` was removed by T-066) |
 | Shared (loopback in a non-production build, or `HOST_SHARED_MODE=1`, e.g. the local container behind the local proxy profile) | Every route above on one origin (not the internal cron routes) | As the route's own audience |
 | Internal (`internal.geraiexpress.local`, never routed by the proxy) | `POST /api/internal/cron/dispatch`, `POST /api/internal/cron/cleanup`, `/healthz` | `CRON_SECRET` bearer (constant-time compare); 404 while the secret is unset; no cookie reaches the route |
-| API route handlers | `GET /api/mengantar/area` (member-only local catalogue search, including demo; 401 without a workspace; live fallback only on a connected non-demo catalogue miss), `GET /pengiriman/export.csv` (tenant-admin CSV; 403 operator and demo, 404 anonymous), `GET /healthz` (liveness only), and the internal `POST /api/internal/cron/*` routes above | Workspace, tenant admin, none, `CRON_SECRET` respectively |
-| Not present | any webhook, cancel or tracking route; responsibility acceptance at activation; admin close for unknown payment or ambiguous pickup reservation; scheduled credential rewrap | |
+| API route handlers | `GET /api/mengantar/area` (member-only local catalogue search, including demo; 401 without a workspace; live fallback only on a connected non-demo catalogue miss), `GET /pengiriman/export.csv` (tenant-admin CSV; 403 operator and demo, 404 anonymous), `GET /healthz` (anonymous SQL-backed readiness, not provider/mail readiness), and the internal `POST /api/internal/cron/*` routes above | Workspace, tenant admin, none, `CRON_SECRET` respectively |
+| Not present | any webhook, cancel or tracking route; responsibility acceptance at activation; admin close for unknown payment or ambiguous pickup reservation | |
 
 `src/app/robots.ts` reads the request host: the production apex allows only the five public pages
 and disallows `/api`, `/admin` and `/masuk`; every other host answers a disallow-all `robots.txt`.
@@ -768,7 +814,7 @@ Bahasa Indonesia.
 | Hosting | Self-hosted Node container (Next.js standalone, `Dockerfile`, `compose.yaml`: app, scheduler, PostgREST, Caddy proxy, optional PostgreSQL) with the dispatcher sweep and demo cleanup run by the scheduler container through internal cron routes; the data store is plain PostgreSQL 17 behind PostgREST (a local `gxdb` Compose stack here, nothing hosted is used by this build); the app calls Mengantar directly from the server's fixed IPv4 address, no gateway exists | Decision (DEC-020): the owner provisions a server with a fixed IPv4 address, the Mengantar allow-list address; provider, region and DNS are open; ARCH-2, T-062 (built), T-052 cancelled |
 | Database and auth | PostgreSQL 17 + PostgREST (HS256 JWT) + application-owned auth module (`src/lib/auth/**`, `src/lib/db/**`, `db/migrations/20261029100000_auth_core.sql`); migrations and seed in `db/`; local stack `compose.db.yaml` | Decision (DEC-021, ADR-0002): production database hosting (same server or managed), backups and point-in-time recovery are owner decisions and gates (T-067) |
 | Environments | Env templates `infra/env/{staging,production}.env.example` and the local `.env.local`/`.env.container`; `pnpm check:environments` validates env files, the Compose model and the proxy config (no secret value shared between environments, no production value in staging, Turnstile never disabled outside local); the committed templates pass, a separate staging environment (own database and secrets) is still the owner's to create | Owner creates the staging and production environments and env files; no deployment implied; ARCH-6, DEL-2 |
-| Seller binding and encryption | Built T-032/T-034/T-050/F1: machine writers, write-once seller id unique per provider environment, scoped credentials, key ring and same-environment Partner reconciliation across regeneration | SQL consent-version and caller-environment enforcement plus scheduled rewrap remain T-057; DATA-4, SEC-7 |
+| Seller binding and encryption | Built T-032/T-034/T-050/F1: machine writers, write-once seller id unique per provider environment, scoped credentials, key ring and same-environment Partner reconciliation across regeneration | T-054/T-057 locally enforce SQL consent versions, caller environment, rotation-outcome fencing and hourly rewrap; deployment verification remains a release gate; DATA-4, SEC-7 |
 | Pricing | Normal tariff plus COD fee once; private cost/nullable provider percentage stored; terms and ceiling built; cost/assigned terms rendered to tenant admins only; no platform fee or ledger | Written commercial confirmation/courier gates remain; terms have no provider-environment column; DATA-9, BILL-3, T-048 |
 | Shipment reference | `<PREFIX>-<yymmdd>-<seq>` from `private.reference_counters` (WIB date, row lock, widening past 999); old `GX<yymmdd>-<6 chars>` references stay valid; demo references repeat across tenants (`db/migrations/20261028120000_tenant_slug_reference.sql`) | Built per CTX-41 item 12; DATA-8, PR-37 |
 | Tenant slug | `tenants.slug` immutable and unique, `tenants.shipment_prefix` immutable (unique across non-demo tenants), both set by the `tenants_identity` trigger at insert | Built per CTX-41 item 11; DATA-8, PR-37 |
@@ -817,41 +863,39 @@ regeneration, rotation guards, rewrap downgrade and stale-check ordering. F2 fix
 status/read-back, added intake coverage and audit/export/validation/contact fixes. Documentation
 and task-state drift are corrected here. Remaining findings are explicitly below and in
 T-056 to T-059. The earlier T-041 ceiling/repricing rejection was reworked; T-053 closes its
-provider-percentage and UI gaps. Final independent reviews of wave F found no Critical/High; the lead fixed the middleware 503 answer and the neutral marketing copy. Open items: T-056 (pickup copy contradictions, fresh-reservation slot window), T-057 (rotation_unknown overwrite by the onboarding-outcome writer), T-060 (Auth ingress follow-ups) and T-061 (origin validation per deployable environment).
+provider-percentage and UI gaps. Final independent reviews of wave F found no Critical/High; the lead fixed the middleware 503 answer and the neutral marketing copy. Open items: T-056 (pickup copy contradictions, fresh-reservation slot window), T-060 (Auth ingress follow-ups) and T-061 (origin validation per deployable environment).
 
 Still unproved: supervised provider payment/regeneration/pickup captures (T-048), migrations on
 the deployed preview, db lint after all new migrations, full release/ledger/production gates,
 and any final-build runtime result not recorded in STATUS.md. DEC-005 landing is owned by the
 lead's matching smoke/Worker-e2e record, not inferred from the pins.
 
-## Known defects and residuals (open on 2026-10-28)
+## Known defects and residuals
 
 Closed in the working tree (see "Merged 2026-10-28"): P0-1 seller binding (T-032), P0-2 and P0-3
 batch payment (T-033), P0-4 marketing claims (T-036), P1-2 privilege catalog (T-035), P1-3 and P1-4
 quote origin and credential fence (T-034), P1-1 and P1-9 to P1-11 Auth ingress, cookies and CSP
-base policy (T-038, T-042; the Partner retry-after part of that group is open, see below), P1-15
+base policy (T-038, T-042; Partner retry-after subsequently fixed by T-054), P1-15
 demo quotas and the `demo_limit`/cleanup path (T-051) and the P2 Bahasa error pages and gerai
 switcher (T-051). The table records what still exists and is wrong or unproven; it is not a
-target.
+target. Implemented locally by T-054/T-057: durable Partner stops/retry windows, platform TOTP
+recency, SQL-enforced consent versions, environment-bound reconciliation/payment claims and
+rotation-outcome fencing. The hourly cleanup task also performs credential rewrap and auth expiry
+purge (`credential_rewrap`, `auth_purge`; OBSERVABILITY.md). Deployment verification remains a
+separate release gate.
 
 | Residual | What exists today | Task |
 |---|---|---|
 | Pre-existing Partner bindings | Bindings and active Partner credentials written before T-032 are not re-verified; before any shared environment migrates, list every non-null `partner_seller_id` and active Partner credential and check each with `sellers/list` | Operator step (T-032 Result) |
-| Partner `retry_after` and restriction | The next `begin_partner_seller_onboarding` still wipes a stored retry window; a 429 `Retry-After` before the key-rotation fence is returned but not stored | T-054 |
-| Owner session recency | The 12-hour owner and 7-day gerai cookie bounds slide on refresh; `private.platform_capable` checks only the `aal2` level, so an active owner session is not re-prompted for TOTP | T-054 |
 | Script CSP | Report-Only only (nonce limitation above) | T-055 |
 | Runtime/release gate | The pre-DEC-020 Workers smoke and e2e are history; the container gate (image build, `smoke:container`, container e2e) replaced them under T-062 and is recorded in BUILD-LOG and by the lead in STATUS.md | T-037, T-055 |
 | Stuck payment or ambiguous reservation | Sent/unknown payment is reconcile-only and readable zero-count answers use per-order reads; no admin close for persistent unknown payment or `reservation_ambiguous` | T-056 |
 | Unpaid-batch lock note | `compute_unpaid_batch` shipment locking versus authorization key-share locking may deadlock; inference, not reproduced, and not a proven explanation of the DB flake | T-054 |
 | Staging isolation | Environment scope/key ring are built and `check:environments` passes on the committed templates, but no separate staging environment (own database and secrets) exists yet; the real env files are checked at release (RELEASE.md) | Owner gate in T-050 |
-| Rewrap scheduling | `reencryptCredentials` and tenant enumeration exist but no cron/route invokes them; production must switch ring bindings at first rotation and retain old keys until complete | T-057 |
-| SQL consent versions | Server-held versions are not enforced by SQL; direct tenant-admin begin accepts any nonempty version of the allowed length | T-057 |
-| SQL caller environment | Reconcile, payment-check and batch begin return the operation-environment credential without `p_env`; only the app server checks its environment | T-057 |
 | OTP verify state and lockout | Verify email is client-held/unbound (T-058). Turnstile is now checked at code verification, wrong guesses are bounded in SQL (5 per code, 20 per address per hour across codes, `auth_issue_otp` answers `throttled` beyond that), so exhausting one address's verification budget costs a solved challenge per attempt; a stranger who can solve them could still keep one address's code sign-in throttled for up to an hour (read from the SQL, not exercised) | T-058 |
 | Full DB-suite flake | Worker F1 saw `account_busy` failures in cod-and-payment/issuance on two full runs and 349/349 once; cause Unknown, suspected shared-state timing unproven | T-059 |
 | Container e2e timing | Workers-era Server Actions were slow under local workerd (20-second expect timeout then); the container behind the local proxy is measured under T-062 (BUILD-LOG) | T-059 |
 | Sign-in budget | One visitor can spend the account-wide password budget with ten CAPTCHA-solved misses per minute (the budget follows the Turnstile step). Beyond the budget a correct password is revoked again, no cookie is set and the reply is the same throttle message as for any other attempt (`src/lib/auth-actions.ts`); a timing difference between those attempts is not measured. The Supabase-client items once listed under T-060 (`authClient()`, `onRefusal`, Auth IP forwarding, skipped CAPTCHA for secret-key requests) no longer exist in the code | T-060 |
-| Onboarding outcome during rotation | `record_partner_seller_onboarding_outcome` can overwrite `rotation_unknown` | T-057 |
 | Environment origins | `appHref` throws at request time when a deployed environment's `APP_ORIGIN` is empty; `check:environments` now requires four https origins in the staging and production env files and refuses production hosts in staging, but the app itself still validates only at link time | T-061 |
 | Pickup copy and fresh-reservation window | Copy contradicts itself when `pickup_phase` is `reserved` with `PICKUP_TIME_INVALID`, `PICKUP_NOT_FOUND`, `QUOTE_STALE` or `CLOSED_NOT_CREATED`; the fresh-reservation path can adopt another shipment's slot when that operation has not stored its id yet | T-056 |
 | Discount environment | Provider percentage and gerai/admin UI are built; discount terms themselves remain tenant-scoped without a provider-environment column | Owner/design gate, DATA-9 |
@@ -895,7 +939,7 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
 | Super Admin | `/admin` with `platform_grants` capabilities, TOTP `aal2` (app-side TOTP: sealed secret, replay guard) checked in `private.platform_capable` on every call, tenant directory + suspend/reactivate with reason, grant/revoke with stale-revision and final-governor guard, append-only `audit_events` with a filtered projection (actor, target, change, reason) | `tests/db/platform.test.ts` (mutation-checked: aal2 check, final-governor guard, lock-before-check concurrency); `tests/e2e/platform.spec.ts` |
 | Registration | `/daftar` email code (app-issued, HMAC-hashed, Bahasa Indonesia mail from `renderCodeMail`, generic reply), password set only after verification, one open `tenant_applications` row per identity (revisioned, partial drafts), Super Admin approve / request changes / reject with reason; approval creates one active tenant, outlet and `tenant_admin` membership and no seller. Public account creation is closed unless a governor opens it (`private.settings`, audited); local seed opens it. A password set before an email's first confirmation is discarded at confirmation (pre-registration takeover; trigger `private.discard_pre_verification_password`) | `tests/db/registration.test.ts`, `tests/db/isolation.test.ts` (mutation-checked: password discard, review authority); `tests/e2e/registration.spec.ts` |
 | Staff and roles | `tenant_invitations` (one pending per tenant+email, 7 days, revocable, RPC-only reads); accept only by the verified invited email while the issuer is still an active admin, once (concurrent accepts converge); an invited email may create its account while public registration is closed; `set_member_role` / `deactivate_member` lock the tenant's memberships, re-check the caller, keep one active `tenant_admin`; `reconcile_shipment` re-checks the role after a share lock; demo tenants cannot invite | `tests/db/invitations.test.ts` (mutation-checked: issuer check, last-admin guard, role re-check after lock); `tests/e2e/members.spec.ts` |
-| Mengantar credentials & Partner onboarding | Machine-only seller binding/completion, write-once seller id per provider environment, list verification, consent/version fence, recovery and key regeneration; AES-GCM key ring uses stored encryption version and tenant/credential-version AAD. Partner operations can reconcile with the active same-environment Partner key after regeneration. BYOK never crosses versions; SQL consent versions, caller `p_env` and scheduled rewrap remain open | `20261028230000_environment_scope_key_ring.sql`, `20261028250000_reconcile_across_key_regeneration.sql`; credential/key-ring/environment/regeneration tests (worker-reported) |
+| Mengantar credentials & Partner onboarding | Machine-only seller binding/completion, write-once seller id per provider environment, list verification, consent/version fence, recovery and key regeneration; AES-GCM key ring uses stored encryption version and tenant/credential-version AAD. Partner operations can reconcile with the active same-environment Partner key after regeneration. BYOK never crosses versions; T-054/T-057 add durable stops, rotation-outcome fencing, SQL consent versions, caller `p_env` enforcement and hourly environment-scoped rewrap; deployment verification remains a release gate | `20261028230000_environment_scope_key_ring.sql`, `20261028250000_reconcile_across_key_regeneration.sql`; credential/key-ring/environment/regeneration tests (worker-reported) |
 | Public marketing | `/`, `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami` render under the GeraiExpress brand (zero legacy brand references or redirects) and publish only approved, implemented claims (no numeric commission, fee, payout or partnership copy; `/simulasi` is a neutral page); signed-in `/` routing (`PR-32`) is preserved; the four marketing pages other than `/` build statically | `tests/unit/marketing-rebrand.test.ts`, `tests/e2e/marketing.spec.ts` (desktop-1280 and mobile-390) |
 | Demo cleanup, quotas & staging | Bounded demo cleanup through the scheduler container's hourly `POST /api/internal/cron/cleanup` (and a pg_cron job only where that extension exists); demo caps by triggers; the staging environment is the template `infra/env/staging.env.example`, whose own database and signing secrets must differ from production and local (`check:environments`) | demo-quota/cleanup DB, `tests/unit/cron.test.ts`, `tests/unit/check-environments.test.ts` |
 | CAPTCHA | Turnstile is verified by the app (`src/lib/auth/turnstile.ts`) before password sign-in, demo entry, code request and code verification, failing closed; account-plus-visitor limits precede the auth call, password account-wide limits follow its CAPTCHA step. Code verification still has no server-bound email state | `tests/unit/auth-turnstile.test.ts`, captcha/auth-account-lockout tests; T-058 |

@@ -1,0 +1,65 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { printBatchLabelsAction } from "../../src/modules/labels/batch-actions";
+import { LABEL_UNKNOWN_RESULT } from "../../src/modules/labels/messages";
+
+const id = "00000000-0000-4000-b000-000000000001";
+const otherId = "00000000-0000-4000-b000-000000000002";
+const tenantId = "00000000-0000-4000-b000-000000000003";
+const input = { ids: [id], mask: false, size: "10x15", city: "" };
+const row = { id, reference: "GX1", submission_state: "issued", awb: "JP12345678", is_simulated: false };
+const rpc = vi.fn();
+const eq = vi.fn();
+const rows = vi.fn();
+const maybeSingle = vi.fn();
+const from = vi.fn();
+const query = { select: () => query, eq: (column: string, value: string) => { eq(column, value); return query; }, in: rows, maybeSingle };
+vi.mock("@/lib/workspace", () => ({ requireWorkspace: async () => ({ tenant: { id: tenantId } }) }));
+vi.mock("@/lib/db/server", () => ({ dbServer: async () => ({ from, rpc }) }));
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  from.mockReturnValue(query);
+  rows.mockResolvedValue({ data: [row], error: null });
+  maybeSingle.mockResolvedValue({ data: { contact_whatsapp: "081234567890", masking_allowed: true }, error: null });
+  rpc.mockImplementation(async (name: string) => ({ data: name === "create_label_snapshot" ? otherId : 1, error: null }));
+});
+
+describe("printBatchLabelsAction", () => {
+  it.each([
+    null, undefined, [], "bad", {},
+    { ...input, ids: null }, { ...input, ids: [123] }, { ...input, ids: [] },
+    { ...input, ids: ["bad"] }, { ...input, ids: [`${id},${otherId}`] },
+    { ...input, ids: Array(51).fill(id) }, { ...input, mask: "true" },
+    { ...input, size: "A4" }, { ...input, city: null }, { ...input, city: "x".repeat(101) },
+  ])("rejects malformed payload %# before DB access", async (payload) => {
+    expect(await printBatchLabelsAction(payload as typeof input)).toEqual({ snapshots: [], error: "Pilihan label tidak valid." });
+    expect(from).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses the whole batch before any RPC if a selected id is absent from the tenant-filtered rows", async () => {
+    const result = await printBatchLabelsAction({ ...input, ids: [id, otherId] });
+    expect(result.error).toContain("Pilihan pengiriman berubah");
+    expect(eq).toHaveBeenCalledWith("tenant_id", tenantId);
+    expect(rows).toHaveBeenCalledWith("id", [id, otherId]);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("propagates an unknown print outcome and stops before the next shipment", async () => {
+    rows.mockResolvedValue({ data: [row, { ...row, id: otherId, reference: "GX2" }], error: null });
+    rpc.mockResolvedValueOnce({ data: otherId, error: null })
+      .mockResolvedValueOnce({ error: { message: "FetchError: response lost" } });
+    expect(await printBatchLabelsAction({ ...input, ids: [id, otherId] })).toEqual({
+      snapshots: [], error: `GX1: ${LABEL_UNKNOWN_RESULT}`, reconcile: true,
+    });
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("requires reconciliation when a print committed but its snapshot cannot be read", async () => {
+    maybeSingle.mockResolvedValueOnce({ data: { contact_whatsapp: "081234567890" }, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: "read failed" } });
+    expect(await printBatchLabelsAction(input)).toEqual({ snapshots: [], error: `GX1: ${LABEL_UNKNOWN_RESULT}`, reconcile: true });
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(eq.mock.calls.filter(([column]) => column === "tenant_id")).toEqual([["tenant_id", tenantId], ["tenant_id", tenantId]]);
+  });
+});

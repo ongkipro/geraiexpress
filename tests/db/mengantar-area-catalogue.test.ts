@@ -41,6 +41,21 @@ describe("search_mengantar_areas (T-100)", () => {
     expect((punctuated.data as { id: string }[]).map((a) => a.id)).toEqual([ids[2]]);
   });
 
+  it("exposes the actual RPC candidate predicate to the trigram index for a 3+ character token", () => {
+    // EXPLAIN on a PL/pgSQL call only shows Function Scan. Explain its actual RETURN QUERY with
+    // concrete local values instead, so this regression cannot pass against a hand-written surrogate.
+    const definition = sql("select pg_get_functiondef('public.search_mengantar_areas(text,integer)'::regprocedure)");
+    const query = definition.match(/return query\s+([\s\S]*?);\s*end/i)?.[1];
+    expect(query).toBeDefined();
+    const locals: Record<string, string> = {
+      q: "'zzt100 district'", pattern: "'zzt100 district'", tokens: "array['zzt100','district']::text[]",
+      longest_token: "'district'", p_limit: "20",
+    };
+    const concrete = query!.replace(/\b(q|pattern|tokens|longest_token|p_limit)\b/g, (name) => locals[name]);
+    const plan = sql(`begin; set local enable_seqscan = off; explain (costs off) ${concrete}; rollback;`);
+    expect(plan).toContain("Bitmap Index Scan on mengantar_areas_search_trgm_idx");
+  });
+
   it.each([1, 30])("accepts limit boundary %s", async (p_limit) => {
     const result = await member.rpc("search_mengantar_areas", { p_query: "99881", p_limit });
     expect(result.error).toBeNull();

@@ -165,7 +165,7 @@ the names and `infra/env/*.env.example` are the staging and production templates
 | `PGRST_DB_URI`, `POSTGRES_PASSWORD` | Compose env file | Read by Compose only (not by the app): the `authenticator` connection string of the production `postgrest` service, and the password of the optional `postgres` service (profile `db`) |
 | `TRUSTED_PROXY` | Container env | `1` = read the client address from `X-Real-IP`, which the proxy overwrites (`src/lib/client-address.ts`). `compose.yaml` sets it for the app; `dev:env` sets it in `.env.local` for `next dev`. Without it the address is unknown and the visitor limiters refuse in production |
 | `CRON_SECRET` | Container env (app and scheduler) | Bearer secret of `/api/internal/cron/dispatch` and `/cleanup`; the routes are disabled (404) while unset. The scheduler holds this secret only |
-| `CREDENTIAL_KEYS`, `CREDENTIAL_KEY_CURRENT` | Container env (secret) | Version-to-base64-key JSON ring and current version; opening uses stored `key_version`, sealing uses current. Single `CREDENTIAL_KEY` remains v1 while the ring is unset. Switch production values at first rotation; retain old keys until rewrap completes. No scheduled rewrap trigger exists yet (T-057) |
+| `CREDENTIAL_KEYS`, `CREDENTIAL_KEY_CURRENT` | Container env (secret) | Version-to-base64-key JSON ring and current version; opening uses stored `key_version`, sealing uses current. Single `CREDENTIAL_KEY` remains v1 while the ring is unset. Switch production values at first rotation; retain old keys until rewrap completes. Hourly `/api/internal/cron/cleanup` runs environment-scoped rewrap (T-057); inspect `credential_rewrap` counts/disabled state and failures before retiring old keys (OBSERVABILITY.md) |
 | `PARTNER_TERMS_VERSION`, `PARTNER_PRIVACY_VERSION`, `PARTNER_TERMS_URL`, `PARTNER_PRIVACY_URL` | Container env | Provider Terms and Privacy document versions and URLs shown and recorded in the Partner consent step. Unset means onboarding is blocked (`configuration_blocked`) and the submit button is disabled; set them in `.env.local` to try the step locally. The real values are owner-held |
 | `SIGN_IN_*`, `DEMO_*`, `OTP_*`, `MFA_*`, `REFRESH_*` limiters | In-process (`src/lib/limiter.ts`) | Fixed-window limits (visitor 10/5/3/10 per 60 s, account and refresh 10 per 60 s) with bounded memory; exact for ONE app instance, a second instance needs a shared store |
 | `E2E_BASE_URL`, `E2E_APP_URL`, `E2E_SITE_URL`, `E2E_OWNER_URL`, `E2E_HOOKS_URL`, `E2E_MAILPIT_URL` | Playwright shell env | Base URL for the single-origin specs and one origin per audience for `tests/e2e/hosts.spec.ts` (derived as `*.localhost` on the same port when unset) |
@@ -197,8 +197,9 @@ Apply it with
 
 Credentials (local): `pnpm dev:env` writes a local `CREDENTIAL_KEY` (kept across runs), used as
 version 1 to seal keys saved under `/pengaturan`. Ring values belong in runtime secrets (the 0600 env
-file outside the repository), never in a committed file; no automatic `reencryptCredentials` trigger
-is wired yet (T-057).
+file outside the repository), never in a committed file. The hourly cleanup task invokes
+environment-scoped `reencryptCredentials` (T-057); retain old keys until completion is verified,
+and investigate `credential_rewrap` failures or unexpected disabled state (OBSERVABILITY.md).
 
 Registration (local): `/daftar` sends a 6-digit code (valid 10 minutes) to the local Mailpit at
 http://127.0.0.1:58025; public registration is open only because `seed.sql` opens it.

@@ -1,17 +1,47 @@
 # GeraiExpress — Status
 
-Updated: 2026-11-04
+Updated: 2026-11-05
 Status: Active
 State: INTEGRATING
 Review-Risk: R3
 Primary-Worker: pi-parent-01a1a300
-Independent-Review: T-099 source run RUN-20261104T132445Z-6016ac5f closed PASS after independent R3 approval of digest f73c23dfa0b6a6a95138d303ea129aa9fcc66aab0457b16cd27c9ce4cdbef257. This does not close other product, provider, legal or release gates.
-Independent-Reviewer: reviewer-185798e0 (separate reviewer; retained session 615c5c30-a61c-475a-850a-58feab6d7907)
-Independent-Review-Head: Source commit 8b092c5; merge 209c1c5 preserves its five source blobs. This documentation handoff has its own integration gates under RUN-20261104T174014Z-efb3143a.
+Independent-Review: T-082, T-096 and T-100 source runs closed PASS after independent R3 digest approvals; T-101 remediation run RUN-20261104T213403Z-eb091d80 awaits its digest approval. This does not close provider, legal or release gates.
+Independent-Reviewer: separate reviewer per run (T-082 decba79d, T-096 708b2380, T-100 1ff03b98); T-101 pending
+Independent-Review-Head: Integrated HEAD 45d7534 (merges ad326cb T-082, b41b7df T-096, 45d7534 T-100) plus uncommitted T-101 surface; approval binds to the ledger digest.
 
-## T-100 Local Mengantar area catalogue (implementation verified; final gates and integration pending)
+## T-101 Whole-repo review remediation (verified locally; digest approval pending; not deployed)
 
-Run `RUN-20261104T194904Z-1ff1e869` (R2), worktree `.gx-wt/T-100`; not merged, committed or deployed.
+Run `RUN-20261104T213403Z-eb091d80` (R3) on `feat/counter-ops-2026-11` after the T-082/T-096/T-100
+integration. Three independent read-only reviews (database 58a1c4ad, application/security 7578a80b,
+contracts/docs 2890e8da) found six P1 and several P2 issues; the integration handoff run
+RUN-20261104T211915Z-75a6e643 was closed BLOCKED before its gates in favour of this run.
+- Database, forward migration `20261105110000_review_hardening.sql` (no applied migration edited):
+  `service_role` loses its default-privilege access to `counter_payments`/`cash_periods`; the payment ->
+  cash-period FK is NO ACTION, so a period with history cannot be deleted alone (owner cascades remain);
+  `void_counter_payment` locks the shipment before membership (no inversion with batch authorization);
+  `record_live_quotes` skips COD rows with a missing/null fee instead of storing 0; cargo range CHECK
+  requires known endpoints; nine required-revision RPCs use `is distinct from` (NULL no longer bypasses).
+  Recreated stale guards raise 55000, never 40001 (PostgREST retries 40001; DIL-11). `pg_trgm` + GIN on
+  `mengantar_areas.search` with an indexable longest-token predicate (EXPLAIN test).
+- Application: single-label print verifies the shipment belongs to the selected tenant and scopes the
+  snapshot read; full runtime validation of label Server Action payloads; unknown print outcomes block
+  resubmission and offer reload; selecting a recipient without an address clears the old destination;
+  the area route limits only live Mengantar fallback (30/60 s per tenant, 429 + Retry-After); payment
+  field errors are linked through `aria-describedby`.
+- Docs: RELEASE gate 11 (pending migrations, approval-gated `npm run db:areas`, `init: true` recreate),
+  OBSERVABILITY (hourly credential rewrap and auth purge; no area-fallback/receipt telemetry yet),
+  ARCHITECTURE system map/ER/routes/residuals, PRD/UX/DATA-10/11/14 status, DEC-026 wording, T-092 closed.
+- Test fixes found by the gates: unit tests now import through relative paths (no Vitest alias);
+  a prefix assertion no longer assumes `TOKO` is free in a shared suite; the T-070 "no print" check
+  targets label/resi links, because the T-082 receipt is allowed for confirmed and COD shipments.
+Final executed ledger gates on this surface: typecheck, 1,180 unit, 534 full DB, 176 upgrade-replay
+DB tests (12 affected files), 133 e2e at 390/1280 (one desktop-only keyboard test skipped on mobile by
+design), diff hygiene. Logs `/data/tmp/t101/`. Not deployed; production migrations, catalogue loads
+and dev `gxdb` recreation are separate steps.
+
+## T-100 Local Mengantar area catalogue (verified; integrated, not deployed)
+
+Run `RUN-20261104T194904Z-1ff1e869` closed PASS (R3 approval 1ff03b98); commit 172113f, merged 45d7534; not deployed.
 Owner request 2026-11-05: kelurahan/kecamatan/kota/kode pos locally, from Mengantar or the owner's
 99ribu project. `data/mengantar/areas-2026-10-30.json.gz` is the 99ribu read-only Mengantar
 `/address/search` harvest copied unchanged (SHA-256 f1712dc0...2e02, 79,391 rows, Mengantar area ids;
@@ -27,8 +57,8 @@ normalisation added (re-verified by the final gates). Loading the dev `gxdb` cat
 (2026-11-05: "ya lanjutkan masukan ke katalog"); retained/production loads and refreshes still need approval.
 ## T-096 Gerai logo upload (verified; integrated, not deployed)
 
-Run `RUN-20261104T161806Z-137154a5`, worktree `.gx-wt/T-096`, based on verified T-094 `f020c09`;
-T-094 has since merged/pushed as `c91927a` (handoff `db71536`). T-096 remains unmerged and uncommitted;
+Run `RUN-20261104T161806Z-137154a5` closed PASS (R3 approval 708b2380); commit 6740ce0, merged b41b7df; based on T-094 `f020c09`;
+T-094 has since merged/pushed as `c91927a` (handoff `db71536`).
 Data model (DATA-10) and ARCHITECTURE now record the logo storage, INSERT capture and read path.
 Implemented tenant-admin-only versioned logo replacement/removal with optimistic revisions and audit,
 server/DB PNG/JPEG/WebP signature and MIME checks, 204,800-byte maximum, private PostgreSQL storage,
@@ -140,9 +170,9 @@ by the separate handoff run; that run's executed evidence records their outcome 
 closed source-run surface. Pi runtime artifacts are retained untracked and excluded only through a
 temporary Git exclusion file during handoff verification; no user ignore configuration was changed.
 
-## T-082 Counter payment and receipts (implementation verified; final gates and integration pending)
+## T-082 Counter payment and receipts (verified; integrated, not deployed)
 
-Run `RUN-20261104T132645Z-49fd8a7a` (R3), worktree `.gx-wt/T-082b`; not merged, committed or deployed.
+Run `RUN-20261104T132645Z-49fd8a7a` closed PASS (R3 approval decba79d); commit 37314c1, merged ad326cb; not deployed.
 Implemented record/void, one active payment, auto-open cash period, COD refusal, admin-only difference
 reads, 58/80 mm receipts, WhatsApp text and append-only print history (`label_print_events.kind`).
 Owner decision 2026-11-05 ("ya boleh kau sempurnakan", DEC-026): customer receipts and WhatsApp text

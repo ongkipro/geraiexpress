@@ -532,3 +532,94 @@ describe("environment-bound batch claim (T-057 second review)", () => {
     } finally { await cleanup(life, f); }
   });
 });
+
+// T-101 reuses the owned psql lifecycle above: no untracked holder can survive failed assertions.
+async function counterPaidBatch(life: TestOwner) {
+  const f = await batchFixture(life, 1);
+  const shipment = f.members[0].shipment;
+  const owner = await life.signIn("owner-a@geraiexpress.test");
+  // Reachable flow: counter payment while queued, then provider creates an unpaid batch.
+  await life.sql(`update public.shipments set submission_state = 'queued' where id = '${shipment}'`);
+  const paid = await owner.rpc("record_counter_payment", {
+    p_shipment: shipment, p_method: "cash", p_amount_idr: 18000, p_received_idr: 20000, p_difference_reason: null,
+  });
+  expect(paid.error).toBeNull();
+  const payment = paid.data as string;
+  expect((await owner.rpc("record_receipt_print", { p_shipment: shipment, p_payment: payment, p_width: "58" })).error).toBeNull();
+  await life.sql(`update public.shipments set submission_state = 'awaiting_payment' where id = '${shipment}'`);
+  f.digest = await review(life, f);
+  return { f, shipment, payment };
+}
+
+it("T-101 void waits for shipment before membership and cannot deadlock batch authorization", async ({ owner: life }) => {
+  const { f, shipment, payment } = await counterPaidBatch(life);
+  try {
+    const holder = life.startPsql(`begin; set local statement_timeout = '12s'; ${asOwner}
+      select id from public.shipments where id = '${shipment}' for update;
+      do $gate$
+      declare deadline timestamptz := clock_timestamp() + interval '8 seconds';
+      begin
+        loop
+          -- pg_stat_activity is cached within this transaction: the void connection starts AFTER
+          -- our first poll. Discard that snapshot so later polls can see the new blocked backend.
+          perform pg_stat_clear_snapshot();
+          -- Proceed only after the other connection is actually waiting for this shipment.
+          exit when exists (select 1 from pg_stat_activity a
+            where a.pid <> pg_backend_pid() and a.wait_event_type = 'Lock'
+              and position('${payment}' in a.query) > 0
+              and pg_backend_pid() = any(pg_blocking_pids(a.pid)));
+          if clock_timestamp() >= deadline then raise exception 'void_did_not_wait_for_shipment'; end if;
+          perform pg_sleep(0.05);
+        end loop;
+      end $gate$;
+      -- While void is blocked on our shipment, prove it holds no conflicting membership lock.
+      -- NOWAIT also makes the old membership-first void fail immediately rather than deadlock.
+      select 1 from public.memberships where tenant_id = '${f.tenant}' for share nowait;
+      -- Actual batch authorization takes membership FOR SHARE after the shipment.
+      select public.authorize_batch_payment('${shipment}', '${f.digest}');
+      commit;`);
+    const deadline = Date.now() + 8000;
+    while (await life.sql(`select exists (select 1 from pg_stat_activity
+      where application_name = '${holder.name}' and wait_event = 'PgSleep')`) !== "t") {
+      if (Date.now() >= deadline) throw new Error("shipment holder did not reach its gate");
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const voiding = life.startPsql(`begin; set local statement_timeout = '12s'; ${asOwner}
+      select public.void_counter_payment('${payment}', 'Salah metode bayar'); commit;`);
+    const [held, voided] = await Promise.all([holder.done, voiding.done]);
+    const diagnostics = `holder:\n${held.output}\nvoid:\n${voided.output}`;
+    expect(diagnostics).not.toMatch(/40P01|deadlock detected/);
+    expect([held.code, voided.code], diagnostics).toEqual([0, 0]);
+    expect(held.output).toContain('"authorized": true');
+    expect(await life.sql(`select voided_at is not null from public.counter_payments where id = '${payment}'`)).toBe("t");
+  } finally { await cleanup(life, f); }
+}, 30000);
+
+it("T-101 tenant deletion still cascades periods, payments and receipts together", async ({ owner: life }) => {
+  const { f, payment } = await counterPaidBatch(life);
+  try {
+    // Preserve the existing selected-quote cleanup convention, but do NOT pre-delete shipments:
+    // this exercises the competing tenant -> outlet -> period and tenant -> shipment cascades.
+    await life.sql(`update public.shipments set selected_quote_id = null where tenant_id = '${f.tenant}';
+      delete from public.tenants where id = '${f.tenant}'`);
+    for (const table of ["cash_periods", "counter_payments", "label_print_events"]) {
+      expect(await life.sql(`select count(*) from public.${table} where tenant_id = '${f.tenant}'`)).toBe("0");
+    }
+    expect(await life.sql(`select count(*) from public.counter_payments where id = '${payment}'`)).toBe("0");
+  } finally { await cleanup(life, f); }
+});
+
+it("T-101 outlet deletion after its shipments in one transaction still removes periods and history", async ({ owner: life }) => {
+  const { f } = await counterPaidBatch(life);
+  try {
+    const outlet = await life.sql(`select outlet_id from public.shipments where id = '${f.members[0].shipment}'`);
+    // Shipments' existing outlet FK is NO ACTION, not CASCADE; leave that ownership contract alone.
+    await life.sql(`begin;
+      update public.shipments set selected_quote_id = null where outlet_id = '${outlet}';
+      delete from public.shipments where outlet_id = '${outlet}';
+      delete from public.outlets where id = '${outlet}'; commit;`);
+    for (const table of ["cash_periods", "counter_payments", "label_print_events"]) {
+      expect(await life.sql(`select count(*) from public.${table} where tenant_id = '${f.tenant}'`)).toBe("0");
+    }
+  } finally { await cleanup(life, f); }
+});

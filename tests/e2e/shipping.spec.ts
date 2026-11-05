@@ -932,7 +932,9 @@ test("awaiting payment, unknown and failed never offer print or a new order from
       await page.goto(`/pengiriman/${s.id}`);
       await expect(page.getByRole("button", { name: row.primary })).toBeVisible();
       await expect(printLink(page), row.state).toHaveCount(0);
-      await expect(page.getByRole("link", { name: /Cetak|contoh label/ }), row.state).toHaveCount(0);
+      // Label/resi printing only: the T-082 customer receipt (Cetak struk) is a separate document that
+      // DATA-11 allows for confirmed queued/unknown shipments and for COD instructions.
+      await expect(page.getByRole("link", { name: /Cetak (label|resi)|contoh label/ }), row.state).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Buat pengiriman lagi" }), row.state).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Salin resi" }), row.state).toHaveCount(0);
       await expect(page.getByTestId("detail-action-bar"), row.state).toHaveCount(0);
@@ -970,6 +972,42 @@ test("keyboard only: from the last intake control to the label page (T-070, 1280
   await tabTo("Siapkan label");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/label$/);
+});
+
+test("switching recipient A with an address to B without one clears the destination and requires a new area for quotes", async ({ page }) => {
+  const id = randomUUID(), withAddress = randomUUID(), withoutAddress = randomUUID(), tag = randomUUID().slice(0, 6);
+  localSql(`insert into public.contacts (tenant_id, id, name, phone, is_recipient) values
+      ('${T53_TENANT}', '${withAddress}', 'Penerima Beralamat ${tag}', '081277770301', true),
+      ('${T53_TENANT}', '${withoutAddress}', 'Penerima Tanpa Alamat ${tag}', '081277770302', true);
+    insert into public.contact_addresses (tenant_id, contact_id, address_line, area, area_id, postal_code, is_primary)
+      values ('${T53_TENANT}', '${withAddress}', 'Jl. Tujuan A No. 3', 'SUKATANI, TAPOS, DEPOK', '5fc63169f8f44b34aa4c2ee1', '16454', true);
+    insert into public.shipments (tenant_id, outlet_id, id, reference, is_simulated, created_by, sender_name, sender_phone, item_description, weight_grams)
+      values ('${T53_TENANT}', '${T53_OUTLET}', '${id}', 'E2E101-${id.slice(0, 8)}', false, '${T53_OWNER}', 'Pengirim Uji', '081234567890', 'Buku', 1000);`);
+  try {
+    await signIn(page, "operator-a@geraiexpress.test");
+    await page.goto(`/pengiriman/${id}?kontak=${tag}`);
+    await chooseOption(page, "Pilih penerima tersimpan", `Penerima Beralamat ${tag} · 081277770301`);
+    await expect(page.getByLabel("Alamat lengkap")).toHaveValue("Jl. Tujuan A No. 3");
+    await expect(page.getByTestId("area-chosen")).toContainText("SUKATANI, TAPOS, DEPOK");
+    await expect(page.getByLabel("Kode pos penerima")).toHaveValue("16454");
+    await chooseOption(page, "Pilih penerima tersimpan", `Penerima Tanpa Alamat ${tag} · 081277770302`);
+    await expect(page.getByLabel("Nama penerima")).toHaveValue(`Penerima Tanpa Alamat ${tag}`);
+    await expect(page.getByLabel("Alamat lengkap")).toHaveValue("");
+    await expect(page.getByTestId("area-chosen")).toHaveCount(0);
+    await expect(page.locator('input[name="recipient_area"]')).toHaveValue("");
+    await expect(page.locator('input[name="recipient_area_id"]')).toHaveValue("");
+    await expect(page.getByLabel("Kode pos penerima")).toHaveValue("");
+    // A newly typed street is not enough: B must have a new destination area selected.
+    await page.getByLabel("Alamat lengkap").fill("Jl. Tujuan B No. 9");
+    await page.getByRole("button", { name: "Simpan & cek ongkir" }).click();
+    await expect(page.getByText("Lengkapi data yang ditandai sebelum cek ongkir.")).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Wilayah penerima" })).toHaveAttribute("aria-invalid", "true");
+    expect(localSql(`select count(*) from public.shipment_quotes where shipment_id = '${id}'`)).toBe("0");
+  } finally {
+    localSql(`delete from public.shipments where id = '${id}';
+      delete from public.contact_addresses where contact_id in ('${withAddress}', '${withoutAddress}');
+      delete from public.contacts where id in ('${withAddress}', '${withoutAddress}');`);
+  }
 });
 
 // T-100: real route + member RPC on both configured 390/1280 projects, not a page.route stub.

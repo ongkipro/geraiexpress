@@ -16,7 +16,7 @@ import {
   type LabelChoice, type LabelFacts, type LabelSize, type LabelSnapshot, type SenderErrors, type SenderInput,
 } from "@/lib/label-content";
 import { printLabelAction } from "./actions";
-import { MASKING_DISABLED, RETENTION_NOTE, WHATSAPP_MISSING } from "./messages";
+import { LABEL_UNKNOWN_RESULT, MASKING_DISABLED, RETENTION_NOTE, WHATSAPP_MISSING } from "./messages";
 import { PendingLabel, PreviewDesk, ScaledSheet, SegmentedControl, ZOOM_OPTIONS, type Zoom } from "./print-ui";
 
 export type PrintHistoryEntry = { id: number; at: string; version: number; size: LabelSize; mask: boolean };
@@ -69,6 +69,7 @@ export function LabelWorkbench({
   const [sender, setSender] = useState<SenderInput>(initialSender);
   const [errors, setErrors] = useState<SenderErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
+  const [reconcile, setReconcile] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [printed, setPrinted] = useState<LabelSnapshot | null>(null);
   const [printNonce, setPrintNonce] = useState(0);
@@ -126,7 +127,7 @@ export function LabelWorkbench({
   const print = () => {
     setFailure(null);
     setNotice(null);
-    if (whatsappBlocked) return;
+    if (whatsappBlocked || reconcile) return;
     if (effectiveMask) {
       const found = senderErrors(sender);
       setErrors(found);
@@ -137,15 +138,21 @@ export function LabelWorkbench({
       }
     }
     startTransition(async () => {
-      const result = await printLabelAction({ shipmentId, mask: effectiveMask, size, sender });
-      if (!result.ok) {
-        setErrors(result.fieldErrors ?? {});
-        setFailure(result.error);
-        return;
+      try {
+        const result = await printLabelAction({ shipmentId, mask: effectiveMask, size, sender });
+        if (!result.ok) {
+          setErrors(result.fieldErrors ?? {});
+          setFailure(result.error);
+          setReconcile(result.reconcile === true);
+          return;
+        }
+        setPrinted(result.snapshot);
+        setNotice(`Permintaan cetak label versi ${result.snapshot.version} dicatat di riwayat dan dialog cetak peramban dibuka. Ini belum membuktikan kertas tercetak.`);
+        setPrintNonce((n) => n + 1);
+      } catch {
+        setReconcile(true);
+        setFailure(LABEL_UNKNOWN_RESULT);
       }
-      setPrinted(result.snapshot);
-      setNotice(`Permintaan cetak label versi ${result.snapshot.version} dicatat di riwayat dan dialog cetak peramban dibuka. Ini belum membuktikan kertas tercetak.`);
-      setPrintNonce((n) => n + 1);
     });
   };
 
@@ -233,14 +240,16 @@ export function LabelWorkbench({
               </AlertDescription>
             </Alert>
           ) : null}
-          {failure ? (
+          {failure || reconcile ? (
             <Alert variant="destructive">
               <AlertTriangle aria-hidden="true" />
-              <AlertDescription className="text-foreground">{failure}</AlertDescription>
+              <AlertDescription className="text-foreground">
+                {reconcile ? <>{LABEL_UNKNOWN_RESULT} <a href={`/pengiriman/${shipmentId}/label`} className="underline">Muat ulang</a></> : failure}
+              </AlertDescription>
             </Alert>
           ) : null}
           {notice ? <p role="status" data-testid="print-notice" className="rounded-md bg-muted p-3 text-sm">{notice}</p> : null}
-          <Button type="button" onClick={print} disabled={pending || whatsappBlocked} aria-busy={pending} className="w-full">
+          <Button type="button" onClick={print} disabled={pending || whatsappBlocked || reconcile} aria-busy={pending} className="w-full">
             <Printer data-icon="inline-start" aria-hidden="true" />
             <PendingLabel pending={pending} label={reuse ? "Cetak ulang label" : "Cetak label"} pendingLabel="Menyimpan label…" />
           </Button>

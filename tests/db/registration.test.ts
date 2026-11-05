@@ -26,6 +26,10 @@ describe("applicant boundary (TEN-5)", () => {
     // A second "new" save does not create another application; it conflicts with the open one.
     expect((await c.rpc("save_application", { p_expected_revision: 0, ...FULL })).error?.message).toBe("stale_state");
     expect((await c.rpc("submit_application", { p_id: draft.id, p_expected_revision: 1 })).error?.message).toBe("incomplete_application");
+    expect((await c.rpc("save_application", { p_expected_revision: null, ...FULL })).error?.message).toBe("stale_state");
+    expect((await c.rpc("submit_application", { p_id: draft.id, p_expected_revision: null })).error?.message).toBe("stale_state");
+    expect((await c.rpc("withdraw_application", { p_id: draft.id, p_expected_revision: null })).error?.message).toBe("stale_state");
+    expect(sql(`select status || '|' || revision from public.tenant_applications where id = '${draft.id}'`)).toBe("draft|1");
     const full = await c.rpc("save_application", { p_expected_revision: 1, ...FULL });
     expect((full.data![0] as { id: string }).id).toBe(draft.id);
     expect((await c.rpc("submit_application", { p_id: draft.id, p_expected_revision: 2 })).error).toBeNull();
@@ -78,6 +82,8 @@ describe("Super Admin review (PR-15 / PR-30)", () => {
     const a = await submitted();
     const admin = await signInAal2("admin@geraiexpress.test");
     expect((await admin.rpc("platform_review_application", { p_id: a.appId, p_expected_revision: a.revision, p_decision: "approve", p_reason: "" })).error?.message).toBe("reason_required");
+    expect((await admin.rpc("platform_review_application", { p_id: a.appId, p_expected_revision: null, p_decision: "approve", p_reason: "Data lengkap" })).error?.message).toBe("stale_state");
+    expect(sql(`select status || '|' || revision || '|' || (tenant_id is null) from public.tenant_applications where id = '${a.appId}'`)).toBe(`submitted|${a.revision}|true`);
     const ok = await admin.rpc("platform_review_application", { p_id: a.appId, p_expected_revision: a.revision, p_decision: "approve", p_reason: "Data lengkap" });
     expect(ok.error).toBeNull();
     const tenant = ok.data as string;

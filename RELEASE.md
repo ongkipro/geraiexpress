@@ -146,6 +146,19 @@ by the app. Gates before a release is started:
     `pg_dump --globals-only` is NOT used: roles are re-provisioned by `db/foundation` and passwords by the runner
     locally or this remote owner procedure; backups contain database objects/data, not cluster credentials.
     First production Super Admin grant and TOTP enrollment require owner action; no production seed.
+    Apply all pending migrations in order, including `20261104120000_counter_payments.sql`,
+    `20261104130000_gerai_logos.sql` and `20261105100000_mengantar_area_catalogue.sql`, plus the
+    forthcoming `20261105110000_review_hardening.sql` once integrated. The hardening migration adds
+    `pg_trgm` and a trigram index on `mengantar_areas.search`; it requires the `pg_trgm` contrib
+    module, present in the official `postgres:17` image. After schema reload, obtain explicit owner
+    approval before loading the catalogue into any retained or production database. Using the protected
+    operator `DATABASE_URL` and owner/migration role, run `npm run db:areas`. This load is separate
+    from migrations and seed execution. Record the dataset version and counts, verify a known member
+    search, and verify an identical second load reports `validated=79391 changed=0 unchanged=79391`
+    for the bundled 2026-10-30 dataset. Do not harvest or refresh provider data without separate approval.
+    Local-only T-099 prerequisite: `compose.db.yaml` now runs PostgreSQL with `init: true`. Recreate
+    an existing local gxdb PostgreSQL container with `docker compose -f compose.db.yaml up -d postgres`
+    (keep the volume) before running `tests/db/batch-payment-fixes` against it.
 12. **Backup policy (owner-gated; local mechanism proven).** Schedule `pnpm db:backup` at least daily and before
     migrations, with `BACKUP_DIR` pointing at an existing private directory. Archive uses `pg_dump -Fc`, mode
     0600, exclusive creation (no overwrite); optional first argument selects an exact file. Default target is

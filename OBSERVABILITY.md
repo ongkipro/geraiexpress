@@ -80,6 +80,16 @@ any non-zero value needs an admin to check the Mengantar app (runbook in RELEASE
 
 `demo_cleanup` (T-030, T-051): expired demo tenants are removed by `cleanup_expired_demos(p_max_age_hours, p_batch)` (batch default 200). The **scheduler container** calls `POST /api/internal/cron/cleanup` once an hour (on the whole UTC hour); the route needs only `POSTGREST_URL` and `AUTH_JWT_SECRET` (the machine identity), not the full machine bindings, and emits `{"event":"demo_cleanup","deletedTenants":...,"deletedUsers":...,"hasMore":...,"failed":...}` (counts and flags only, no tenant or user identifiers). Migration `20261028180000_demo_quotas_and_cleanup.sql` also creates an hourly pg_cron job `demo-cleanup` (`0 * * * *`, `select public.cleanup_expired_demos(24, 200)`), but only where the `pg_cron` extension is available; on the plain PostgreSQL 17 image used here it is not, so the scheduler call is the cleanup. A job that does exist logs no container event, so its runs are visible only in `cron.job_run_details`. `hasMore: true` means more than one batch of expired demos remained and the next run continues; `failed: true` means the machine RPC call failed.
 
+The hourly `/api/internal/cron/cleanup` task performs demo cleanup, auth expiry purge and
+environment-scoped credential rewrap (`src/lib/mengantar/scheduled.ts`):
+
+- `auth_purge` reports `sessions`, `otpCodes` and `failed` (counts/flag only).
+- `credential_rewrap` reports disabled state or bounded counts (`scanned`, `rewrapped`,
+  `alreadyCurrent`, `noCredential`, `conflicts`, `failed`) and the provider environment; an unexpected
+  exception reports `failed: true`. No tenant identifiers or key material are logged. Investigate
+  failures and unexpected disabled state before retiring an old credential key. Retain old keys
+  until completion is verified.
+
 Scheduler events (T-062): `scheduler_call` carries `task`, HTTP `status` or transport `error`, and `ms`; `scheduler_skipped` means a previous call is running. The app logs `cron_skipped` for a held lock and `cron_timeout` at 270 s: it aborts scheduled PostgREST/provider requests and expires the lock, while the DB retains its one-in-flight rule. A missing task call for two periods, a non-200 status or `scheduler_disabled` needs investigation. A 200 can mean disabled: also inspect `dispatch_sweep.disabled`. No secret is logged.
 
 ## Configuration and release gates (local waves E/F, not deployed preview state)
@@ -87,7 +97,7 @@ Scheduler events (T-062): `scheduler_call` carries `task`, HTTP `status` or tran
 | Name / gate | Observed behavior and operational boundary |
 |---|---|
 | `CREDENTIAL_KEYS`, `CREDENTIAL_KEY_CURRENT` | Container environment secrets: versioned encryption ring and sealing pointer; open by stored `key_version`. Single `CREDENTIAL_KEY` remains v1. At first production rotation switch to the ring, keep old keys until rewrap is complete; never log key material |
-| `reencryptCredentials` | Library plus machine-only fenced/audited `rewrap_seller_credential` exists; `credential.rewrapped` is a database audit action, not a scheduled log event. No cron/route invokes the library yet (T-057); do not monitor an imaginary job |
+| `reencryptCredentials` | The hourly cleanup task invokes environment-scoped rewrap (T-057), emitting `credential_rewrap` as above; `credential.rewrapped` is the separate database audit action. Verify completion before old-key retirement |
 | `APP_ORIGIN` | Must be passed as the `APP_ORIGIN` build argument of the image (and exported for `pnpm build`); local value `http://127.0.0.1:8080`. Static marketing links are baked, so the runtime environment alone is insufficient. Current invitation/marketing callers read only this origin; the other three names are generic mappings without current application callers |
 | `pnpm check:environments` | Required release gate over the env files, the Compose model and the proxy configuration (no secret value shared between environments, Turnstile never disabled outside local, no production value in staging, only the proxy publishes ports, `X-Real-IP` overwritten, `/api/internal` denied); the committed templates pass, the real files are checked at release (RELEASE.md) |
 | Container-runtime email | `MAIL_TRANSPORT=mailpit` and local `MAILPIT_URL` required. Production has no transport (T-063): readiness fails before issuance, with the same error for every address. Configured delivery failures log `auth_mail_failed` asynchronously; no address is logged. |
@@ -95,9 +105,15 @@ Scheduler events (T-062): `scheduler_call` carries `task`, HTTP `status` or tran
 
 Environment-scoped credentials and same-environment Partner reconciliation across regeneration are
 built. Persistent `credential_unavailable` can still reflect missing ring material, BYOK replacement
-or an unresolved rotation; it is not proof that replay is safe. SQL consent-version enforcement,
-caller `p_env` on reconcile RPCs and the rewrap trigger remain T-057. The full-suite `account_busy`
+or an unresolved rotation; it is not proof that replay is safe. Implemented locally by T-054/T-057:
+durable Partner stops/retry windows, platform TOTP recency, SQL-enforced consent versions,
+environment-bound reconciliation/payment claims and rotation-outcome fencing. Deployment
+verification remains a separate release gate. The full-suite `account_busy`
 flake is Unknown (T-059), not an established production signal or accepted timing defect.
+
+Area catalogue/fallback rates and receipt preparation/print failures currently have no dedicated
+telemetry or alerts. Receipt history proves only a recorded application request, not printer success
+or browser-dialog completion. `/healthz` does not detect an empty catalogue or these failures.
 
 Add only actual stable non-secret endpoints after they exist, using the native
 release-check format:

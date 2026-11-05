@@ -41,8 +41,9 @@ export function VoidPaymentDialog({ shipmentId, paymentId, reference, amountIdr,
           <Field data-invalid={!!state.fieldErrors?.reason || undefined}>
             <FieldLabel htmlFor="void-reason">Alasan</FieldLabel>
             <Textarea id="void-reason" name="reason" required minLength={5} maxLength={500} rows={2}
-              value={reason} onChange={(e) => setReason(e.target.value)} aria-invalid={!!state.fieldErrors?.reason} />
-            {state.fieldErrors?.reason ? <FieldError>{state.fieldErrors.reason}</FieldError> : null}
+              value={reason} onChange={(e) => setReason(e.target.value)} aria-invalid={!!state.fieldErrors?.reason}
+              aria-describedby={state.fieldErrors?.reason ? "void-reason-error" : undefined} />
+            {state.fieldErrors?.reason ? <FieldError id="void-reason-error">{state.fieldErrors.reason}</FieldError> : null}
           </Field>
           <DialogFooter className="gap-3">
             <DialogClose asChild><Button type="button" variant="outline">Kembali</Button></DialogClose>

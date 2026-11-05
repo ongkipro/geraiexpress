@@ -49,6 +49,33 @@ describe("COD quotes, confirmation, and provider refusal detail (T-025)", () => 
       .toBe("JNE:40000:3150:43150:true,JT:93000:4994:97994:true");
   });
 
+  it("skips unknown COD fees but retains an explicit zero in either provider spelling", async () => {
+    const f = await realOperation();
+    sql(`update public.shipments set submission_state = 'draft' where id = '${f.shipment}';
+      update public.shipments set is_cod = true, goods_value_idr = 50000 where id = '${f.shipment}'`);
+    const args = {
+      p_tenant: f.tenant, p_shipment: f.shipment,
+      p_expected_revision: Number(sql(`select revision from public.shipments where id = '${f.shipment}'`)),
+      p_origin_area_id: "5fc62f60f8f44b34aa4c0dcd", p_origin_address_id: "6acf44a4771fe2b474c055ca",
+    };
+    const row = { courier: "JT", tariff: 12000, net: 10000, cod_supported: true, eta: "1-2" };
+    const m = machine();
+    for (const fee of [{}, { cod_fee: null }, { codFee: null }, { cod_fee: null, codFee: null }]) {
+      const result = await m.rpc("record_live_quotes", { ...args, p_rows: [{ ...row, ...fee }] });
+      expect(result.error).toBeNull();
+      expect(result.data).toBe(0);
+      expect(sql(`select submission_state from public.shipments where id = '${f.shipment}'`)).toBe("draft");
+      expect(sql(`select count(*) from public.shipment_quotes where shipment_id = '${f.shipment}' and expires_at > now()`)).toBe("0");
+    }
+    for (const fee of [{ cod_fee: 0 }, { codFee: "0" }]) {
+      const result = await m.rpc("record_live_quotes", { ...args, p_rows: [{ ...row, ...fee }] });
+      expect(result.error).toBeNull();
+      expect(result.data).toBe(1);
+      expect(sql(`select cod_fee_idr || '|' || customer_charge_idr from public.shipment_quotes
+        where shipment_id = '${f.shipment}' and expires_at > now()`)).toBe("0|12000");
+    }
+  });
+
   it("freezes customer_charge_idr = tariff + cod_fee and cod_amount_idr = goods + customer_charge on confirm, and compares estimatedPrice without false price_mismatch", async () => {
     const f = await realOperation();
     sql(`update public.shipments set submission_state = 'draft', selected_quote_id = null, customer_charge_idr = null where id = '${f.shipment}';

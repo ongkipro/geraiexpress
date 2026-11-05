@@ -1,15 +1,21 @@
 "use server";
 
 import { dbServer } from "@/lib/db/server";
-import { SNAPSHOT_COLUMNS, isLabelSize, type LabelSnapshot } from "@/lib/label-content";
+import { SNAPSHOT_COLUMNS, isLabelSize, type LabelSnapshot } from "../../lib/label-content";
 import { requireWorkspace } from "@/lib/workspace";
-import { batchExclusion, batchSender, parseBatchIds, printSequentially, type BatchCandidate } from "./batch-selection";
-import { labelError } from "./messages";
+import { BATCH_LIMIT, batchExclusion, batchSender, parseBatchIds, printSequentially, type BatchCandidate } from "./batch-selection";
+import { LABEL_UNKNOWN_RESULT, labelPrintError } from "./messages";
 
-export async function printBatchLabelsAction(input: { ids: string[]; mask: boolean; size: string; city: string }): Promise<{ snapshots: LabelSnapshot[]; error?: string }> {
+export async function printBatchLabelsAction(input: { ids: string[]; mask: boolean; size: string; city: string }): Promise<{ snapshots: LabelSnapshot[]; error?: string; reconcile?: boolean }> {
   const ws = await requireWorkspace();
-  const ids = parseBatchIds(Array.isArray(input.ids) ? input.ids.join(",") : "");
-  if (!ids || !isLabelSize(input.size) || typeof input.city !== "string" || input.city.length > 100 || typeof input.mask !== "boolean") return { snapshots: [], error: "Pilihan label tidak valid." };
+  if (!input || typeof input !== "object" || Array.isArray(input)
+    || !Array.isArray(input.ids) || input.ids.length > BATCH_LIMIT
+    || !input.ids.every((id) => typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))
+    || !isLabelSize(input.size) || typeof input.city !== "string" || input.city.length > 100 || typeof input.mask !== "boolean") {
+    return { snapshots: [], error: "Pilihan label tidak valid." };
+  }
+  const ids = parseBatchIds(input.ids.join(","));
+  if (!ids) return { snapshots: [], error: "Pilihan label tidak valid." };
   const db = await dbServer();
   const [{ data: rows, error }, { data: tenant }] = await Promise.all([
     db.from("shipments").select("id, reference, submission_state, awb, is_simulated, sender_name, sender_phone, sender_address, sender_area").eq("tenant_id", ws.tenant.id).in("id", ids),
@@ -25,11 +31,17 @@ export async function printBatchLabelsAction(input: { ids: string[]; mask: boole
   return printSequentially(candidates, async (row) => {
     const sender = batchSender(row, input.city);
     const created = await db.rpc("create_label_snapshot", { p_shipment: row.id, p_mask: input.mask, p_size: input.size, p_sender_name: input.mask ? sender.name : null, p_sender_phone: input.mask ? sender.phone : null, p_sender_city: input.mask ? sender.city : null, p_sender_address: input.mask ? sender.address : null });
-    if (created.error || typeof created.data !== "string") return { ok: false, error: labelError(created.error) };
+    if (created.error || typeof created.data !== "string") {
+      const message = labelPrintError(created.error);
+      return { ok: false, error: message, reconcile: message === LABEL_UNKNOWN_RESULT };
+    }
     const printed = await db.rpc("record_label_print", { p_snapshot: created.data });
-    if (printed.error) return { ok: false, error: labelError(printed.error) };
+    if (printed.error) {
+      const message = labelPrintError(printed.error);
+      return { ok: false, error: message, reconcile: message === LABEL_UNKNOWN_RESULT };
+    }
     const { data: snapshot } = await db.from("label_snapshots").select(SNAPSHOT_COLUMNS).eq("tenant_id", ws.tenant.id).eq("id", created.data).maybeSingle();
-    if (!snapshot) return { ok: false, error: "label tersimpan belum bisa dimuat." };
+    if (!snapshot) return { ok: false, error: LABEL_UNKNOWN_RESULT, reconcile: true };
     return { ok: true, snapshot: snapshot as unknown as LabelSnapshot };
   });
 }

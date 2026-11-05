@@ -80,7 +80,8 @@ export function createFixedWindowLimiter({ limit, periodMs, maxKeys = DEFAULT_MA
   };
 }
 
-// The same names and limits as the former `ratelimits` bindings in wrangler.jsonc.
+// Auth keeps the names and limits of the former `ratelimits` bindings in wrangler.jsonc.
+// MENGANTAR_AREA_LIMITER bounds live area-search fallback per verified tenant (catalogue hits are free).
 // Visitor limits are per client network (IPv4 address or IPv6 /56, see visitor-key.ts); the *_ACCOUNT_*
 // limits are per target account (email SHA-256, or the verified MFA user id), and REFRESH_LIMITER is per
 // visitor, spent only when Auth must actually refresh a session.
@@ -95,6 +96,7 @@ export const LIMITS = {
   OTP_ACCOUNT_VISITOR_LIMITER: { limit: 5, periodSeconds: 60 },
   MFA_ACCOUNT_LIMITER: { limit: 10, periodSeconds: 60 },
   REFRESH_LIMITER: { limit: 10, periodSeconds: 60 },
+  MENGANTAR_AREA_LIMITER: { limit: 30, periodSeconds: 60 },
 } as const;
 
 export type LimiterName = keyof typeof LIMITS;

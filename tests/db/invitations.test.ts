@@ -93,6 +93,8 @@ describe("accepting (PR-31)", () => {
     // A fresh invitation replaces the expired one; revoking it closes it.
     const again = await owner.rpc("invite_member", { p_tenant: IDS.tenantA, p_email: target, p_role: "operator" });
     expect(again.error).toBeNull();
+    expect((await owner.rpc("revoke_invitation", { p_id: again.data, p_expected_revision: null })).error?.message).toBe("stale_state");
+    expect(sql(`select status || '|' || revision from public.tenant_invitations where id = '${again.data}'`)).toBe("pending|1");
     expect((await owner.rpc("revoke_invitation", { p_id: again.data, p_expected_revision: 1 })).error).toBeNull();
     expect((await staff.c.rpc("accept_invitation", { p_id: again.data })).error?.message).toBe("invitation_unavailable");
 
@@ -116,6 +118,10 @@ describe("member management (DEC-008)", () => {
     expect((await owner.rpc("set_member_role", { p_tenant: IDS.tenantA, p_user: OWNER_A, p_role: "operator", p_expected_revision: self.revision })).error?.message).toBe("last_tenant_admin");
     expect((await owner.rpc("deactivate_member", { p_tenant: IDS.tenantA, p_user: OWNER_A, p_expected_revision: self.revision })).error?.message).toBe("last_tenant_admin");
     const op = members.find((m) => m.user_id === OPERATOR_A)!;
+    expect((await owner.rpc("set_member_role", { p_tenant: IDS.tenantA, p_user: OPERATOR_A, p_role: "tenant_admin", p_expected_revision: null })).error?.message).toBe("stale_state");
+    expect((await owner.rpc("deactivate_member", { p_tenant: IDS.tenantA, p_user: OPERATOR_A, p_expected_revision: null })).error?.message).toBe("stale_state");
+    expect(sql(`select role || '|' || status || '|' || revision from public.memberships
+      where tenant_id = '${IDS.tenantA}' and user_id = '${OPERATOR_A}'`)).toBe(`operator|active|${op.revision}`);
     expect((await owner.rpc("set_member_role", { p_tenant: IDS.tenantA, p_user: OPERATOR_A, p_role: "tenant_admin", p_expected_revision: op.revision + 9 })).error?.message).toBe("stale_state");
     try {
       expect((await owner.rpc("set_member_role", { p_tenant: IDS.tenantA, p_user: OPERATOR_A, p_role: "tenant_admin", p_expected_revision: op.revision })).error).toBeNull();

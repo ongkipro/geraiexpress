@@ -664,7 +664,7 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** none
 - **Done when:** the declaration is written only inside `confirm_shipment` (new `p_declaration_version` parameter, `auth.uid()`, `now()`; no column grant) and the privilege allowlist and TypeScript callers follow the new signature; `confirm_shipment` refuses a shipment without item description or declaration and freezes version, member and time; `public.declaration_texts` has one seeded Bahasa version listing the Art 22 categories; the intake checkbox and missing-item message follow UX-19 item 4; DB tests for refusal, freeze and cross-tenant denial; e2e at 390 and 1280; existing confirmation e2e updated with a one-line reason each.
 
-### [ ] T-082 — Counter payment record and receipt (PR-38)
+### [x] T-082 — Counter payment record and receipt (PR-38)
 - **Progress:** implementation and owner receipt decision DEC-026 (2026-11-05) verified: typecheck, 1,046 unit, 491 full DB, 24 browser (390/768/1280); reviews code/visual PASS; closed-period variance P2 fixed. Final surface-bound gates and integration pending; details in `STATUS.md`. Not deployed.
 - **Primary requirement:** PR-38
 - **Constraints:** UX-17 items 1–4, 7, 8; DATA-11; UX-13; PR-22; IAM-1 counter rows; no gateway, no surcharge, no tax line
@@ -738,7 +738,8 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** T-089
 - **Done when:** a capability-gated "Konfigurasi" area shows the current declaration text and every courier/service rule (current version, history, source, date) and appends a new version through the existing RPCs with a required reason and confirmation; refusals and load failures are named in Bahasa; nothing is edited in place; e2e at 390 and 1280 including a denied capability.
 
-### [ ] T-092 — Super Admin monitoring overview, tenant directory and per-gerai summary (DEC-024 G3/G4)
+### [x] T-092 — Super Admin monitoring overview, tenant directory and per-gerai summary (DEC-024 G3/G4)
+- **Result:** `RUN-20261103T151534Z-fdd8ce09` PASS; final re-review APPROVE; verification recorded in `STATUS.md`.
 - **Primary requirement:** UX-6
 - **Constraints:** DEC-024, IAM-7, TEN-4, UX-1; read-only monitoring; one gerai = one cabang; aggregates only (no customer personal data, that is T-093)
 - **Risk Level:** R3
@@ -791,7 +792,7 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** T-093
 - **Done when:** intake stores an optional sender street, area and postal code (saved to the sender contact's `contact_addresses` when "Simpan sebagai kontak pengirim" is ticked, picked like the recipient's); the provider payload and `dispatch_payload` carry no sender address (unit test); the masked label pre-fills from the shipment sender and prints the full address within the stated limits; the database refuses out-of-limit printed fields and the old "no address when masked" rule is replaced in a new migration; batch print uses each shipment's own sender; DB tests for limits, grants, guard/revision and snapshot reuse; e2e at 390 and 1280.
 
-### [ ] T-096 — Gerai logo upload for the resi slip and label (owner, 2026-11-04)
+### [x] T-096 — Gerai logo upload for the resi slip and label (owner, 2026-11-04)
 - **Progress:** local versioned/audited upload and immutable logo snapshots implemented. Typecheck, 1,036 unit and 483 full DB tests passed; initial browser 26 passed/2 failed on corrupt-image feedback, now repaired with deterministic delayed-hydration coverage and all 30 browser tests passing at 390/1280. Final bounded code/visual re-review reports OK with no reachable P0-P2 finding. Owner 2026-11-05 masked-parcel branding decision implemented and reviewed (1,038 unit, 37 focused DB, 34 browser PASS); T-095 slip remains open; current evidence and integration seams are in `STATUS.md`.
 - **Primary requirement:** PR-34
 - **Constraints:** DEC-017; tenant admin only; stored in PostgreSQL (no new storage service or dependency): PNG, JPEG or WebP only, verified by magic bytes on the server, at most 200 KB; SVG refused (script risk); one current logo per gerai with versioned replace/remove audited; printed only as a size-bounded image; the gerai name remains the fallback
@@ -807,7 +808,15 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** T-096
 - **Done when:** label print offers 10x15 (10x10 parcel label + 10x5 slip: gerai logo or name and courier name, then the Code128 resi barcode, then the resi number below it) and 10x10 (parcel label only); the first print freezes the format in the label snapshot and every reprint uses it (DB refuses a different format); unit/DB tests for the lock and slip content; e2e and print-layout evidence at 390 and 1280.
 
-### [ ] T-100 — Local Mengantar area catalogue for recipient kelurahan/kecamatan/kota/kode pos (owner, 2026-11-05)
+### [ ] T-101 — Whole-repo review remediation after the T-082/T-096/T-100 integration (2026-11-05)
+- **Primary requirement:** NFR-1
+- **Constraints:** owner direction 2026-11-05 ("review keseluruhan ... menyempurnakan"); forward migration only; no applied migration edited; behavior changes limited to the review findings.
+- **Risk Level:** R3
+- **Allowed Paths:** `db/migrations/**` (new forward migration only), `src/modules/labels/**`, `src/modules/shipments/**`, `src/modules/payments/**`, `src/app/api/mengantar/**`, `src/lib/**`, `tests/**`, `docs/spec/**`, `ARCHITECTURE.md`, `RELEASE.md`, `OBSERVABILITY.md`, `README.md`, `DECISIONS.md`, `STATUS.md`, `TASKS.md`
+- **Done when:** every P1 and P2 finding of reviews 58a1c4ad, 7578a80b and 2890e8da is fixed with a regression or documented as accepted; typecheck, unit, full DB, upgrade replay and affected e2e pass; independent digest approval.
+- **Progress:** all findings fixed; executed gates PASS (1,180 unit, 534 DB, 176 upgrade, 133 e2e); digest approval pending. Details in `STATUS.md`.
+
+### [x] T-100 — Local Mengantar area catalogue for recipient kelurahan/kecamatan/kota/kode pos (owner, 2026-11-05)
 - **Primary requirement:** PR-3
 - **Constraints:** Owner (2026-11-05): "database kelurahan, kecamatan, kota, kodepos tarik ke local dari mengantar atau bisa ambil dari 99ribu". Reuse the 99ribu project's read-only Mengantar `GET /address/search` harvest (owner's own project; same provider area `_id`s; 79,391 kelurahan rows, harvested 2026-10-30) as a committed, versioned local dataset; no new harvest against Mengantar without owner approval. A public Kepmendagri/postal dataset is not a substitute: quotes and orders need Mengantar's own area id. The catalogue is reference data (no tenant data): read-only to members through a bounded search RPC; loaded only by the owner role. The recipient picker of a connected gerai searches the local catalogue first (no seller-key call per keystroke) and keeps the live Mengantar search as a fallback for areas missing from the catalogue; a chosen id still goes to Mengantar unchanged at quote/order time, which remains the authority. Loading never deletes rows that history may name.
 - **Risk Level:** R2 (new reference table, read RPC, picker behavior; no provider write)

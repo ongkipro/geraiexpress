@@ -109,6 +109,8 @@ describe("access governance (DEC-008)", () => {
     expect((await admin2.rpc("platform_tenants")).error).toBeNull();
     const rev = Number(sql(`select revision from public.platform_grants where user_id = '${ADMIN_2}'`));
     try {
+      expect((await admin.rpc("platform_revoke_grant", { p_user: ADMIN_2, p_expected_revision: null, p_reason: "null revision probe" })).error?.message).toBe("stale_state");
+      expect(sql(`select (revoked_at is null) || '|' || revision from public.platform_grants where user_id = '${ADMIN_2}'`)).toBe(`true|${rev}`);
       expect((await admin.rpc("platform_revoke_grant", { p_user: ADMIN_2, p_expected_revision: rev + 5, p_reason: "stale probe" })).error?.message).toBe("stale_state");
       expect((await admin.rpc("platform_revoke_grant", { p_user: ADMIN_2, p_expected_revision: rev, p_reason: "Uji pencabutan" })).error).toBeNull();
       // Same token, still aal2: access is gone because authority is read from the table.

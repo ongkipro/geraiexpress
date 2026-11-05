@@ -100,6 +100,19 @@ describe("billable-weight rule boundary", () => {
     for (const invalid of [{ source_url: null }, { source_updated_at: null }, { divisor: 0 }, { tolerance_grams: 1000 }, { max_weight_grams: -1 }, { service_class: "express" }, { effective_at: null }, { source_url: "javascript:bad" }]) {
       expect((await admin.rpc("platform_set_billable_weight_rule", { ...args, p_rule: { ...args.p_rule, ...invalid } })).error).not.toBeNull();
     }
+    for (const range of [[null, null], [null, 100], [100, null]]) {
+      const result = await admin.rpc("platform_set_billable_weight_rule", { ...args, p_rule: {
+        ...args.p_rule, service_class: "cargo", cargo_minimum_range_grams: range,
+        cargo_minimum_source_url: "https://help.mengantar.com/id/articles/5502313",
+        cargo_minimum_observed_at: "2026-11-02",
+      } });
+      expect(result.error?.code).toBe("23514");
+      expect(result.error?.message).toContain("billable_weight_rules_cargo_range_endpoints");
+    }
+    // Owner-loaded SQL arrays must use the same one-based shape as the JSON RPC.
+    expect(() => sql(`begin; update private.billable_weight_rules
+      set cargo_minimum_range_grams = '[0:1]={100,200}'::integer[] where courier = 'Sap' and service_class = 'cargo';
+      rollback;`)).toThrow(/billable_weight_rules_cargo_range_endpoints/);
     const { data: id, error } = await admin.rpc("platform_set_billable_weight_rule", args);
     expect(error).toBeNull();
     try {
@@ -261,6 +274,8 @@ describe("billable quote → confirmation → real dispatcher (offline)", () => 
     const saved = await f.c.from("shipments").update({ sender_name: "Pengirim", sender_phone: "081234567890", recipient_name: "Penerima", recipient_phone: "081234567890",
       recipient_address: "Jl. Penerima No. 1", recipient_area: "Wilayah Uji", item_description: "Buku", weight_grams: 1000,
       length_cm: 30, width_cm: 20, height_cm: 20, is_cod: true, goods_value_idr: 50000 }).eq("id", id).select("revision").single();
+    expect((await f.c.rpc("request_quotes", { p_shipment: id, p_expected_revision: null })).error?.message).toBe("stale_revision");
+    expect(sql(`select count(*) from public.shipment_quotes where shipment_id = '${id}'`)).toBe("0");
     const { data, error } = await f.c.rpc("request_quotes", { p_shipment: id, p_expected_revision: saved.data!.revision });
     expect(error).toBeNull(); expect(data).toHaveLength(2);
     for (const q of data!) {

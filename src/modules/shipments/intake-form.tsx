@@ -151,8 +151,8 @@ export function IntakeForm(props: Props) {
       ...v,
       [`${role}_name`]: c.name,
       [`${role}_phone`]: c.phone,
-      ...(role === "recipient" && address
-        ? { recipient_address: address.address_line, recipient_area: address.area, recipient_area_id: address.area_id ?? "", recipient_postal_code: address.postal_code ?? "" }
+      ...(role === "recipient"
+        ? { recipient_address: address?.address_line ?? "", recipient_area: address?.area ?? "", recipient_area_id: address?.area_id ?? "", recipient_postal_code: address?.postal_code ?? "" }
         : {}),
       // T-094: a picked sender always replaces all three sender address fields (empty when the contact has
       // none), so a previous sender's address can never stay attached to another sender's name and phone.

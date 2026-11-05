@@ -55,15 +55,15 @@ export function advanceLatestSnapshots(previous: ReadonlyMap<string, LabelSnapsh
   return next;
 }
 
-export type BatchStep = { ok: true; snapshot: LabelSnapshot } | { ok: false; error: string };
+export type BatchStep = { ok: true; snapshot: LabelSnapshot } | { ok: false; error: string; reconcile?: boolean };
 
 // Prints in order and stops at the first failure: the snapshots recorded before it are returned with
 // the failing reference, so the operator is told how many print requests already exist.
-export async function printSequentially(rows: BatchCandidate[], step: (row: BatchCandidate) => Promise<BatchStep>): Promise<{ snapshots: LabelSnapshot[]; error?: string }> {
+export async function printSequentially(rows: BatchCandidate[], step: (row: BatchCandidate) => Promise<BatchStep>): Promise<{ snapshots: LabelSnapshot[]; error?: string; reconcile?: boolean }> {
   const snapshots: LabelSnapshot[] = [];
   for (const row of rows) {
     const result = await step(row);
-    if (!result.ok) return { snapshots, error: `${row.reference}: ${result.error}` };
+    if (!result.ok) return { snapshots, error: `${row.reference}: ${result.error}`, ...(result.reconcile ? { reconcile: true } : {}) };
     snapshots.push(result.snapshot);
   }
   return { snapshots };

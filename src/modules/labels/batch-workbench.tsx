@@ -11,6 +11,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { contentFromSnapshot, isLabelSize, type LabelFacts, type LabelSize, type LabelSnapshot } from "@/lib/label-content";
 import { advanceLatestSnapshots, batchExclusion, batchPreviewContent, batchSender, type BatchCandidate } from "./batch-selection";
 import { printBatchLabelsAction } from "./batch-actions";
+import { LABEL_UNKNOWN_RESULT } from "./messages";
 import { PreviewDesk, ScaledSheet, SegmentedControl } from "./print-ui";
 
 export type BatchEntry = { row: BatchCandidate; facts: LabelFacts; latest: LabelSnapshot | null };
@@ -22,6 +23,7 @@ export function BatchWorkbench({ entries, maskingAllowed, whatsapp, preferenceKe
   const [snapshots, setSnapshots] = useState<LabelSnapshot[]>([]);
   const [latestById, setLatestById] = useState(() => new Map(entries.map(({ row, latest }) => [row.id, latest])));
   const [error, setError] = useState("");
+  const [reconcile, setReconcile] = useState(false);
   // isPending of the form action: plain setState inside an action only commits when it ends.
   const [, runPrint, pending] = useActionState(async () => { await print(); return null; }, null);
   // The choice on screen right now, read when a print response arrives (after an await).
@@ -45,10 +47,21 @@ export function BatchWorkbench({ entries, maskingAllowed, whatsapp, preferenceKe
     ? snapshots.map(contentFromSnapshot)
     : included.map(({ row, facts, latest }) => batchPreviewContent(facts, latestById.get(row.id) ?? latest, { mask, size, sender: batchSender(row, city) }));
   async function print() {
+    if (reconcile) return;
     setError("");
     const request = { mask, size, city };
     const ids = included.map(({ row }) => row.id);
-    const result = await printBatchLabelsAction({ ids, ...request });
+    let result: Awaited<ReturnType<typeof printBatchLabelsAction>>;
+    try {
+      result = await printBatchLabelsAction({ ids, ...request });
+    } catch {
+      setReconcile(true);
+      return;
+    }
+    if (result.reconcile) {
+      setReconcile(true);
+      return;
+    }
     if (result.snapshots.length) setLatestById((prev) => advanceLatestSnapshots(prev, ids, result.snapshots));
     const now = current.current;
     // The controls are locked while pending; if the choice still changed, never print what the
@@ -72,8 +85,8 @@ export function BatchWorkbench({ entries, maskingAllowed, whatsapp, preferenceKe
       {maskingAllowed ? <label className="flex min-h-11 items-center gap-3"><Switch checked={mask} disabled={pending} onCheckedChange={(value) => changeChoice(value, size)} />Gunakan masking pengirim</label> : null}
       {mask && entries.some(({ row }) => !row.sender_area) ? <div className="flex flex-col gap-2"><Label htmlFor="batch-city">Kecamatan / kota pengirim untuk kiriman yang belum mengisinya</Label><p className="text-sm text-muted-foreground">Label lain memakai pengirim kirimannya sendiri. Isian ini hanya dipakai untuk kiriman lama tanpa kecamatan pengirim.</p><Input id="batch-city" value={city} maxLength={40} disabled={pending} onChange={(event) => { setCity(event.target.value); setSnapshots([]); }} /></div> : null}
       {blocked ? <p role="alert">Isi WhatsApp gerai sebelum mencetak. <Link className="text-primary underline" href="/pengaturan#whatsapp-gerai">Buka pengaturan WhatsApp gerai</Link></p> : null}
-      {error ? <p role="alert" className="text-danger">{error}</p> : null}
-      <form action={runPrint}><SubmitButton disabled={blocked || !included.length} pendingLabel="Menyiapkan label…">Cetak {included.length} label</SubmitButton></form>
+      {reconcile ? <p role="alert" className="text-danger">{LABEL_UNKNOWN_RESULT} <a href={`/pengiriman/cetak?ids=${entries.map(({ row }) => row.id).join(",")}`} className="underline">Muat ulang</a></p> : error ? <p role="alert" className="text-danger">{error}</p> : null}
+      <form action={runPrint}><SubmitButton disabled={blocked || !included.length || reconcile} pendingLabel="Menyiapkan label…">Cetak {included.length} label</SubmitButton></form>
     </section>
     {excluded.length ? <section className="print:hidden"><h2 className="text-xl">Tidak disertakan</h2><ul className="mt-3 divide-y divide-border rounded-lg bg-card ring-1 ring-border">{excluded.map(({ row, reason }) => <li key={row.id} className="p-4"><strong className="tabular">{row.reference}</strong><p className="text-sm text-muted-foreground">{reason}</p></li>)}</ul></section> : null}
     <div className={snapshots.length ? "" : "print:hidden"}><PreviewDesk>{contents.map((content, index) => <div key={`${content.reference}-${index}`} className="print:break-after-page print:last:break-after-auto"><ScaledSheet zoom="fit" label={`Pratinjau ${content.reference}`}><LabelSheet content={content} /></ScaledSheet></div>)}</PreviewDesk></div>

@@ -1,4 +1,4 @@
-import { friendlyError } from "@/lib/errors";
+import { friendlyError } from "../../lib/errors";
 
 // Bahasa Indonesia messages for the label and gerai-WhatsApp commands (UX-9). Stable database codes in,
 // operator-facing sentences out; anything else falls back to the shared mapping.
@@ -20,6 +20,16 @@ const MESSAGES: Record<string, string> = {
   admin_required: "Hanya admin gerai yang dapat mengubah nomor WhatsApp gerai.",
   demo_restricted: "Fitur ini tidak tersedia di demo.",
 };
+
+export const LABEL_UNKNOWN_RESULT =
+  "Hasil penyimpanan label belum pasti. Muat ulang halaman untuk memeriksa riwayat permintaan cetak sebelum mencoba lagi.";
+
+// Only stable refusals from the label commands prove that the write did not happen.
+// Transport errors and unrecognized responses require reconciliation, never a blind retry.
+export function labelPrintError(error: { message?: string; code?: string } | null | undefined): string {
+  const refusals = ["not_found", "invalid_input", "simulated_shipment", "no_awb", "masking_disabled", "sender_fields_required", "whatsapp_missing"];
+  return error?.message && refusals.includes(error.message) ? labelError(error) : LABEL_UNKNOWN_RESULT;
+}
 
 export const labelError = (error: { message?: string; code?: string } | null | undefined): string =>
   (error?.message && MESSAGES[error.message]) || friendlyError(error);

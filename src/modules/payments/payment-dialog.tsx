@@ -70,38 +70,41 @@ export function PaymentDialog({ shipmentId, reference, chargeIdr, isDemo }: {
               <div className="grid grid-cols-2 gap-2">
                 {PAYMENT_METHODS.map((m) => (
                   <label key={m} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-sm border border-input bg-card px-3 has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
-                    <input type="radio" name="method" value={m} checked={method === m} onChange={() => setMethod(m)} className="size-4 accent-primary" />
+                    <input type="radio" name="method" value={m} checked={method === m} onChange={() => setMethod(m)} className="size-4 accent-primary"
+                      aria-invalid={!!err.method} aria-describedby={err.method ? "payment-method-error" : undefined} />
                     <span>{PAYMENT_METHOD_LABEL[m]}</span>
                   </label>
                 ))}
               </div>
-              {err.method ? <FieldError>{err.method}</FieldError> : null}
+              {err.method ? <FieldError id="payment-method-error">{err.method}</FieldError> : null}
             </FieldSet>
             <Field data-invalid={!!err.amount || undefined}>
               <FieldLabel htmlFor="payment-amount">Jumlah dibayar (Rp){contoh}</FieldLabel>
               <Input id="payment-amount" name="amount" inputMode="numeric" autoComplete="off" required className="tabular"
-                value={amount} onChange={(e) => setAmount(e.target.value)} aria-invalid={!!err.amount} />
-              {err.amount ? <FieldError>{err.amount}</FieldError> : null}
+                value={amount} onChange={(e) => setAmount(e.target.value)} aria-invalid={!!err.amount}
+                aria-describedby={err.amount ? "payment-amount-error" : undefined} />
+              {err.amount ? <FieldError id="payment-amount-error">{err.amount}</FieldError> : null}
             </Field>
             {method === "cash" ? (
               <Field data-invalid={!!err.received || undefined}>
                 <FieldLabel htmlFor="payment-received">Uang diterima (Rp){contoh}</FieldLabel>
                 <Input id="payment-received" name="received" inputMode="numeric" autoComplete="off" className="tabular"
                   value={received} onChange={(e) => setReceived(e.target.value)} aria-invalid={!!err.received}
-                  aria-describedby="payment-change" />
+                  aria-describedby={err.received ? "payment-change payment-received-error" : "payment-change"} />
                 <FieldDescription id="payment-change" aria-live="polite" data-testid="payment-change">
                   Kembalian: <span className="tabular text-foreground">{change == null ? "—" : `${formatIdr(change)}${contoh}`}</span>
                 </FieldDescription>
-                {err.received ? <FieldError>{err.received}</FieldError> : null}
+                {err.received ? <FieldError id="payment-received-error">{err.received}</FieldError> : null}
               </Field>
             ) : null}
             {differs || err.reason ? (
               <Field data-invalid={!!err.reason || undefined}>
                 <FieldLabel htmlFor="payment-reason">Alasan selisih</FieldLabel>
                 <Textarea id="payment-reason" name="reason" required minLength={5} maxLength={500} rows={2}
-                  value={reason} onChange={(e) => setReason(e.target.value)} aria-invalid={!!err.reason} />
-                <FieldDescription>Jumlah berbeda dari tarif pelanggan. Selisih ditampilkan ke admin gerai.</FieldDescription>
-                {err.reason ? <FieldError>{err.reason}</FieldError> : null}
+                  value={reason} onChange={(e) => setReason(e.target.value)} aria-invalid={!!err.reason}
+                  aria-describedby={err.reason ? "payment-reason-hint payment-reason-error" : "payment-reason-hint"} />
+                <FieldDescription id="payment-reason-hint">Jumlah berbeda dari tarif pelanggan. Selisih ditampilkan ke admin gerai.</FieldDescription>
+                {err.reason ? <FieldError id="payment-reason-error">{err.reason}</FieldError> : null}
               </Field>
             ) : null}
           </FieldGroup>

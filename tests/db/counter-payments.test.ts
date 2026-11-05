@@ -3,7 +3,7 @@
 // shipment; a difference needs a reason; void is tenant-admin only, keeps the row; reopen_shipment is
 // refused while an active record exists; another tenant can neither read nor write.
 import { afterAll, describe, expect, it } from "vitest";
-import { IDS, realOperation, signIn, sql } from "./helpers";
+import { IDS, machine, realOperation, signIn, sql } from "./helpers";
 
 // Shipments and outlets these tests add to the shared fixture tenant A; removed afterwards.
 const createdOutlets: string[] = [];
@@ -377,6 +377,39 @@ describe("record_receipt_print (T-082)", () => {
 });
 
 describe("counter payment read boundary (T-082 / IAM-1)", () => {
+  it("keeps the exact effective machine table and column privilege set empty on RPC-only new tables", () => {
+    for (const table of ["counter_payments", "cash_periods", "mengantar_areas"]) {
+      expect(sql(`select coalesce(string_agg(p, ',' order by p), '')
+        from unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) p
+        where has_table_privilege('service_role', 'public.${table}', p)`), table).toBe("");
+      expect(sql(`select coalesce(string_agg(p, ',' order by p), '')
+        from unnest(array['SELECT','INSERT','UPDATE','REFERENCES']) p
+        where has_any_column_privilege('service_role', 'public.${table}', p)`), table).toBe("");
+    }
+  });
+
+  it("refuses direct machine reads/writes and cannot delete a period to erase its payment or receipt", async () => {
+    const { shipment } = await confirmedShipment();
+    const operator = await signIn("operator-a@geraiexpress.test");
+    const saved = await operator.rpc("record_counter_payment", record(shipment));
+    expect(saved.error).toBeNull();
+    const payment = saved.data as string;
+    expect((await operator.rpc("record_receipt_print", { p_shipment: shipment, p_payment: payment, p_width: "58" })).error).toBeNull();
+    const period = sql(`select period_id from public.counter_payments where id = '${payment}'`);
+    const m = machine();
+    for (const table of ["cash_periods", "counter_payments"]) {
+      const id = table === "cash_periods" ? period : payment;
+      expect((await m.from(table).select("id").eq("id", id)).error?.code).toBe("42501");
+      expect((await m.from(table).insert({ tenant_id: IDS.tenantA })).error?.code).toBe("42501");
+      expect((await m.from(table).update({ id }).eq("id", id)).error?.code).toBe("42501");
+      expect((await m.from(table).delete().eq("id", id)).error?.code).toBe("42501");
+    }
+    // The FK also protects history from an owner delete, independently of the machine ACL.
+    expect(() => sql(`delete from public.cash_periods where id = '${period}'`)).toThrow(/counter_payments_tenant_id_period_id_fkey/);
+    expect(sql(`select count(*) from public.counter_payments where id = '${payment}'`)).toBe("1");
+    expect(sql(`select count(*) from public.label_print_events where receipt_payment_id = '${payment}'`)).toBe("1");
+  });
+
   it("keeps receipt facts member-readable but administrative expected charge and reasons RPC-only", async () => {
     const { shipment } = await confirmedShipment();
     const operator = await signIn("operator-a@geraiexpress.test");
