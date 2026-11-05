@@ -941,14 +941,72 @@ describe("housekeeping", () => {
         `('${freshCode}', 'login', '${hex()}', now() + interval '10 minutes', now() - interval '1 hour')`,
     );
 
-    const res = (await rpc("auth_purge_expired")) as unknown as { sessions: number; otp_codes: number };
-    expect(res.sessions).toBeGreaterThanOrEqual(2);
-    expect(res.otp_codes).toBeGreaterThanOrEqual(1);
+    // Batches of the default size until done (other suites may have left expired rows behind).
+    const totals = { sessions: 0, otp_codes: 0 };
+    for (let batch = 0; batch < 50; batch++) {
+      const res = (await rpc("auth_purge_expired")) as unknown as { sessions: number; otp_codes: number; remaining: boolean };
+      totals.sessions += res.sessions;
+      totals.otp_codes += res.otp_codes;
+      if (!res.remaining) break;
+    }
+    expect(totals.sessions).toBeGreaterThanOrEqual(2);
+    expect(totals.otp_codes).toBeGreaterThanOrEqual(1);
     const survivors = (ids: string[]) => count("auth.sessions", `id in (${ids.map((i) => `'${i}'`).join(", ")})`);
     expect(survivors([longExpired.id, longRevoked.id])).toBe(0);
     expect(survivors([liveS.id, recentlyExpired.id, justRevoked.id])).toBe(3);
     expect(await live(liveS.id)).toBe(true);
     expect(count("auth.otp_codes", `email = '${oldCode}'`)).toBe(0);
     expect(count("auth.otp_codes", `email = '${freshCode}'`)).toBe(1);
+  });
+
+  it("auth_purge_expired deletes at most p_limit rows per table and reports remaining work (T-104)", async () => {
+    const backlog = Array.from({ length: 8 }, (_, i) => email(`purge-batch-${i}`));
+    const keep = email("purge-batch-keep");
+    sql(`insert into auth.otp_codes (email, purpose, code_hash, expires_at, created_at) values ` +
+      backlog.map((addr) => `('${addr}', 'login', '${hex()}', now() - interval '3 days', now() - interval '3 days')`).join(", ") +
+      `, ('${keep}', 'login', '${hex()}', now() + interval '10 minutes', now() - interval '23 hours')`);
+    const expired = () => count("auth.otp_codes", "created_at < now() - interval '1 day'");
+    const before = expired();
+    expect(before).toBeGreaterThanOrEqual(8);
+
+    const first = (await rpc("auth_purge_expired", { p_limit: 5 })) as unknown as { sessions: number; otp_codes: number; remaining: boolean };
+    expect(first.otp_codes).toBe(5);
+    expect(first.sessions).toBeLessThanOrEqual(5);
+    expect(first.remaining).toBe(true);
+    expect(expired()).toBe(before - 5);
+
+    const sessionBacklog = count("auth.sessions", "least(absolute_expires_at, coalesce(revoked_at, absolute_expires_at)) < now() - interval '7 days'");
+    let calls = 1;
+    for (let last = first; last.remaining; calls++) {
+      expect(calls, "bounded number of batches").toBeLessThanOrEqual(Math.ceil(Math.max(before, sessionBacklog) / 5) + 2);
+      last = (await rpc("auth_purge_expired", { p_limit: 5 })) as unknown as typeof first;
+      expect(last.otp_codes).toBeLessThanOrEqual(5);
+    }
+    expect(calls).toBeGreaterThanOrEqual(2);
+    expect(expired()).toBe(0);
+    expect(count("auth.otp_codes", `email in (${backlog.map((a) => `'${a}'`).join(", ")})`)).toBe(0);
+    expect(count("auth.otp_codes", `email = '${keep}'`)).toBe(1);
+    // Out-of-range limits are clamped, never unbounded or refused.
+    for (const p_limit of [0, -1, null, 1000000]) {
+      expect((await rpc("auth_purge_expired", { p_limit })) as unknown as { remaining: boolean }).toMatchObject({ remaining: false });
+    }
+  });
+
+  it("issuing a code no longer deletes another address's expired codes (T-104)", async () => {
+    const stale = email("purge-stale-other");
+    sql(`insert into auth.otp_codes (email, purpose, code_hash, expires_at, created_at)
+      values ('${stale}', 'login', '${hex()}', now() - interval '2 days', now() - interval '2 days')`);
+    const user = newUser({ tag: "purge-issue" });
+    expect((await issue(user.email, hex())).status).toBe("sent");
+    expect(count("auth.otp_codes", `email = '${stale}'`)).toBe(1);
+    expect(count("auth.otp_codes", `email = '${user.email}' and consumed_at is null`)).toBe(1);
+  });
+
+  it("the purge has a created_at index and stays machine-only (T-104)", () => {
+    expect(sql("select indexdef from pg_indexes where schemaname = 'auth' and indexname = 'otp_codes_created_idx'")).toContain("(created_at)");
+    expect(sql(`select string_agg(r || '=' || has_function_privilege(r, 'public.auth_purge_expired(integer)', 'execute'), ',' order by r)
+      from unnest(array['anon', 'authenticated', 'service_role']) r`)).toBe("anon=false,authenticated=false,service_role=true");
+    expect(sql(`select (prosecdef and exists (select 1 from unnest(proconfig) c where c = 'search_path=""'))::text
+      from pg_proc where oid = 'public.auth_purge_expired(integer)'::regprocedure`)).toBe("true");
   });
 });

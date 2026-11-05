@@ -119,7 +119,7 @@ incident to investigate, not a row to delete silently.
 - Statement: Incident recovery shall preserve or reconcile external-operation uncertainty across database, dispatcher and secret/configuration recovery before any affected account resumes mutations.
 - Acceptance: A non-production restore drill covers an operation dispatched after the backup point, a changed credential version and duplicate queued delivery; no blind create/payment/rotation follows restore, and current authorization is re-established.
 - Constraints: BILL-2, MIG-1, OBS-1; no zero-loss, RPO/RTO, availability percentage or contractual SLA is promised.
-- Evidence: Recovery design only; backups and restoration have not been exercised.
+- Evidence: Archive backup and scratch restore are Observed locally (`scripts/db-backup.sh`, `scripts/db-restore-check.sh`: row counts per table in `public`/`private`/`auth`, migration checksums, `auth.users` query; local drill in RELEASE.md gate 13). The external-effect-safe recovery this requirement asks for (an operation dispatched after the backup point, a changed credential version, duplicate queued delivery, no blind replay) has not been exercised; no production schedule, off-server storage or PITR exists.
 
 1. The authorized responder fences affected new dispatch and records the incident
    scope. Read-only status and safe known-result capture continue where possible.
@@ -127,8 +127,8 @@ incident to investigate, not a row to delete silently.
    schemas, including `auth.users`, `auth.sessions`, `auth.mfa_factors` and
    durable account coordination/outbox), object assets and secret/configuration
    versions (`AUTH_JWT_SECRET`, `AUTH_SECRET`, `CREDENTIAL_KEY*`). Production
-   PostgreSQL backup (`pg_dump` / `scripts/db-backup.sh`, not yet on disk), a
-   tested restore drill and point-in-time recovery (WAL archiving or managed
+   PostgreSQL backup (`pg_dump` / `scripts/db-backup.sh`, on disk and drilled locally; no production schedule or off-server copy yet), a
+   production restore drill from that copy and point-in-time recovery (WAL archiving or managed
    PITR) remain open under T-067; a database backup alone is not proof that all
    these systems can be restored together.
 3. Restore into an isolated environment first. Validate identity/grants, RLS,

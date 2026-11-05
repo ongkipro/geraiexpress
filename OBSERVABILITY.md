@@ -83,7 +83,11 @@ any non-zero value needs an admin to check the Mengantar app (runbook in RELEASE
 The hourly `/api/internal/cron/cleanup` task performs demo cleanup, auth expiry purge and
 environment-scoped credential rewrap (`src/lib/mengantar/scheduled.ts`):
 
-- `auth_purge` reports `sessions`, `otpCodes` and `failed` (counts/flag only).
+- `auth_purge` reports `sessions`, `otpCodes`, `hasMore` and `failed` (counts/flags only). Since T-104
+  each `auth_purge_expired(p_limit)` call deletes at most 1000 rows per table, skips rows locked by a live
+  refresh or verification, and returns `remaining`; one run makes at most 10 calls inside the task
+  deadline. `hasMore: true` means a backlog is left for the next hourly run; a missing or malformed
+  reply is `failed: true`, never zero work. Retention is unchanged (sessions dead > 7 days, codes > 1 day).
 - `credential_rewrap` reports disabled state or bounded counts (`scanned`, `rewrapped`,
   `alreadyCurrent`, `noCredential`, `conflicts`, `failed`) and the provider environment; an unexpected
   exception reports `failed: true`. No tenant identifiers or key material are logged. Investigate

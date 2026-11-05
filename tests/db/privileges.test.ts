@@ -157,7 +157,8 @@ const MACHINE_ONLY = [
   "public.auth_mfa_factor(uuid,uuid)",
   "public.auth_mfa_verify(uuid,uuid,uuid,bigint,text)",
   "public.auth_password_credential(text)",
-  "public.auth_purge_expired()",
+  // T-104: bounded batches (p_limit default 1000, clamped 1..10000).
+  "public.auth_purge_expired(integer)",
   "public.auth_refresh_session(text,text,integer)",
   "public.auth_revoke_session(uuid)",
   "public.auth_revoke_user_sessions(uuid,uuid)",
@@ -399,6 +400,18 @@ describe("table sweep (DIL-12)", () => {
           or has_any_column_privilege('authenticated', c.oid, 'select,insert,update,references')) order by 1`);
     const invoker = (options: string[] | null) => (options ?? []).some((o) => /^security_invoker=(true|on|1|yes)$/i.test(o));
     expect(granted.filter((v) => v.kind !== "v" || !invoker(v.options)).map((v) => v.name)).toEqual([]);
+  });
+
+  it("service_role reads only public.tenants directly and holds no other table or column privilege (T-104)", () => {
+    // The machine identity bypasses RLS and writes only through SECURITY DEFINER RPCs. Its one direct
+    // read is the credential rewrap's tenant list (src/lib/credential-keyring.ts listTenantIds).
+    const held = rows<{ name: string; privilege: string }>(`select c.relname as name, p.privilege from pg_class c
+      cross join unnest(array['select', 'insert', 'update', 'delete', 'truncate', 'references', 'trigger', 'maintain']) p(privilege)
+      where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p', 'v', 'm', 'f')
+        and (has_table_privilege('service_role', c.oid, p.privilege)
+          or (p.privilege in ('select', 'insert', 'update', 'references') and has_any_column_privilege('service_role', c.oid, p.privilege)))
+      order by 1, 2`);
+    expect(held).toEqual([{ name: "tenants", privilege: "select" }]);
   });
 
   it("authenticated has no table-level write privilege anywhere", () => {

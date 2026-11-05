@@ -4,7 +4,7 @@
 // Synthetic couriers and areas only; nothing here reaches Mengantar.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { IDS, client, signIn, signInAal2, sql } from "./helpers";
+import { IDS, client, machine, signIn, signInAal2, sql } from "./helpers";
 
 const OWNER_A = "00000000-0000-4000-a000-0000000000a1";
 const COURIER_VERIFIED = "ZzUjiTerima";
@@ -177,6 +177,30 @@ describe("record_label_print acknowledgement (PR-46)", () => {
       values ('${IDS.tenantA}', '${id}', '${snap.data}', '10x15', '${OWNER_A}', 'unverified', false)`)).toThrow(/label_print_events_acceptance/);
     expect((await owner.from("label_print_events").insert({ tenant_id: IDS.tenantA, shipment_id: id, snapshot_id: snap.data,
       size: "10x15", actor: OWNER_A, acceptance_state: "verified", acknowledged: false })).error?.code).toBe("42501");
+  });
+
+  it("the machine identity cannot write label history around record_label_print (T-104)", async () => {
+    const owner = await signIn("owner-a@geraiexpress.test");
+    const id = realShipment();
+    const snap = await owner.rpc("create_label_snapshot", { p_shipment: id, ...MASK });
+    expect(snap.error).toBeNull();
+    const m = machine();
+    // NULL acceptance fields (allowed by the constraint for history) and a forged `verified` state.
+    for (const fields of [{ acceptance_state: null, acknowledged: null }, { acceptance_state: "verified", acknowledged: true }]) {
+      const write = await m.from("label_print_events").insert({ tenant_id: IDS.tenantA, shipment_id: id, snapshot_id: snap.data,
+        size: "10x15", actor: OWNER_A, ...fields });
+      expect(write.error?.code, JSON.stringify(fields)).toBe("42501");
+    }
+    expect((await m.from("label_snapshots").insert({ tenant_id: IDS.tenantA, shipment_id: id, version: 99, size: "10x15",
+      mask_sender: false, printed_sender_name: "Palsu", printed_sender_phone: "081311112222", true_tenant_name: "Palsu",
+      true_tenant_slug: "palsu", awb: "JP1234567890", shipment_reference: "X", is_cod: false, content_digest: "a".repeat(64),
+      created_by: OWNER_A })).error?.code).toBe("42501");
+    for (const table of ["label_print_events", "label_snapshots"]) {
+      expect((await m.from(table).select("tenant_id").eq("shipment_id", id)).error?.code, table).toBe("42501");
+      expect(sql(`select has_table_privilege('service_role', 'public.${table}', 'select,insert,update,delete,truncate')`), table).toBe("f");
+    }
+    expect(sql(`select count(*) from public.label_print_events where shipment_id = '${id}'`)).toBe("0");
+    expect(sql(`select count(*) from public.label_snapshots where shipment_id = '${id}'`)).toBe("1");
   });
 
   it("another tenant cannot print a gerai's masked label even with the acknowledgement", async () => {
