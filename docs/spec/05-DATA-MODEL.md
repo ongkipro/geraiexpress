@@ -56,8 +56,11 @@ Choose exact PostgreSQL types and indexes in reviewed migrations, not this table
 
 Table grants (Observed, T-104 `20261105180000_db_hardening.sql`): `anon` holds no table
 privilege; `authenticated` holds member-scoped SELECT (RLS) plus the column-scoped draft writes
-pinned in `tests/db/privileges.test.ts`; the machine identity `service_role` (BYPASSRLS) holds only
-SELECT on `public.tenants` (credential rewrap tenant list) and writes nothing directly. Every write
+pinned in `tests/db/privileges.test.ts`; the machine identity `service_role` (BYPASSRLS) holds no table
+privilege (T-109 revoked its last one, SELECT on `public.tenants`, when the credential rewrap moved to
+`machine_rewrap_candidates`) and reads and writes nothing directly. T-109 also dropped the unused
+`auth.users` columns `instance_id`, `confirmation_token`, `recovery_token`, `email_change_token_new` and
+`raw_user_meta_data` and the callerless `platform_tenants()` / `platform_tenant_slugs()`. Every write
 goes through a SECURITY DEFINER RPC; the foundation's default `service_role` table ACL is revoked on
 all existing public tables, and a new table must revoke it (or be caught by the catalog test).
 

@@ -38,8 +38,15 @@ acquisition deadline. `/healthz` performs an anonymous SQL-backed readiness prob
 2-second timeout and answers 503 without upstream details on failure; since T-105 it is also not
 ready while the server configuration does not load (`src/lib/startup.ts`), and `src/instrumentation.ts`
 refuses a production start with missing or invalid required variables (names only). Every PostgREST
-request carries an application deadline (`src/lib/db/client.ts`: 15 s, scheduled machine requests 60 s);
-there is no SQL-side `statement_timeout` per role yet. `compose.yaml` gives the app and the scheduler a
+request carries an application deadline (`src/lib/db/client.ts`: 15 s, scheduled machine requests 60 s).
+Since T-109 (`20261105190000_db_followups.sql`) the database enforces matching per-role limits that
+PostgREST applies to each request as impersonated-role settings: `authenticated` 15 s statement / 5 s
+lock / 30 s idle-in-transaction, `anon` 5 s / 3 s / 15 s, `service_role` 60 s / 10 s / 60 s, and
+`authenticator` a 65 s statement upper bound; `postgres` (migrations, backups) has none. Readiness also
+requires the applied schema (`public.schema_version()`, machine-only) to be at least the image's
+`EXPECTED_SCHEMA_VERSION` (`src/lib/schema-version.ts`); a newer schema is ready. The machine identity
+holds no table privilege in `public`: the credential rewrap selects its tenants through
+`machine_rewrap_candidates`. `compose.yaml` gives the app and the scheduler a
 300 s `stop_grace_period` (the 270 s cron deadline plus drain).
 
 Migration `20261029130000_backend_audit.sql` serializes first-password initialization at the
@@ -341,7 +348,7 @@ flowchart LR
         CashRPC["close_cash_period / reopen_cash_period<br/>period row lock · active cash aggregate<br/>cash_period_events: RLS, append-only, RPC writes"]
         PilotRPC["pilot_report(tenant, from, to) · record_export('pilot_report')<br/>tenant admin · ≤92 WIB days · derived measures only<br/>earnings via private.quote_gerai_cost"]
         CaseRPC["open_shipment_case / update_shipment_case / close_shipment_case<br/>case_attention · claim_window_rules<br/>shipment_cases + append-only shipment_case_events<br/>deadline from private.claim_window_rules"]
-        Hardening["T-104: shipment lock before memberships · member recheck after FOR UPDATE<br/>service_role table privilege = SELECT on tenants only<br/>bounded auth_purge_expired(p_limit)"]
+        Hardening["T-104: shipment lock before memberships · member recheck after FOR UPDATE<br/>T-109: service_role has no public-table privilege (rewrap via machine_rewrap_candidates)<br/>bounded auth_purge_expired(p_limit)"]
         AreaRPC["search_mengantar_areas(query, limit)<br/>authenticated · active membership · max 30"]
         Areas["PostgreSQL: public.mengantar_areas<br/>shared provider reference data · no tenant ownership · RLS · no API table grants"]
         TrackingRPC["track_shipment(token) · anon only<br/>hash lookup · latest label masking · fixed projection"]
@@ -551,13 +558,16 @@ observed. Counts and executed checks are under "Verified counts and gates".
   and claims take the environment; reconcile payloads derive it from the operation and the Worker
   checks the caller environment; T-057 also enforces SQL `p_env`. `CREDENTIAL_KEYS` JSON and
   `CREDENTIAL_KEY_CURRENT` select the sealing key; opening uses stored `key_version`; single
-  `CREDENTIAL_KEY` remains v1. `reencryptCredentials`, `listTenantIds` and machine-only
+  `CREDENTIAL_KEY` remains v1. `reencryptCredentials` and machine-only
   `rewrap_seller_credential` exist, fenced/audited without changing credential identity or
   active/superseded state; F1 permits only increasing key versions. The hourly
   `/api/internal/cron/cleanup` invokes environment-scoped rewrap (T-057), emitting
   `credential_rewrap` counts or disabled/failure state; retain old keys until completion is verified.
-  T-105: each run rewraps at most 500 tenants (`rewrapNextBatch`, keyset over `public.tenants` by id)
-  after an in-process cursor; `pending` reports remaining tenants, a restart begins a new idempotent pass.
+  T-105/T-109: each run rewraps at most 500 tenants (`rewrapNextBatch`) read through machine-only
+  `machine_rewrap_candidates` (`rewrapCandidatePage`): only non-demo tenants whose active credential for
+  the environment is below the current key version, keyset by tenant id after an in-process cursor; a
+  rewrapped tenant leaves the candidate list, `pending` reports remaining candidates, and a restart begins
+  a new idempotent pass. The machine role reads no table directly.
   `pnpm check:environments` refuses secret values shared between environments, a production
   provider in non-production and Turnstile disabled outside local; it checks the committed templates
   by default and the real files when given. The deploy scripts of the Worker era are gone (T-062); a separate

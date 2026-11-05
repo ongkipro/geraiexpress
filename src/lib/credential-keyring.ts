@@ -2,7 +2,6 @@
 // ring's current key. Server-side (machine identity); the database only ever sees ciphertext. Run it
 // after adding a key to CREDENTIAL_KEYS and switching CREDENTIAL_KEY_CURRENT, and drop the old key
 // from the ring only when a run reports nothing left to re-wrap.
-import type { Db } from "./db/client";
 import { credentialAad, openCredential, resolveKeyRing, sealCredential, type CredentialKeyMaterial, type CredentialKeyRing } from "./credential-crypto";
 
 type RpcResult = PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>;
@@ -78,32 +77,22 @@ export async function reencryptCredentials(opts: {
   return summary;
 }
 
-// One keyset page of non-demo tenant ids after `after` (null = from the start), through the machine
-// client (service_role reads public.tenants). Demo tenants hold no provider credential. Throws on a read
-// error or a malformed answer: a partial list must not look like a finished run.
+// T-109: one keyset page of the non-demo tenants whose active credential of `environment` is sealed
+// under a key version below `currentVersion`, after `after` (null = from the start), through the
+// machine-only RPC machine_rewrap_candidates. Already-current and credential-less tenants are never
+// listed. Throws on an error or a malformed answer: a partial list must not look like a finished run.
 export type TenantIdPage = (after: string | null, limit: number) => Promise<string[]>;
-export async function tenantIdPage(machine: Db, after: string | null, limit: number): Promise<string[]> {
-  let query = machine.from("tenants").select("id").eq("is_demo", false);
-  if (after) query = query.gt("id", after);
-  const { data, error } = await query.order("id").limit(limit);
-  if (error || !Array.isArray(data) || data.some((r: { id?: unknown }) => typeof r?.id !== "string")) throw new Error("tenant_list_failed");
-  return data.map((r: { id: string }) => r.id);
-}
-
-// Every non-demo tenant id (all pages).
-export async function listTenantIds(machine: Db, pageSize = 500): Promise<string[]> {
-  const ids: string[] = [];
-  for (;;) {
-    const page = await tenantIdPage(machine, ids.at(-1) ?? null, pageSize);
-    ids.push(...page);
-    if (page.length < pageSize) return ids;
-  }
+export async function rewrapCandidatePage(rpc: RewrapRpc, environment: string, currentVersion: string, after: string | null, limit: number): Promise<string[]> {
+  const { data, error } = await rpc("machine_rewrap_candidates", { p_env: environment, p_current_version: currentVersion, p_after: after, p_limit: limit });
+  if (error || !Array.isArray(data) || data.some((id) => typeof id !== "string")) throw new Error("tenant_list_failed");
+  return data as string[];
 }
 
 // T-105: bounded, resumable rewrap. Each scheduled run handles at most REWRAP_BATCH tenants after the
 // cursor of the previous run, so a large tenant list never restarts from the beginning and starves the
-// tail. The cursor is in-process (no schema change): a restart begins a new pass, which is safe because
-// the rewrap is idempotent. `pending` = tenants remain after this batch (the next run continues);
+// tail. T-109: the page lists only tenants that still need a rewrap (rewrapCandidatePage), so a rewrapped
+// tenant leaves the set by itself and the cursor only steps past conflicts and failures. The cursor is
+// in-process: a restart begins a new pass, which is safe because the rewrap is idempotent. `pending` = tenants remain after this batch (the next run continues);
 // a run with pending=false ended a pass and the next run starts over. A failed tenant is reported and
 // retried on the next pass; a failed page read keeps the cursor.
 export const REWRAP_BATCH = 500;

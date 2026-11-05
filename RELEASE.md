@@ -39,7 +39,14 @@ Enable **Preserve repository during deployment**: the gateway bind-mounts
 5. `/healthz` must return 200 with the database available, 503 during an isolated data-path
    outage, and recover afterward. Its two-second probe checks SQL/schema readiness and (T-105)
    that the server configuration loads (PostgREST URL, auth secrets and CAPTCHA setting,
-   tracking secret), not provider entitlements, production mail or the schema version.
+   tracking secret), not provider entitlements or production mail. Since T-109 it also answers
+   503 `reason: "schema_behind"` while the database's newest migration is older than the image's
+   `EXPECTED_SCHEMA_VERSION`: apply migrations first (a newer database is ready, so an image
+   rollback after a forward migration stays healthy). The T-109 migration also sets per-role
+   database timeouts (`authenticated` 15 s, `anon` 5 s, `service_role` 60 s statement; lock and
+   idle-in-transaction limits; `authenticator` 65 s) and sends `notify pgrst, 'reload config'`; a
+   PostgREST that missed the notify applies them after its next restart. Migrations and
+   maintenance run as `postgres` and are not limited by them.
    A production container with a missing or invalid required variable now refuses to start
    (`startup_config_invalid` names the variables, never a value) and never becomes healthy:
    check `docker compose logs app` before suspecting the database. `compose.yaml` stops the

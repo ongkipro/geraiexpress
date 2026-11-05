@@ -12,7 +12,7 @@ The app exposes `GET /healthz` (`{"ok":true,"service":"geraiexpress"}`,
 `Cache-Control: no-store`) on every host it answers, including the internal host name
 `internal.geraiexpress.local` (`src/lib/hosts.ts`); it is the image `HEALTHCHECK`, the compose
 `service_healthy` condition and the first probe of `pnpm smoke:container` and `pnpm smoke:preview`. It
-is a readiness check: the server configuration must load (T-105: `src/lib/startup.ts`, the same validators as startup, sign-in and tracking — PostgREST URL, auth secrets and CAPTCHA setting, tracking secret) and an anonymous `registration_open` RPC must return a boolean within 2 seconds; registration closed is still ready. A missing URL, timeout, refused request or malformed result returns 503 with `ok:false`; no upstream details are exposed. It checks PostgreSQL/PostgREST availability and the application schema, not Mengantar or mail delivery. The canonical proposed
+is a readiness check: the server configuration must load (T-105: `src/lib/startup.ts`, the same validators as startup, sign-in and tracking — PostgREST URL, auth secrets and CAPTCHA setting, tracking secret) and an anonymous `registration_open` RPC must return a boolean within 2 seconds; registration closed is still ready. Since T-109 the machine-only `schema_version()` RPC must also return a migration version at least `EXPECTED_SCHEMA_VERSION` (`src/lib/schema-version.ts`, pinned by a unit test to the newest file in `db/migrations`): an older database answers 503 `{"ok":false,"service":"geraiexpress","reason":"schema_behind"}` (apply migrations before this image), a newer one is ready (forward-compatible). A missing URL or JWT secret, timeout, refused request or malformed result returns 503 with `ok:false` and no reason; no upstream details are exposed. It checks PostgreSQL/PostgREST availability and the application schema level, not Mengantar or mail delivery. The canonical proposed
 signal and limit contract is [16-OBSERVABILITY-RATE-LIMITING.md](docs/spec/16-OBSERVABILITY-RATE-LIMITING.md).
 
 The data path is browser → Caddy → app → PostgREST (HTTP, HS256 JWT) → PostgreSQL (ADR-0002, DEC-021);
@@ -110,6 +110,9 @@ remains for the next run: `demo_cleanup.hasMore`, `auth_purge.hasMore`, `credent
 answer of the wrong shape (null, missing or non-numeric counts) is `failed` with `malformed: true`, never
 zero work. `credential_rewrap` handles at most 500 tenants per run, resuming after the previous run's last
 tenant (an in-process cursor: a restart begins a new pass, which is safe because rewrap is idempotent);
+since T-109 the tenants come from `machine_rewrap_candidates`, which lists only tenants whose active
+credential of this environment is below the current key version, so already-current and credential-less
+tenants are no longer scanned;
 `pending: false` ends a pass. The app logs `cron_run` (`task`, `result`, `steps`) at the end of each run.
 
 Cron response envelope (`POST /api/internal/cron/{task}`, `src/lib/cron.ts`):
@@ -130,8 +133,13 @@ freshness check or alert delivery for these signals.
 Database request deadline (T-105, `src/lib/db/client.ts`): every PostgREST request is aborted after 15 s
 (scheduled machine requests: 60 s, inside the 270 s task deadline). The caller sees an ordinary error;
 a mutation whose answer did not arrive is reported as an unknown result where the action already handles
-one and is never replayed. PostgreSQL may still finish the statement: there is no per-role
-`statement_timeout` yet (proposed SQL follow-up, TASKS.md T-105).
+one and is never replayed. Since T-109 PostgreSQL enforces the same bounds per role (`authenticated` 15 s,
+`anon` 5 s, `service_role` 60 s statement timeout, with lock and idle-in-transaction limits; `authenticator`
+65 s upper bound): a statement over its role's limit is cancelled with SQLSTATE 57014 and PostgREST
+answers an error. SQL execution is therefore bounded per role, but the two limits are independent: an
+HTTP deadline can expire first (interactive machine requests keep the 15 s client deadline while the
+`service_role` SQL limit is 60 s, and readiness aborts before its roles' limits), in which case the
+statement may still run to its role's limit after the caller has given up.
 
 ## Configuration and release gates (local waves E/F, not deployed preview state)
 

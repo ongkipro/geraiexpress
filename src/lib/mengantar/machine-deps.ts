@@ -1,7 +1,7 @@
 import { mintStaticJwt } from "../auth/jwt";
 import { dataClient, DB_TIMEOUT_MS, SCHEDULED_DB_TIMEOUT_MS, type Db } from "../db/client";
-import { keyMaterialFromBindings } from "../credential-crypto";
-import { tenantIdPage, type TenantIdPage } from "../credential-keyring";
+import { keyMaterialFromBindings, resolveKeyRing } from "../credential-crypto";
+import { rewrapCandidatePage, type TenantIdPage } from "../credential-keyring";
 import type { DispatcherDeps } from "./dispatcher";
 
 // DEC-010: dispatcher dependencies from the environment values, shared by server actions (through
@@ -66,7 +66,7 @@ export function cleanupRpc(b: MachineBindings, fetchImpl?: typeof fetch): Rpc | 
 export function rewrapDeps(b: MachineBindings, fetchImpl?: typeof fetch) {
   const deps = dispatcherDeps(b, fetchImpl);
   if (!deps) return null;
-  const db = machineDb(b.POSTGREST_URL!, b.AUTH_JWT_SECRET!, fetchImpl);
-  const page: TenantIdPage = async (after, limit) => tenantIdPage(await db(), after, limit);
+  const current = resolveKeyRing(deps.credentialKey).current;
+  const page: TenantIdPage = (after, limit) => rewrapCandidatePage(deps.rpc, deps.environment, current, after, limit);
   return { rpc: deps.rpc, environment: deps.environment, key: deps.credentialKey, page };
 }
