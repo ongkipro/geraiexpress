@@ -254,6 +254,7 @@ flowchart LR
         AreaRoute["GET /api/mengantar/area<br/>workspace member · local first (T-100)"]
         PaymentActions["modules/payments<br/>detail payment and /struk receipt actions"]
         CashClose["/kas · cash-period-actions<br/>close: member · reopen: tenant admin<br/>T-083 runtime verification pending"]
+        PilotReport["/kas/laporan + /kas/laporan/export.csv<br/>tenant admin only · T-087 runtime verification pending"]
         LogoActions["modules/tenants/logo-actions.ts<br/>settings · tenant-admin only"]
         Health["/healthz (no-store)"]
         Hosts["lib/hosts.ts<br/>host table, route-family matrix, per-environment origins"]
@@ -264,6 +265,7 @@ flowchart LR
         AuthDb["auth schema: users · sessions · otp_codes · mfa_factors<br/>(no API grants) · 14 machine-only auth_* functions<br/>before_user_created gate blocks public signup<br/>anonymous identities locked to demo"]
         DB["public schema: RLS on every table<br/>composite same-tenant FKs<br/>column-level grants"]
         CashRPC["close_cash_period / reopen_cash_period<br/>period row lock · active cash aggregate<br/>cash_period_events: RLS, append-only, RPC writes"]
+        PilotRPC["pilot_report(tenant, from, to) · record_export('pilot_report')<br/>tenant admin · ≤92 WIB days · derived measures only<br/>earnings via private.quote_gerai_cost"]
         AreaRPC["search_mengantar_areas(query, limit)<br/>authenticated · active membership · max 30"]
         Areas["PostgreSQL: public.mengantar_areas<br/>shared provider reference data · no tenant ownership · RLS · no API table grants"]
         LogoVersions["private.gerai_logo_versions<br/>append-only raster versions"]
@@ -278,6 +280,7 @@ flowchart LR
 
     UI --> MW --> Pages
     Pages --> CashClose -->|user JWT via PostgREST| CashRPC --> DB
+    Pages --> PilotReport -->|user JWT via PostgREST| PilotRPC --> DB
     UI --> AreaRoute
     AreaRoute -->|user JWT via PostgREST| AreaRPC --> Areas
     AreaRoute -->|"empty catalogue + connected non-demo only: address/search"| Mengantar
@@ -547,6 +550,28 @@ observed. Counts and executed checks are under "Verified counts and gates".
   DB/unit/e2e coverage is added in source-named cash-period tests, including a deterministic blocked
   payment/close race and 390/1280 screenshots. Executed and independently reviewed; results are
   recorded in STATUS.md. PR-45 pilot reporting is not part of this slice.
+- **Pilot report and earnings view (T-087, implementation present; runtime verification pending).**
+  `20261105160000_pilot_report.sql` extracts the unchanged per-quote body of
+  `gerai_cost_for_quote` into `private.quote_gerai_cost(uuid,uuid)` (no API grant);
+  `gerai_cost_for_quote` keeps its signature, ACL and admin check as a thin wrapper.
+  `public.pilot_report(uuid,date,date)` (security definer; member check, then `admin_required`
+  42501 for operators; `report_range_invalid` 22023 for a missing, reversed or over-92-day range)
+  returns one row per outlet and WIB day plus per-outlet and grand totals from one GROUPING SETS
+  aggregate, so total medians are exact. Measures: issued shipments by `issued_at` WIB day (real
+  gerai: non-simulated only; demo gerai: its simulated sample only, never mixed); median minutes
+  `created_at` → `issued_at`; active counter payments by method by `recorded_at` WIB day; shipments
+  with a label and those whose latest snapshot is masked; earnings = selected quote
+  `normal_tariff_idr` − `private.quote_gerai_cost` (terms at `quoted_at`), excluding COD fee and
+  insurance, NULL when any contributing cost is unknown (with an unknown count), always NULL for
+  demo. No net cost, assigned/observed percentage or discount column is returned.
+  `record_export` is recreated from its latest body with the same signature and ACL and also
+  accepts kind `pilot_report` (filters `from`/`to` only; audit `export.pilot_report`).
+  Tenant-host `/kas/laporan` (tenant admin only; operators get the workspace not-found page and no
+  nav item) renders the table with definitions, period and data timestamp, unknown as
+  "Belum diketahui" and demo amounts "contoh". `/kas/laporan/export.csv` (tenant admin of a real
+  gerai, `no-store`, audited before any byte, formula guard from `src/lib/csv.ts`) mirrors the
+  shipment export contract. Responses at the 1000-row Data API cap fail closed. Tests:
+  `tests/db/pilot-report.test.ts`, `tests/unit/pilot-report.test.ts`, `tests/e2e/pilot-report.spec.ts`.
 - **Counter payments and receipts (T-082, verified locally).**
   `20261104120000_counter_payments.sql` adds member-readable, RPC-only `counter_payments` and
   `cash_periods`. Payment reads are column-scoped: members receive payment/receipt facts, not stored
@@ -829,7 +854,7 @@ API.
 | Audience (host) | Routes served | Access |
 |---|---|---|
 | Public (apex `geraiexpress.com`, `staging.`) | `/` (marketing, without session resolution), `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`, `/robots.txt`, `/sitemap.xml`, `/healthz` | No session; the proxy resolves no session on this host |
-| Gerai application (`app.`, `app-staging.`) | `/` (gerai dashboard after account/workspace checks), `/masuk`, `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/undangan`, `/akses`, `/pilih-gerai`, `/api/mengantar/area`, `/robots.txt`, `/healthz`, and the workspace: `/pengiriman`, `/pengiriman/baru`, `/pengiriman/cetak`, `/pengiriman/[id]`, `/pengiriman/[id]/label`, `/pengiriman/[id]/invoice`, `/pengiriman/[id]/struk`, `/pengiriman/export.csv`, `/kas`, `/kontak`, `/kontak/[id]`, `/pengaturan`, `/anggota` | Workspace group: verified active membership; tenant from the `ge_tenant` selector validated against memberships; `/anggota` and the CSV export are tenant admin only |
+| Gerai application (`app.`, `app-staging.`) | `/` (gerai dashboard after account/workspace checks), `/masuk`, `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/undangan`, `/akses`, `/pilih-gerai`, `/api/mengantar/area`, `/robots.txt`, `/healthz`, and the workspace: `/pengiriman`, `/pengiriman/baru`, `/pengiriman/cetak`, `/pengiriman/[id]`, `/pengiriman/[id]/label`, `/pengiriman/[id]/invoice`, `/pengiriman/[id]/struk`, `/pengiriman/export.csv`, `/kas`, `/kas/laporan`, `/kas/laporan/export.csv`, `/kontak`, `/kontak/[id]`, `/pengaturan`, `/anggota` | Workspace group: verified active membership; tenant from the `ge_tenant` selector validated against memberships; `/anggota`, the CSV exports and `/kas/laporan` are tenant admin only |
 | Super Admin (`owner.`, `owner-staging.`) | `/`, `/masuk` (demo and registration hidden), `/verifikasi-2fa`, `/admin` (tenant directory with slug), `/admin/tenant/[id]` (masking control), `/admin/pengajuan`, `/admin/konfigurasi`, `/admin/pantau-pengajuan`, `/admin/pelanggan`, `/admin/pelanggan/[tenant]`, `/admin/integrasi`, `/admin/akses`, `/admin/audit`, `/admin/diskon`, `/admin/diskon/[tenant]`, `/robots.txt`, `/healthz` | Platform grant plus capability plus `aal2` with recent TOTP (`requirePlatform`) |
 | Hooks (`hooks.`, `hooks-staging.`) | the reserved prefix `/api/webhooks` (no route exists), `/healthz` | None today; cookies are stripped and none is set (the Send Email Hook route `/api/auth/send-email` was removed by T-066) |
 | Shared (loopback in a non-production build, or `HOST_SHARED_MODE=1`, e.g. the local container behind the local proxy profile) | Every route above on one origin (not the internal cron routes) | As the route's own audience |

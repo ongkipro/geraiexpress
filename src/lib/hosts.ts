@@ -105,8 +105,9 @@ export const ROUTE_FAMILIES: Readonly<Record<RouteFamily, PathRule>> = {
   // Both the gerai sign-in and the platform sign-in (the second factor follows on /verifikasi-2fa).
   signin: { exact: ["/masuk"], prefixes: [] },
   tenant: {
-    exact: ["/kas", "/akses", "/pilih-gerai", "/undangan", "/api/mengantar/area"],
-    prefixes: ["/daftar", "/pengiriman", "/kontak", "/pengaturan", "/anggota"],
+    exact: ["/akses", "/pilih-gerai", "/undangan", "/api/mengantar/area"],
+    // "/kas" is a prefix (T-087: /kas/laporan and its CSV) matched on a segment boundary.
+    prefixes: ["/daftar", "/pengiriman", "/kas", "/kontak", "/pengaturan", "/anggota"],
   },
   // `/verifikasi-2fa` follows the platform class: the second factor protects the platform workspace.
   platform: { exact: ["/verifikasi-2fa"], prefixes: ["/admin"] },
