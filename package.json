@@ -21,6 +21,7 @@
     "db:restore-check": "bash scripts/db-restore-check.sh",
     "db:reset": "bash scripts/db-migrate.sh --reset",
     "db:verify": "bash scripts/db-verify.sh",
+    "db:fixture": "bash scripts/db-fixture.sh",
     "test:db": "vitest run tests/db",
     "dev:env": "bash scripts/dev-env.sh",
     "smoke:preview": "playwright test -c playwright.preview.config.ts",
