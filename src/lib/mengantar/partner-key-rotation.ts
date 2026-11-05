@@ -10,12 +10,12 @@
 // geraiexpress:tenant:<tenantId>. `callbackSecret` is never read, stored, logged or returned.
 
 import { credentialAad, credentialHint, sealCredential } from "../credential-crypto";
-import { createPartnerClient, PartnerError, type PartnerClient } from "./partner-api";
-import { DEFAULT_PARTNER_ID, type PartnerOnboardingDeps } from "./partner-onboarding";
+import { createPartnerClient, PartnerError, type PartnerClient, type PartnerQuotaGate } from "./partner-api";
+import { DEFAULT_PARTNER_ID, partnerQuotaGate, type PartnerOnboardingDeps } from "./partner-onboarding";
 
 export type KeyRotationDeps = Pick<
   PartnerOnboardingDeps,
-  "rpc" | "machineRpc" | "environment" | "partnerId" | "partnerSecret" | "credentialKey" | "fetchImpl" | "now"
+  "rpc" | "machineRpc" | "environment" | "partnerId" | "partnerSecret" | "credentialKey" | "fetchImpl" | "now" | "quota"
 >;
 
 export type KeyRotationInput = { tenantId: string; actorId: string };
@@ -56,6 +56,7 @@ type Context = {
   input: KeyRotationInput;
   deps: KeyRotationDeps;
   partner: PartnerClient;
+  quota: PartnerQuotaGate;
   credentialKey: string;
   facts: Facts;
 };
@@ -81,10 +82,11 @@ async function prepare(input: KeyRotationInput, deps: KeyRotationDeps): Promise<
   } catch {
     return fail("configuration_blocked", "partner_not_configured");
   }
-  const partner = createPartnerClient("sandbox", partnerId, partnerSecret, deps.fetchImpl, deps.now);
+  const quota = partnerQuotaGate(deps, "sandbox", partnerId);
+  const partner = createPartnerClient("sandbox", partnerId, partnerSecret, quota, deps.fetchImpl, deps.now);
   const facts = await readFacts(input.tenantId, deps);
   if ("ok" in facts) return facts;
-  return { input, deps, partner, credentialKey, facts };
+  return { input, deps, partner, quota, credentialKey, facts };
 }
 
 async function readFacts(tenantId: string, deps: KeyRotationDeps): Promise<Facts | Failure> {
@@ -166,6 +168,12 @@ async function failAfterFence(ctx: Context, error: unknown, phase: "regenerate" 
     return fail("provider_restricted", "rotation_restricted");
   }
   if (error.code === "SELLER_NOT_FOUND") return bindingFailure(ctx);
+  // T-110: refused locally before the request was signed, so the provider changed nothing. The marker
+  // stays (the key is fenced); recovery later reads the current key.
+  if (error.code === "partner_quota_exhausted" || error.code === "provider_fence_engaged") {
+    await recordOutcome(ctx, "rotation_unknown", error.code.toUpperCase());
+    return fail("rotation_unknown", error.code, error.code === "partner_quota_exhausted" ? error.retryAfterSeconds : undefined);
+  }
   const refused = DEFINITE_REFUSALS[error.code] === true && error.status !== null && error.status < 500;
   const retry = error.code === "RATE_LIMITED" ? error.retryAfterSeconds : null;
   await recordOutcome(ctx, "rotation_unknown", providerCode(error), retry);
@@ -234,8 +242,22 @@ export async function regeneratePartnerSellerKey(input: KeyRotationInput, deps: 
     if (error.code === "PARTNER_DEACTIVATED" || error.code === "IP_NOT_ALLOWED") {
       return fail("rejected", "partner_restricted");
     }
+    // T-110: nothing was sent; Partner-wide, so nothing is stored for the tenant.
+    if (error.code === "partner_quota_exhausted") return fail("rejected", "partner_quota_exhausted", error.retryAfterSeconds);
     if (error.code === "UNAUTHORIZED" || error.code === "INVALID_TIMESTAMP") return fail("rejected", "partner_not_configured");
     return fail("rejected", error.code === "unavailable" || error.code === "INTERNAL_ERROR" ? "mengantar_unavailable" : "mengantar_data_unreadable");
+  }
+
+  // T-110: the Partner quota is reserved BEFORE the key fence, so a quota denial or the provider mutation
+  // fence leaves the active key untouched. Cost 2: the regeneration request plus headroom for the
+  // current-key read a lost answer leads to (that later read still reserves its own unit). The
+  // regeneration below does not reserve again.
+  const reserved = await ctx.quota.reserve({ mutating: true, newSellerRef: null, cost: 2 });
+  if (!reserved.allowed) {
+    if (reserved.reason === "fence") return fail("rejected", "provider_fence_engaged");
+    const wait = reserved.nextEligibleAt === null ? null
+      : Math.max(1, Math.ceil((reserved.nextEligibleAt - (deps.now?.() ?? Date.now())) / 1000));
+    return fail("rejected", "partner_quota_exhausted", wait);
   }
 
   // Intent first: from here no code path can open a key for this tenant until it is stored again.
@@ -245,7 +267,7 @@ export async function regeneratePartnerSellerKey(input: KeyRotationInput, deps: 
 
   let apiKey: string;
   try {
-    apiKey = await partner.regenerateSellerKey(facts.sellerId);
+    apiKey = await partner.regenerateSellerKey(facts.sellerId, { quotaReserved: true });
   } catch (error) {
     return failAfterFence(ctx, error, "regenerate");
   }

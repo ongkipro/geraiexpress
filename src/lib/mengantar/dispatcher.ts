@@ -47,6 +47,11 @@ type Payload = {
   pickup_phase?: "reserving" | "reserved" | "creating" | null;
   pickup_time_id?: string | null;
   credential: { ciphertext: string; iv: string; key_version: string; version: number } | null;
+  // T-110: the operation was queued when the post-restore fence was cleared. A claim checks Mengantar
+  // for an order with this reference (created since `created_at`) before any create; reconciliation of
+  // such an operation scans from `created_at` too, because its pre-restore attempt predates `dispatched_at`.
+  restore_check_required?: boolean;
+  created_at?: string;
 };
 
 type BatchMember = {
@@ -208,6 +213,13 @@ export async function dispatchOperation(operationId: string, deps: DispatcherDep
     const { error } = await deps.rpc("dispatch_release", { p_operation: operationId, p_attempt: p.attempt });
     return error ? { status: "record_failed", outcome: "released" } : { status: "not_claimed", reason: "credential_unavailable" };
   }
+  // T-110 / TD-3: a queued operation that survived a database restore may already exist at Mengantar.
+  // Checked before every other path, including the local refusals below: a refusal of an order that
+  // exists would make the shipment reopenable and lead to a second order.
+  if (p.restore_check_required === true) {
+    const checked = await restoreCheck(p, client, deps, record);
+    if (checked !== null) return checked;
+  }
   // Nothing is sent when the request cannot be built: a truthful local refusal.
   const request = orderRequest(p);
   if (!request) return record("rejected", { p_code: "INPUT_INCOMPLETE" });
@@ -223,6 +235,7 @@ export async function dispatchOperation(operationId: string, deps: DispatcherDep
     const { error } = await deps.rpc("dispatch_release", { p_operation: operationId, p_attempt: p.attempt });
     return error ? { status: "record_failed", outcome: "released" } : { status: "not_claimed", reason: "mengantar_unavailable" };
   }
+
 
   let order: CreateOrderRequest = request;
   if (p.handover === "pickup") {
@@ -255,6 +268,45 @@ export async function dispatchOperation(operationId: string, deps: DispatcherDep
   }
 }
 
+// One live order found for our reference: recorded exactly as reconciliation records it (never created).
+async function recordFoundOrder(m: ProviderOrder, p: Pick<Payload, "cargo">, record: Recorder): Promise<DispatchSummary> {
+  if (!m.orderId || !m.batch) return { status: "inconclusive", reason: "incomplete_order" };
+  // The found order must be the confirmed service: a regular order never settles a cargo quote.
+  if (m.cargo !== undefined && m.cargo !== (p.cargo === true)) return { status: "inconclusive", reason: "service_mismatch" };
+  if (m.paid && m.trackingNumber) return record("issued", { p_order_id: m.orderId, p_tracking: m.trackingNumber, p_batch: m.batch, p_code: "RECONCILED", p_price: m.price, ...batchIdArg(m.batchId) });
+  if (!m.paid && !m.trackingNumber) return record("unpaid", { p_order_id: m.orderId, p_batch: m.batch, p_code: "RECONCILED", p_price: m.price, ...batchIdArg(m.batchId) });
+  return { status: "inconclusive", reason: "incomplete_order" };
+}
+
+// T-110 / DR-1: the read-only lookup before the first create of a restore-check operation. Returns null
+// only when Mengantar provably has no order for this reference (the flag is cleared; the caller creates
+// once). Every other outcome ends this call WITHOUT a create: exactly one live order is recorded as found;
+// several are recorded as unknown (reconciliation/manual review); a lookup that fails or times out, the
+// quota or the fence, or a flag that could not be cleared gives the claim back with the flag kept.
+async function restoreCheck(p: Payload, client: MengantarPublicClient, deps: DispatcherDeps, record: Recorder): Promise<DispatchSummary | null> {
+  const release = async (reason: string): Promise<DispatchSummary> => {
+    const { error } = await deps.rpc("dispatch_release", { p_operation: p.operation_id, p_attempt: p.attempt });
+    return error ? { status: "record_failed", outcome: "released" } : { status: "not_claimed", reason };
+  };
+  const since = p.created_at ? new Date(p.created_at) : null;
+  if (!p.courier || !since || !Number.isFinite(since.getTime())) return release("restore_check_pending");
+  let matches: ProviderOrder[];
+  try {
+    matches = await client.findOrdersByReference({ reference: p.reference, courier: p.courier, notBefore: since });
+  } catch {
+    return release("restore_check_pending");
+  }
+  const live = matches.filter((m) => m.status !== "error");
+  if (live.length > 1) return record("unknown", { p_code: "DUPLICATE_ORDERS" });
+  if (live.length === 1) return recordFoundOrder(live[0], p, record);
+  // Error items mean an earlier attempt reached Mengantar; reconciliation decides, never a new create.
+  if (matches.length > 0) return record("unknown", { p_code: "RESTORE_CHECK_ERROR_ITEM" });
+  const passed = await deps.rpc("dispatch_restore_check_passed", { p_operation: p.operation_id, p_attempt: p.attempt });
+  if (passed.error) return release(passed.error.message === "provider_fence_engaged" ? "provider_fence_engaged" : "restore_check_pending");
+  if ((passed.data as { stale?: boolean } | null)?.stale === true) return { status: "recorded", outcome: "quote_stale" };
+  return null;
+}
+
 export async function reconcileOperation(operationId: string, deps: DispatcherDeps): Promise<DispatchSummary> {
   const begin = await deps.rpc("dispatch_begin_reconcile", { p_operation: operationId, p_env: deps.environment });
   if (begin.error?.message === "provider_env_mismatch") return { status: "inconclusive", reason: "wrong_environment" };
@@ -277,9 +329,18 @@ export async function reconcileOperation(operationId: string, deps: DispatcherDe
     return reconcilePickupReservation(p, client, deps, record);
   }
 
+  // T-110: an operation from a restore check may have an order from its pre-restore attempt, older than
+  // every later dispatched_at; scanning only from dispatched_at could conclude "not created" (reopenable)
+  // and lead to another order. Without a readable created_at nothing is concluded.
+  let notBefore = new Date(p.dispatched_at);
+  if (p.restore_check_required === true) {
+    const created = p.created_at ? new Date(p.created_at) : null;
+    if (!created || !Number.isFinite(created.getTime())) return { status: "inconclusive", reason: "missing_attempt" };
+    notBefore = created;
+  }
   let matches;
   try {
-    matches = await client.findOrdersByReference({ reference: p.reference, courier: p.courier, notBefore: new Date(p.dispatched_at) });
+    matches = await client.findOrdersByReference({ reference: p.reference, courier: p.courier, notBefore });
   } catch {
     return { status: "inconclusive", reason: "lookup_failed" };
   }
@@ -288,15 +349,7 @@ export async function reconcileOperation(operationId: string, deps: DispatcherDe
     await record("unknown", { p_code: "DUPLICATE_ORDERS" });
     return { status: "inconclusive", reason: "duplicate_orders" };
   }
-  if (live.length === 1) {
-    const m = live[0];
-    if (!m.orderId || !m.batch) return { status: "inconclusive", reason: "incomplete_order" };
-    // The found order must be the confirmed service: a regular order never settles a cargo quote.
-    if (m.cargo !== undefined && m.cargo !== (p.cargo === true)) return { status: "inconclusive", reason: "service_mismatch" };
-    if (m.paid && m.trackingNumber) return record("issued", { p_order_id: m.orderId, p_tracking: m.trackingNumber, p_batch: m.batch, p_code: "RECONCILED", p_price: m.price, ...batchIdArg(m.batchId) });
-    if (!m.paid && !m.trackingNumber) return record("unpaid", { p_order_id: m.orderId, p_batch: m.batch, p_code: "RECONCILED", p_price: m.price, ...batchIdArg(m.batchId) });
-    return { status: "inconclusive", reason: "incomplete_order" };
-  }
+  if (live.length === 1) return recordFoundOrder(live[0], p, record);
   if (matches.length > 0) return record("failed", { p_code: "PROVIDER_ERROR_ITEM" });
   return record("not_created", { p_code: "NOT_CREATED" });
 }

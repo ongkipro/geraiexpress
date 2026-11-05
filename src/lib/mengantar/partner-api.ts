@@ -33,6 +33,9 @@ export class PartnerError extends Error {
   constructor(
     // A provider code, or a local integration failure: "unavailable" (network, timeout, redirect,
     // 5xx without a code), "malformed" (unexpected status, type, size or shape) or "unknown".
+    // T-110 local refusals, raised BEFORE anything is signed or sent (retry later, never a resend
+    // trigger): "partner_quota_exhausted" (Partner-wide quota or a shared Retry-After; retryAfterSeconds
+    // is the wait when known) and "provider_fence_engaged" (post-restore provider mutation fence).
     readonly code: string,
     readonly status: number | null = null,
     readonly retryAfterSeconds: number | null = null,
@@ -59,10 +62,59 @@ export async function partnerSignature(path: string, body: string, timestamp: st
 
 export type PartnerClient = ReturnType<typeof createPartnerClient>;
 
+// T-110 / NFR-5: the durable Partner-wide quota every Partner request passes BEFORE it is signed.
+// `mutating`: the call may change provider state (refused while the provider mutation fence is engaged);
+// `newSellerRef`: the externalUserId of a registration (one seller counts once per WIB day).
+// `cost` (default 1): requests reserved at once, for a caller that reserves before a local fence.
+export type PartnerQuotaCall = { mutating: boolean; newSellerRef: string | null; cost?: number };
+export type PartnerQuotaDecision =
+  | { allowed: true }
+  | { allowed: false; reason: "quota" | "fence"; nextEligibleAt: number | null };
+export type PartnerQuotaGate = {
+  reserve(call: PartnerQuotaCall): Promise<PartnerQuotaDecision>;
+  // A provider back-off for the whole Partner account (every tenant and replica waits). until = null:
+  // the provider gave no Retry-After (the database applies its own bounded default).
+  noteRetryAfter(until: number | null, scope: "request" | "new_seller"): Promise<void>;
+};
+
+type QuotaRpc = (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message?: string } | null }>;
+
+// The gate backed by the machine-only RPCs reserve_partner_quota / note_partner_retry_after. Anything but
+// a well-formed "allowed" answer (an RPC error, a malformed or missing reply) is a denial: fail closed.
+export function rpcPartnerQuotaGate(rpc: QuotaRpc, environment: string, partnerId: string): PartnerQuotaGate {
+  return {
+    async reserve(call) {
+      let res: Awaited<ReturnType<QuotaRpc>>;
+      try {
+        res = await rpc("reserve_partner_quota", {
+          p_env: environment, p_partner: partnerId, p_cost: call.cost ?? 1, p_new_seller_ref: call.newSellerRef, p_mutating: call.mutating,
+        });
+      } catch {
+        return { allowed: false, reason: "quota", nextEligibleAt: null };
+      }
+      if (res.error?.message === "provider_fence_engaged") return { allowed: false, reason: "fence", nextEligibleAt: null };
+      const data = res.error ? null : res.data;
+      if (isRecord(data) && data.allowed === true) return { allowed: true };
+      const next = isRecord(data) && typeof data.next_eligible_at === "string" ? Date.parse(data.next_eligible_at) : Number.NaN;
+      return { allowed: false, reason: "quota", nextEligibleAt: Number.isFinite(next) ? next : null };
+    },
+    async noteRetryAfter(until, scope) {
+      try {
+        await rpc("note_partner_retry_after", {
+          p_env: environment, p_partner: partnerId, p_until: until === null ? null : new Date(until).toISOString(), p_scope: scope,
+        });
+      } catch {
+        // Best effort: the provider refusal itself is still returned to the caller.
+      }
+    },
+  };
+}
+
 export function createPartnerClient(
   environment: PartnerEnvironment,
   partnerId: string,
   partnerSecret: string,
+  quota: PartnerQuotaGate,
   fetchImpl: typeof fetch = fetch,
   now: () => number = Date.now,
 ) {
@@ -71,7 +123,16 @@ export function createPartnerClient(
   if (!/^[A-Za-z0-9_.-]{1,64}$/.test(partnerId)) throw new Error("Malformed Partner ID");
   if (partnerSecret.length < 16) throw new Error("Malformed Partner Secret");
 
-  async function post(path: (typeof PATHS)[keyof typeof PATHS], payload: Record<string, unknown>) {
+  // `call === "reserved"`: the caller already reserved this request's quota (key regeneration reserves
+  // before its local fence, so a denial can never leave a fenced rotation).
+  async function post(path: (typeof PATHS)[keyof typeof PATHS], payload: Record<string, unknown>, call: PartnerQuotaCall | "reserved") {
+    // T-110: reserved before signing; a denial sends nothing.
+    const decision = call === "reserved" ? ({ allowed: true } as const) : await quota.reserve(call);
+    if (!decision.allowed) {
+      if (decision.reason === "fence") throw new PartnerError("provider_fence_engaged");
+      const wait = decision.nextEligibleAt === null ? null : Math.max(1, Math.ceil((decision.nextEligibleAt - now()) / 1000));
+      throw new PartnerError("partner_quota_exhausted", null, wait);
+    }
     const body = JSON.stringify(payload);
     const timestamp = String(Math.floor(now() / 1000));
     const signature = await partnerSignature(path, body, timestamp, partnerSecret);
@@ -102,14 +163,23 @@ export function createPartnerClient(
     }
     const envelope = isRecord(json) ? json : null;
     if (envelope?.success === true && response.status < 300) return { status: response.status, envelope };
-    if (!envelope) throw new PartnerError(response.status >= 500 ? "unavailable" : "malformed", response.status);
-    const code = typeof envelope.code === "string" && PROVIDER_CODES.has(envelope.code) ? envelope.code : "unknown";
+    const code = envelope && typeof envelope.code === "string" && PROVIDER_CODES.has(envelope.code) ? envelope.code : "unknown";
     // A missing Retry-After is "unknown", never "retry now".
     const rawRetry = response.headers.get("retry-after")?.trim();
     const retry = rawRetry ? Number(rawRetry) : Number.NaN;
+    const retrySeconds = Number.isFinite(retry) && retry >= 0 ? retry : null;
+    // T-110: a provider throttle applies to the whole Partner account, so it is stored for every caller.
+    // HTTP 429 is a throttle whatever its body (non-JSON or an unrecognised code); only the recognised daily
+    // registration limit narrows it to new sellers.
+    if (code === "DAILY_REGISTRATION_LIMIT") {
+      await quota.noteRetryAfter(retrySeconds === null ? null : now() + retrySeconds * 1000, "new_seller");
+    } else if (code === "RATE_LIMITED" || response.status === 429) {
+      await quota.noteRetryAfter(retrySeconds === null ? null : now() + retrySeconds * 1000, "request");
+    }
+    if (!envelope) throw new PartnerError(response.status === 429 ? "RATE_LIMITED" : response.status >= 500 ? "unavailable" : "malformed", response.status, retrySeconds);
     const data = isRecord(envelope.data) ? envelope.data : envelope;
     const sellerId = typeof data.sellerId === "string" && SELLER_ID.test(data.sellerId) ? data.sellerId : null;
-    throw new PartnerError(code, response.status, Number.isFinite(retry) && retry >= 0 ? retry : null, sellerId);
+    throw new PartnerError(code, response.status, retrySeconds, sellerId);
   }
 
   return {
@@ -119,7 +189,7 @@ export function createPartnerClient(
       if ((page !== undefined && !(Number.isInteger(page) && page >= 1)) || (size !== undefined && !(Number.isInteger(size) && size >= 1 && size <= 200))) {
         throw new Error("Invalid pagination");
       }
-      const { status, envelope } = await post(PATHS.list, filter);
+      const { status, envelope } = await post(PATHS.list, filter, { mutating: false, newSellerRef: null });
       const data = envelope.data;
       if (!isRecord(data) || !Array.isArray(data.sellers) || !Number.isSafeInteger(data.total) || (data.total as number) < 0) {
         throw new PartnerError("malformed", status);
@@ -139,7 +209,7 @@ export function createPartnerClient(
     async registerSeller(seller: NewSeller): Promise<Registration> {
       const { name, email, phone, externalUserId } = seller;
       if (!externalUserId || externalUserId.length > 128) throw new Error("Invalid externalUserId");
-      const { status, envelope } = await post(PATHS.register, { name, email, phone, externalUserId });
+      const { status, envelope } = await post(PATHS.register, { name, email, phone, externalUserId }, { mutating: true, newSellerRef: externalUserId });
       const data = envelope.data;
       if (!isRecord(data) || typeof data.sellerId !== "string" || !SELLER_ID.test(data.sellerId)) throw new PartnerError("malformed", status);
       if (typeof envelope.alreadyRegistered !== "boolean") throw new PartnerError("malformed", status, null, data.sellerId);
@@ -154,7 +224,7 @@ export function createPartnerClient(
     // Creates a key if the seller has none, so it is a credential operation, not a harmless read.
     async getSellerApiKey(sellerId: string): Promise<string> {
       if (!SELLER_ID.test(sellerId)) throw new Error("Invalid sellerId");
-      const { status, envelope } = await post(PATHS.apiKey, { sellerId });
+      const { status, envelope } = await post(PATHS.apiKey, { sellerId }, { mutating: true, newSellerRef: null });
       const data = envelope.data;
       if (!isRecord(data) || data.sellerId !== sellerId || typeof data.apiKey !== "string" || !API_KEY.test(data.apiKey)) {
         throw new PartnerError("malformed", status);
@@ -167,9 +237,11 @@ export function createPartnerClient(
     // returns it (PR-19). A thrown PartnerError is not proof that nothing changed: only a refusal with a
     // known provider code is definite (partner-key-rotation.ts). The Partner docs promise no idempotency,
     // so never call this twice for one intent; lost responses recover through getSellerApiKey.
-    async regenerateSellerKey(sellerId: string): Promise<string> {
+    // `quotaReserved`: the caller reserved the quota itself before fencing (partner-key-rotation.ts).
+    async regenerateSellerKey(sellerId: string, options: { quotaReserved?: boolean } = {}): Promise<string> {
       if (!SELLER_ID.test(sellerId)) throw new Error("Invalid sellerId");
-      const { status, envelope } = await post(PATHS.regenerate, { sellerId });
+      const { status, envelope } = await post(PATHS.regenerate, { sellerId },
+        options.quotaReserved === true ? "reserved" : { mutating: true, newSellerRef: null });
       const data = envelope.data;
       if (!isRecord(data) || data.sellerId !== sellerId || typeof data.apiKey !== "string" || !API_KEY.test(data.apiKey)) {
         throw new PartnerError("malformed", status);

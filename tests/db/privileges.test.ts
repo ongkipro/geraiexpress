@@ -77,16 +77,22 @@ const AUTHENTICATED_EXECUTE = [
   "public.platform_audit(text,integer)",
   "public.platform_billable_weight_rules()",
   "public.platform_clear_partner_stop(uuid,text)",
+  // T-110: integration_operations at aal2 clears the post-restore provider fence (reason, audit, reviewed count).
+  "public.platform_clear_provider_fence(text,integer)",
   "public.platform_customer_lookup(text,text)",
   "public.platform_discount_history(uuid)",
   "public.platform_discount_observations(uuid)",
   "public.platform_discount_overview()",
   "public.platform_integrations()",
+  // T-110: operator exit for a restore check that cannot complete; integration_operations at aal2, reason, audit.
+  "public.platform_mark_restore_check_unknown(uuid,text,text)",
   // T-084: integration_operations at aal2 reads and changes per-courier masking acceptance (reason, audit).
   "public.platform_masking_acceptance()",
   "public.platform_overview()",
   "public.platform_partner_config()",
   "public.platform_pending_applications()",
+  // T-110: integration_operations reads the provider fence state (counts only).
+  "public.platform_provider_fence()",
   "public.platform_review_application(uuid,integer,text,text)",
   "public.platform_revoke_grant(uuid,integer,text)",
   "public.platform_set_billable_weight_rule(jsonb,text)",
@@ -182,15 +188,21 @@ const MACHINE_ONLY = [
   "public.dispatch_record_payment(uuid,text,boolean,text,bigint)",
   "public.dispatch_release(uuid,integer)",
   "public.dispatch_release_batch_payment(uuid)",
+  // T-110: clears restore_check_required after the dispatcher found no order at Mengantar.
+  "public.dispatch_restore_check_passed(uuid,integer)",
   "public.dispatch_stuck_counts()",
   "public.fence_partner_key_rotation(uuid,uuid,text,integer,text)",
   // T-109: tenant ids whose active credential of an environment is below the current key version.
   "public.machine_rewrap_candidates(text,text,uuid,integer)",
   "public.machine_seller_key(uuid,text)",
+  // T-110: Partner-wide back-off shared by every tenant (Retry-After, daily registration stop).
+  "public.note_partner_retry_after(text,text,timestamp with time zone,text)",
   "public.record_live_quotes(uuid,uuid,integer,jsonb,text,text)",
   "public.record_partner_key_rotation_outcome(uuid,uuid,text,integer,text,text,integer,text)",
   "public.record_partner_preflight_failure(uuid,uuid,text,integer,text,text,integer)",
   "public.record_partner_seller_onboarding_outcome(uuid,text,text,text,integer)",
+  // T-110: Partner-wide minute/WIB-day quota reserved before every Partner request is signed.
+  "public.reserve_partner_quota(text,text,integer,text,boolean)",
   "public.rewrap_seller_credential(uuid,integer,text,text,text,text)",
   // T-109: the newest applied migration version for /healthz; reads the runner ledger only.
   "public.schema_version()",

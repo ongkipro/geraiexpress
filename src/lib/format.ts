@@ -84,6 +84,9 @@ export const DISPATCH_INFO: Record<string, string> = {
   invalid_order_request: "Data pesanan belum memenuhi syarat Mengantar, jadi tidak ada yang dikirim.",
   mengantar_key_refused: "Mengantar menolak kunci akun gerai ini. Admin gerai perlu memeriksa kunci di Pengaturan.",
   mengantar_refused: "Mengantar menolak permintaan ini. Periksa data pesanan, lalu coba lagi.",
+  // T-110: a restore-check lookup could not run (Mengantar unreachable, quota, fence): nothing was created.
+  restore_check_pending: "Pesanan ini sedang diperiksa di Mengantar setelah pemulihan data, agar tidak terkirim dua kali. Belum ada yang dikirim; sistem mencoba lagi otomatis.",
+  provider_fence_engaged: "Pengiriman ke Mengantar sedang dijeda setelah pemulihan data. Pesanan menunggu di antrean sampai admin GeraiExpress membuka jeda.",
   payment_not_applied: "Mengantar menjawab tidak ada pesanan yang dibayar, dan semua pesanan masih belum dibayar. Periksa saldo Mengantar, lalu otorisasi pembayaran lagi.",
 };
 

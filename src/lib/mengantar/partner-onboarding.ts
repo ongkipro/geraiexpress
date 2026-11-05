@@ -7,7 +7,7 @@
 // geraiexpress:tenant:<tenantId>. A stored or provider-reported id is never trusted on its own.
 
 import { credentialAad, credentialHint, sealCredential } from "../credential-crypto";
-import { createPartnerClient, PartnerError } from "./partner-api";
+import { createPartnerClient, PartnerError, rpcPartnerQuotaGate, type PartnerQuotaGate } from "./partner-api";
 
 type PartnerClient = ReturnType<typeof createPartnerClient>;
 
@@ -67,7 +67,13 @@ export type PartnerOnboardingDeps = {
   consentDocuments?: PartnerConsentDocuments | null;
   fetchImpl?: typeof fetch;
   now?: () => number;
+  // T-110: the Partner-wide quota gate; by default the machine-only reserve_partner_quota RPC.
+  quota?: PartnerQuotaGate;
 };
+
+export function partnerQuotaGate(deps: Pick<PartnerOnboardingDeps, "machineRpc" | "quota">, environment: string, partnerId: string): PartnerQuotaGate {
+  return deps.quota ?? rpcPartnerQuotaGate(deps.machineRpc, environment, partnerId);
+}
 
 export type PartnerOnboardingInput = {
   tenantId: string;
@@ -206,7 +212,7 @@ async function provisionPartnerSeller(
     };
   }
 
-  const partner = createPartnerClient("sandbox", partnerId, partnerSecret, deps.fetchImpl, deps.now);
+  const partner = createPartnerClient("sandbox", partnerId, partnerSecret, partnerQuotaGate(deps, "sandbox", partnerId), deps.fetchImpl, deps.now);
   const name = input.ownerName.trim();
   const email = input.ownerEmail.trim().toLowerCase();
   const phone = input.ownerPhone.trim().replace(/[\s()-]+/g, "");
@@ -345,6 +351,15 @@ async function handlePartnerError(
   partner: PartnerClient,
   externalUserId: string,
 ): Promise<PartnerOnboardingResult> {
+  // T-110: refused locally before anything was signed or sent. Partner-wide, not this tenant's state:
+  // nothing is recorded for the tenant, and a later attempt simply tries again (never a resend).
+  if (error.code === "partner_quota_exhausted") {
+    return { ok: false, state: "quota_wait", errorCode: "partner_quota_exhausted", sellerId: existingSellerId, retryAfterSeconds: error.retryAfterSeconds };
+  }
+  if (error.code === "provider_fence_engaged") {
+    return { ok: false, state: "configuration_blocked", errorCode: "provider_fence_engaged", sellerId: existingSellerId };
+  }
+
   // SEC-01: a seller id in an error envelope is accepted for KEY_PROVISIONING_FAILED only (the
   // documented partial-provisioning reply), and only after the provider confirms it belongs to
   // this tenant's externalUserId. Every other code keeps the previously stored id.

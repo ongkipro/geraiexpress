@@ -100,6 +100,10 @@ function createHarness(opts: {
   };
 
   const machineRpc: PartnerOnboardingRpc = async (fn, args) => {
+    // T-110: the Partner-wide quota gate (default rpcPartnerQuotaGate) allows every request here; the
+    // gate itself is covered by tests/unit/partner-quota-gate.test.ts. Kept out of the ordered log.
+    if (fn === "reserve_partner_quota") return { data: { allowed: true, reason: null, next_eligible_at: null }, error: null };
+    if (fn === "note_partner_retry_after") return { data: null, error: null };
     if (fn === "begin_partner_seller_onboarding" || fn === "partner_onboarding_status" || fn === "begin_partner_seller_key_recovery") {
       throw new Error(`${fn} must use the caller's session`);
     }
