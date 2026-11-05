@@ -22,6 +22,7 @@ const env = {
   AUTHENTICATOR_PASSWORD: randomBytes(32).toString("hex"),
   POSTGRES_PASSWORD: randomBytes(32).toString("hex"),
   AUTH_JWT_SECRET: randomBytes(32).toString("hex"), AUTH_SECRET: randomBytes(32).toString("hex"),
+  TRACKING_TOKEN_SECRET: randomBytes(32).toString("hex"),
 };
 delete env.DATABASE_URL;
 const run = (cmd, args, extra = {}) => {
@@ -93,7 +94,7 @@ try {
       OWNER_ORIGIN: "http://127.0.0.1:18080", HOOKS_ORIGIN: "http://127.0.0.1:18080",
       CRON_SECRET: randomBytes(32).toString("hex"), CREDENTIAL_KEY: randomBytes(32).toString("base64"), MENGANTAR_ENV: "sandbox",
     });
-    const names = ["POSTGREST_URL", "AUTH_JWT_SECRET", "AUTH_SECRET", "MAILPIT_URL", "MAIL_TRANSPORT", "HOST_SHARED_MODE", "TRUSTED_PROXY",
+    const names = ["POSTGREST_URL", "AUTH_JWT_SECRET", "AUTH_SECRET", "TRACKING_TOKEN_SECRET", "MAILPIT_URL", "MAIL_TRANSPORT", "HOST_SHARED_MODE", "TRUSTED_PROXY",
       "AUTH_CAPTCHA_DISABLED", "TURNSTILE_SITE_KEY", "SITE_ORIGIN", "APP_ORIGIN", "OWNER_ORIGIN", "HOOKS_ORIGIN", "CRON_SECRET", "CREDENTIAL_KEY", "MENGANTAR_ENV"];
     run("docker", ["run", "-d", "--name", `${name}-app`, "--network", name, "--network-alias", "app",
       ...names.flatMap((key) => ["-e", key]), "geraiexpress:audit-local"], { stdio: "ignore" });

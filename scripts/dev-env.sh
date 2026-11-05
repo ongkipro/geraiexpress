@@ -21,6 +21,7 @@ const previous = existsSync(file) ? parseEnv(readFileSync(file, 'utf8')) : {};
 const secret = (name) => /^[a-f0-9]{64}$/.test(previous[name] ?? '') ? previous[name] : randomBytes(32).toString('hex');
 const jwtSecret = secret('AUTH_JWT_SECRET');
 const authSecret = secret('AUTH_SECRET');
+const trackingSecret = secret('TRACKING_TOKEN_SECRET');
 const postgresPassword = secret('POSTGRES_PASSWORD');
 const authenticatorPassword = secret('AUTHENTICATOR_PASSWORD');
 const now = Math.floor(Date.now() / 1000);
@@ -36,7 +37,7 @@ function jwt(role) {
 // Static role tokens intentionally have no user `sub`: they must never impersonate a fixture user.
 const values = {
   POSTGRES_DB: 'gxdb', POSTGRES_USER: 'postgres', POSTGRES_PASSWORD: postgresPassword,
-  AUTHENTICATOR_PASSWORD: authenticatorPassword, AUTH_JWT_SECRET: jwtSecret, AUTH_SECRET: authSecret,
+  AUTHENTICATOR_PASSWORD: authenticatorPassword, AUTH_JWT_SECRET: jwtSecret, AUTH_SECRET: authSecret, TRACKING_TOKEN_SECRET: trackingSecret,
   POSTGREST_URL: 'http://127.0.0.1:55433',
   ANON_JWT: jwt('anon'), SERVICE_ROLE_JWT: jwt('service_role'),
   MAILPIT_URL: 'http://127.0.0.1:58025', SMTP_HOST: '127.0.0.1', SMTP_PORT: '55025',
@@ -72,7 +73,7 @@ const reused = (name, valid) => {
 const credentialKey = reused('CREDENTIAL_KEY', (value) => Buffer.from(value, 'base64').length === 32) ?? randomBytes(32).toString('base64');
 const cronSecret = reused('CRON_SECRET', (value) => value.length >= 32) ?? randomBytes(32).toString('hex');
 const common = {
-  AUTH_JWT_SECRET: jwtSecret, AUTH_SECRET: authSecret, AUTH_CAPTCHA_DISABLED: 'true',
+  AUTH_JWT_SECRET: jwtSecret, AUTH_SECRET: authSecret, TRACKING_TOKEN_SECRET: trackingSecret, AUTH_CAPTCHA_DISABLED: 'true',
   MAIL_TRANSPORT: 'mailpit', CREDENTIAL_KEY: credentialKey, CRON_SECRET: cronSecret, MENGANTAR_ENV: 'sandbox',
   // The widget's public site key: Cloudflare's always-pass test key. Server-side verification is off locally.
   TURNSTILE_SITE_KEY: '1x00000000000000000000AA',

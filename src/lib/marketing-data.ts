@@ -75,6 +75,7 @@ export function isProductionHost(host: string | null | undefined): boolean {
 export const NOINDEX_HEADER = "noindex, nofollow";
 
 const APP_PATHS_DISALLOWED = [
+  "/lacak",
   "/pengiriman",
   "/kontak",
   "/pengaturan",

@@ -185,7 +185,7 @@ describe("scripts/check-client-bundle.mjs", () => {
   });
 
   it("fails on the auth and database secrets: their names in client files, their values anywhere in the build", () => {
-    for (const name of ["AUTH_JWT_SECRET", "AUTH_SECRET", "TURNSTILE_SECRET_KEY", "SERVICE_ROLE_JWT", "PGRST_JWT_SECRET", "PGRST_DB_URI"]) {
+    for (const name of ["AUTH_JWT_SECRET", "AUTH_SECRET", "TRACKING_TOKEN_SECRET", "TURNSTILE_SECRET_KEY", "SERVICE_ROLE_JWT", "PGRST_JWT_SECRET", "PGRST_DB_URI"]) {
       expect(scan({ "static/a.js": `x=process.env.${name}` }).status, name).toBe(1);
     }
     const jwtSecret = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
@@ -199,6 +199,16 @@ describe("scripts/check-client-bundle.mjs", () => {
     expect(anon.status).toBe(1);
     expect(anon.stderr).toContain("value of ANON_JWT from infra/dev/.env is baked into the build");
     expect(scan({ "infra/dev/.env": env, "static/a.js": "ok", "server/chunk.js": "const s=1" }).status).toBe(0);
+  });
+
+  it("rejects baked public-tracking root values in server and client output", () => {
+    const secret = "synthetic-bundle-tracking-test-root-32-bytes";
+    for (const path of ["server/chunk.js", "static/a.js"]) {
+      const leaked = scan({ "static/clean.js": "ok", [path]: `const root='${secret}'` }, { TRACKING_TOKEN_SECRET: secret });
+      expect(leaked.status).toBe(1);
+      expect(leaked.stderr).toContain("value of TRACKING_TOKEN_SECRET from the environment is baked into the build");
+    }
+    expect(scan({ "static/a.js": "ok", "server/chunk.js": "const root=process.env.TRACKING_TOKEN_SECRET" }, { TRACKING_TOKEN_SECRET: secret }).status).toBe(0);
   });
 
   it("also checks the values present in the process environment", () => {

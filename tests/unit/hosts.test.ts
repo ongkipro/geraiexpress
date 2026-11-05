@@ -19,6 +19,7 @@ import { PLATFORM_SESSION_MAX_AGE, TENANT_SESSION_MAX_AGE, sessionCookieContext,
 const PATHS: Record<RouteFamily, string[]> = {
   entry: ["/"],
   marketing: ["/fitur", "/simulasi", "/cara-kerja", "/hubungi-kami", "/sitemap.xml"],
+  tracking: ["/lacak/opaque-token", "/lacak/unknown"],
   robots: ["/robots.txt"],
   signin: ["/masuk"],
   tenant: [
@@ -35,7 +36,7 @@ const PATHS: Record<RouteFamily, string[]> = {
 
 // The audience matrix as the spec states it (ARCH-6, UX-11, TD-14): which families each host serves.
 const SERVES: Record<string, RouteFamily[]> = {
-  "geraiexpress.com": ["entry", "marketing", "robots", "health", "asset"],
+  "geraiexpress.com": ["entry", "marketing", "tracking", "robots", "health", "asset"],
   "app.geraiexpress.com": ["entry", "robots", "signin", "tenant", "health", "asset"],
   "owner.geraiexpress.com": ["entry", "robots", "signin", "platform", "health", "asset"],
   "hooks.geraiexpress.com": ["hook", "health"],

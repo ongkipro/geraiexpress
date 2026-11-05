@@ -36,7 +36,7 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 export const SECRET_NAMES = [
-  "AUTH_JWT_SECRET", "AUTH_SECRET", "TURNSTILE_SECRET_KEY", "PGRST_DB_URI", "POSTGRES_PASSWORD",
+  "AUTH_JWT_SECRET", "AUTH_SECRET", "TRACKING_TOKEN_SECRET", "TURNSTILE_SECRET_KEY", "PGRST_DB_URI", "POSTGRES_PASSWORD",
   "CREDENTIAL_KEY", "CREDENTIAL_KEYS", "MENGANTAR_PARTNER_SECRET", "GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET", "CRON_SECRET",
 ];
 const PRODUCTION_HOSTS = ["geraiexpress.com", "app.geraiexpress.com", "owner.geraiexpress.com", "hooks.geraiexpress.com"];
@@ -115,7 +115,7 @@ export function checkEnvFiles(envs) {
     if (postgrestHost && LOCAL_HOSTS.includes(postgrestHost)) problems.push(`${name}: POSTGREST_URL is a local address`);
     if (!template) {
       // The auth module and PostgREST cannot run without these; a missing value is a failed release, not a default.
-      for (const required of ["AUTH_JWT_SECRET", "AUTH_SECRET", "PGRST_DB_URI", "TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"]) {
+      for (const required of ["AUTH_JWT_SECRET", "AUTH_SECRET", "TRACKING_TOKEN_SECRET", "PGRST_DB_URI", "TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"]) {
         if (placeholder(vars[required])) problems.push(`${name}: ${required} is not set`);
       }
       if (vars.AUTH_JWT_SECRET && vars.AUTH_JWT_SECRET === vars.AUTH_SECRET) problems.push(`${name}: AUTH_SECRET must differ from AUTH_JWT_SECRET`);

@@ -28,6 +28,7 @@ services:
       # must never enter the application container through a shared env_file.
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-}
       AUTH_SECRET: ${AUTH_SECRET:-}
+      TRACKING_TOKEN_SECRET: ${TRACKING_TOKEN_SECRET:-}
       TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       SITE_ORIGIN: ${SITE_ORIGIN:-}
