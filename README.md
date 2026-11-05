@@ -247,31 +247,33 @@ release passes the real files: `pnpm check:environments staging=<file> productio
 
 ```text
 geraiexpress/
-├── Dockerfile · compose.yaml · compose.local.yaml · compose.db.yaml · .dockerignore   # the container image, its production Compose shape (T-062, ADR-0002) and the local database stack
-├── infra/                        # proxy/ (Caddyfile, Caddyfile.local), scheduler/ (sidecar), env/ (templates), dev/ (generated local stack env, gitignored secrets)
+├── Dockerfile · compose.yaml · compose.coolify.yaml · compose.local.yaml · compose.db.yaml · .dockerignore   # the container image, its production Compose shape (T-062, ADR-0002), the Coolify overlay (DEC-022) and the local database stack
+├── infra/                        # proxy/ (Caddyfile, Caddyfile.coolify, Caddyfile.local), scheduler/ (sidecar), env/ (templates); dev/ is generated locally (gitignored secrets)
 ├── src/
-│   ├── app/                      # Next.js routes: /, fitur, simulasi, cara-kerja, hubungi-kami,
+│   ├── app/                      # Next.js routes: /, fitur, simulasi, cara-kerja, hubungi-kami, lacak/[token], sitemap, robots,
 │   │   │                         # masuk, akses, pilih-gerai, daftar, undangan, verifikasi-2fa,
-│   │   │                         # admin (akses, audit, pengajuan, integrasi, diskon), api/internal/cron, api/mengantar/area, healthz
-│   │   └── (workspace)/          # pengiriman (+ label, invoice, export.csv), kontak, pengaturan, anggota (membership required)
-│   ├── components/               # shell, status badge, marketing; ui/ = shadcn (radix, UI-2 tokens)
+│   │   │                         # admin (akses, audit, pengajuan, pantau-pengajuan, pelanggan, integrasi, diskon, konfigurasi, tenant), api/internal/cron, api/mengantar/area, healthz
+│   │   └── (workspace)/          # pengiriman (+ label, invoice, struk, cetak, export.csv), kasus, kas (+ laporan, export.csv), kontak, pengaturan, anggota (membership required)
+│   ├── components/               # app shell and header, status badge, auth, label, invoice, marketing; ui/ = shadcn (radix, UI-2 tokens)
 │   ├── lib/                      # db/ (PostgREST client, session, cookies, refresh), auth/ (service, jwt, password, otp, totp, turnstile), workspace scope, hosts, CSP, platform/registration,
 │   │   └── mengantar/            # Partner & Public API clients, account dispatcher, scheduled tasks, live quotes/orders, key rotation, pickup
-│   ├── modules/                  # contacts/, credentials/, members/, shipments/, labels/, invoices/, exports/, pricing/
+│   ├── modules/                  # cases/, contacts/, credentials/, dashboard/, exports/, invoices/, labels/, members/, mengantar/, payments/, pricing/, shell/, shipments/
 │   └── proxy.ts                  # host → audience 404, session cookie rotation (Node runtime), private no-store responses, security headers
 ├── db/
 │   ├── foundation/               # plain-PostgreSQL prerequisites (roles, auth and extensions schemas)
-│   ├── migrations/               # schema, RLS, RPCs, signup gate, COD, Partner onboarding, demo cleanup, 2026-10-28 batch, auth core (2026-10-29)
+│   ├── migrations/               # forward-only, immutable once applied: schema, RLS, RPCs, auth core, cases, pilot report, lock/privilege hardening
 │   ├── seed.sql                  # local synthetic fixtures only (refuses to run outside a gx-prefixed local database)
 │   └── review-fixture.sql        # optional local review gerai
-├── tests/                        # unit/, db/ (PostgREST/RPC), e2e/ (Playwright, 3 viewports)
-├── scripts/                      # bundle scan, environment guard, docker wrappers, container smoke, ui smoke, dev env
-├── docs/                         # canonical spec pack, research, promotion manifest
+├── data/mengantar/               # Mengantar area catalogue snapshot loaded by `pnpm db:areas`
+├── design/                       # public-site design direction, references, renders and the open visual review (T-076)
+├── tests/                        # unit/, db/ (PostgREST/RPC), contract/ (live Mengantar, opt-in), e2e/ (Playwright, 3 viewports), preview/ (`pnpm smoke:preview`)
+├── scripts/                      # bundle scan, environment guard, docker wrappers, container smoke, db stack/migrate/verify/backup, isolated backend and Coolify proxy tests, TOTP seed/reseal, UI screenshots, size report, dev env
+├── docs/                         # canonical spec pack, research, ADRs, dated reviews (history), promotion manifest
 ├── .delivery/                    # delivery-ledger runs (execution evidence)
 └── AGENTS.md · STATUS.md · TASKS.md · DECISIONS.md · ARCHITECTURE.md · BUILD-LOG.md · RELEASE.md · OBSERVABILITY.md
 ```
 
 ## Selected direction
 
-PostgreSQL 17 behind PostgREST for data (the app talks to it over HTTP with HS256 JWTs it signs itself; client `@supabase/postgrest-js`, query builder only) and an application-owned auth module for sign-in (ADR-0002, DEC-021; scrypt passwords, emailed codes, rotating refresh tokens, server-side sessions, TOTP for the Super Admin, Turnstile verified by the app); Next.js 16.4.3 App Router (exact pin, DEC-005) as a self-hosted Node.js container on a server with a fixed IPv4 address that is the Mengantar allow-list address (DEC-020; Cloudflare Turnstile is the CAPTCHA widget only). Where the production database runs (the same server or managed PostgreSQL) is the owner's decision. shadcn/ui with the supplied Apple-inspired palette. Customer/resi shipping uses
+PostgreSQL 17 behind PostgREST for data (the app talks to it over HTTP with HS256 JWTs it signs itself; client `@supabase/postgrest-js`, query builder only) and an application-owned auth module for sign-in (ADR-0002, DEC-021; scrypt passwords, emailed codes, rotating refresh tokens, server-side sessions, TOTP for the Super Admin, Turnstile verified by the app); Next.js 16.4.5 App Router (exact pin, DEC-005; T-102) as a self-hosted Node.js container on a server with a fixed IPv4 address that is the Mengantar allow-list address (DEC-020; Cloudflare Turnstile is the CAPTCHA widget only). Where the production database runs (the same server or managed PostgreSQL) is the owner's decision. shadcn/ui with the supplied Apple-inspired palette. Customer/resi shipping uses
 normal Mengantar tariff (plus two-pass `cod_fee_idr` for COD orders); private seller cost uses the verified activated discount. Sandbox Partner onboarding, live quotes/issuance, COD, registration and Super Admin are implemented and verified locally; production provisioning and live Mengantar egress remain gated (see [RELEASE.md](RELEASE.md) and [TASKS.md](TASKS.md)).

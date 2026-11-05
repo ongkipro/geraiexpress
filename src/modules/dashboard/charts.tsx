@@ -85,7 +85,7 @@ export function TrendChart({ summary }: { summary: DashboardSummary }) {
             {top > 0 ? <div aria-hidden="true" className="absolute inset-x-0 top-1/2 border-t border-dashed border-border" /> : null}
             <div aria-hidden="true" className="absolute inset-x-0 bottom-0 border-t border-input" />
             <div role="img" aria-label={label} className="absolute inset-0 grid" style={columns}>
-              {daily.map((d, i) => {
+              {daily.map((d) => {
                 const pct = top > 0 ? (d.total / top) * 100 : 0;
                 return (
                   <div key={d.day} className="relative h-full">

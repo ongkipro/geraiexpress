@@ -6,8 +6,6 @@
 // terverifikasi"). A return never goes to the printed (masked) sender.
 // Pure module with relative imports only, so the unit matrix runs without the '@/' alias.
 
-export const RETURN_DESTINATION_SOURCE = "https://help.mengantar.com/id/articles/14715369";
-
 // Create-order courier codes (src/lib/mengantar/public-api.ts COURIERS) with the Java-only return-address rule.
 export const JAVA_RETURN_ADDRESS_COURIERS: ReadonlySet<string> = new Set(["JNE", "SiCepat", "Sap"]);
 

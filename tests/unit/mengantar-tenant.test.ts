@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { credentialAad, openCredential, sealCredential } from "../../src/lib/credential-crypto";
+import { credentialAad, sealCredential } from "../../src/lib/credential-crypto";
 import { MengantarError } from "../../src/lib/mengantar/public-api";
 
 const secrets: Record<string, string | undefined> = {};

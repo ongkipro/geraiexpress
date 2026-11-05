@@ -1,6 +1,6 @@
 # GeraiExpress — Current Architecture Record
 
-Updated: 2026-11-03
+Updated: 2026-11-05
 State: local foundation, synthetic demo preview, public marketing surfaces, Mengantar Partner
 sandbox seller onboarding, live quotes/issuance, two-pass COD pricing and batch `pay-unpaid`
 recovery are implemented and were verified locally (DEL-1 stages 1–3; T-001 through T-031).
@@ -225,7 +225,7 @@ flowchart LR
   sign-in, demo, OTP, MFA and account limiters (spent in Server Actions) are meant to share one process-wide table
   per limiter; the former Edge-runtime split, and the doubled refresh budget it allowed with Auth IP forwarding
   on, no longer apply (that forwarding is gone). This is by construction and has not been measured; the header
-  comment of `src/lib/limiter.ts` still describes the Edge split.
+  comment of `src/lib/limiter.ts` describes the same Node-runtime sharing.
 - **Scheduler.** `POST /api/internal/cron/dispatch` (every 5 minutes: the former `*/5` sweep) and
   `POST /api/internal/cron/cleanup` (hourly: the former aligned-hour cleanup), implemented in
   `src/lib/cron.ts` over `src/lib/mengantar/scheduled.ts`, which ports the former `scheduled` handler's
@@ -314,6 +314,7 @@ flowchart LR
         PaymentActions["modules/payments<br/>detail payment and /struk receipt actions"]
         CashClose["/kas · cash-period-actions<br/>close: member · reopen: tenant admin<br/>T-083 verified locally"]
         PilotReport["/kas/laporan + /kas/laporan/export.csv<br/>tenant admin only · T-087 verified locally"]
+        Cases["/kasus · /kasus/[id] · modules/cases<br/>open/update: member · close: tenant admin<br/>T-086 verified locally"]
         LogoActions["modules/tenants/logo-actions.ts<br/>settings · tenant-admin only"]
         TrackingEdge["/lacak/token · apex only<br/>cookie-less · 30/min/IP · invalid 10/min/IP · noindex<br/>pre-render lookup and constant 404"]
         TrackingPage["Server-rendered public tracking<br/>fixed projection only · no client JS needed"]
@@ -328,6 +329,8 @@ flowchart LR
         DB["public schema: RLS on every table<br/>composite same-tenant FKs<br/>column-level grants"]
         CashRPC["close_cash_period / reopen_cash_period<br/>period row lock · active cash aggregate<br/>cash_period_events: RLS, append-only, RPC writes"]
         PilotRPC["pilot_report(tenant, from, to) · record_export('pilot_report')<br/>tenant admin · ≤92 WIB days · derived measures only<br/>earnings via private.quote_gerai_cost"]
+        CaseRPC["open_shipment_case / update_shipment_case / close_shipment_case<br/>case_attention · claim_window_rules<br/>shipment_cases + append-only shipment_case_events<br/>deadline from private.claim_window_rules"]
+        Hardening["T-104: shipment lock before memberships · member recheck after FOR UPDATE<br/>service_role table privilege = SELECT on tenants only<br/>bounded auth_purge_expired(p_limit)"]
         AreaRPC["search_mengantar_areas(query, limit)<br/>authenticated · active membership · max 30"]
         Areas["PostgreSQL: public.mengantar_areas<br/>shared provider reference data · no tenant ownership · RLS · no API table grants"]
         TrackingRPC["track_shipment(token) · anon only<br/>hash lookup · latest label masking · fixed projection"]
@@ -345,6 +348,8 @@ flowchart LR
     UI --> MW --> Pages
     Pages --> CashClose -->|user JWT via PostgREST| CashRPC --> DB
     Pages --> PilotReport -->|user JWT via PostgREST| PilotRPC --> DB
+    Pages --> Cases -->|user JWT via PostgREST| CaseRPC --> DB
+    Hardening -.-|applies to| DB
     UI --> AreaRoute
     AreaRoute -->|user JWT via PostgREST| AreaRPC --> Areas
     AreaRoute -->|"empty catalogue + connected non-demo only: address/search"| Mengantar
@@ -822,6 +827,8 @@ flowchart TB
             invc["pengiriman/[id]/invoice · pengiriman/export.csv"]
             receipt["pengiriman/[id]/struk · receipt print and WhatsApp"]
             batch["pengiriman/cetak · batch label workbench"]
+            kasus["kasus/ · kasus/[id] (return and claim cases)"]
+            kas["kas/ (cash periods) · kas/laporan (+ export.csv, tenant admin)"]
             kon["kontak/ · kontak/[id]"]
             set["pengaturan/ (capability readiness)"]
             ang["anggota/ (tenant admin: members, invitations)"]
@@ -832,6 +839,7 @@ flowchart TB
             ada["admin/audit (append-only history)"]
         end
         mfa["verifikasi-2fa/ (TOTP enrol / challenge)"]
+        lacak["lacak/[token] (public tracking, apex, no session)"]
         reg["daftar/ (email code) · daftar/kata-sandi · daftar/gerai (application)"]
         inv["undangan/ (accept invitations)"]
         adp["admin/pengajuan (review queue)"]
@@ -848,6 +856,9 @@ flowchart TB
         credR["credentials/rotation-actions.ts · partner-deps.ts · partner-config.ts"]
         payM["payments/ · payment record, void and receipt actions"]
         logoM["tenants/logo-actions.ts · tenant-admin versioned logo"]
+        caseM["cases/ · open, update, close actions · deadline.ts (mirrors private.claim_deadline)"]
+        trackM["tracking/ · share actions · HMAC token · public projection"]
+        dashM["dashboard/ · gerai dashboard regions"]
     end
     subgraph lib["src/lib"]
         authA["auth-actions.ts"]
@@ -878,7 +889,11 @@ flowchart TB
     shipA & conA --> shipD
     shipA & conA & authA & wsL --> sb
     lab & batch & invc --> labM --> sb
-    det & receipt --> payM --> sb
+    det & receipt & kas --> payM --> sb
+    kasus & det --> caseM --> sb
+    det --> trackM --> sb
+    lacak --> trackM
+    entry --> dashM --> sb
     set --> logoM --> sb
     lab & batch --> logoRead --> sb
     area["api/mengantar/area/route.ts"] --> areaRPC["PostgREST · search_mengantar_areas · member JWT"]
@@ -931,6 +946,10 @@ erDiagram
     }
     shipments ||--o{ invoice_snapshots : "append-only"
     shipments ||--o{ batch_payment_attempts : "private, one open per batch"
+    shipments ||--o{ tracking_links : "one active generation"
+    shipments ||--o{ shipment_cases : "one non-closed case"
+    shipment_cases ||--o{ shipment_case_events : "append-only"
+    claim_window_rules |o--o{ shipment_cases : "private, sourced deadline rule"
 ```
 
 `platform_grants` (capabilities per identity) and `audit_events` are platform-only: no PostgREST
@@ -938,8 +957,8 @@ writes, reads need the capability and an `aal2` session with recent TOTP, and au
 deleted or truncated.
 
 `quote_costs`, `seller_credentials`, `tenant_mengantar_onboarding`, `batch_payment_attempts`,
-`batch_payment_authorizations`, `reference_counters`, `invoice_counters` and `gerai_logo_versions`
-live in the `private` schema with RLS enabled and no API-role grants. Every
+`batch_payment_authorizations`, `reference_counters`, `invoice_counters`, `gerai_logo_versions` and
+`claim_window_rules` live in the `private` schema with RLS enabled and no API-role grants. Every
 child table carries `tenant_id` and references its parent through a composite
 `(tenant_id, id)` foreign key, so cross-tenant reparenting fails in the database.
 
@@ -950,7 +969,7 @@ receipt events require it to be NULL. `receipt_payment_id` is optional for recei
 and NULL for label events. Each event belongs to a shipment and proves an application print
 request, not paper output. Snapshot INSERT captures the current private logo version and gerai
 name; later logo edits never rewrite stored labels. The separate 10x5 customer slip is part of the
-`10x15` page (T-095); `/kas` is not built.
+`10x15` page (T-095); `/kas` (cash periods, T-083) and `/kas/laporan` (pilot report, T-087) are built.
 
 ### Primary flow — demo counter issuance
 
@@ -990,8 +1009,8 @@ API.
 | Hooks (`hooks.`, `hooks-staging.`) | the reserved prefix `/api/webhooks` (no route exists), `/healthz` | None today; cookies are stripped and none is set (the Send Email Hook route `/api/auth/send-email` was removed by T-066) |
 | Shared (loopback in a non-production build, or `HOST_SHARED_MODE=1`, e.g. the local container behind the local proxy profile) | Every route above on one origin (not the internal cron routes) | As the route's own audience |
 | Internal (`internal.geraiexpress.local`, never routed by the proxy) | `POST /api/internal/cron/dispatch`, `POST /api/internal/cron/cleanup`, `/healthz` | `CRON_SECRET` bearer (constant-time compare); 404 while the secret is unset; no cookie reaches the route |
-| API route handlers | `GET /api/mengantar/area` (member-only local catalogue search, including demo; 401 without a workspace; live fallback only on a connected non-demo catalogue miss), `GET /pengiriman/export.csv` (tenant-admin CSV; 403 operator and demo, 404 anonymous), `GET /healthz` (anonymous SQL-backed readiness, not provider/mail readiness), and the internal `POST /api/internal/cron/*` routes above | Workspace, tenant admin, none, `CRON_SECRET` respectively |
-| Not present | any webhook, cancel or tracking route; responsibility acceptance at activation; admin close for unknown payment or ambiguous pickup reservation | |
+| API route handlers | `GET /api/mengantar/area` (member-only local catalogue search, including demo; 401 without a workspace; live fallback only on a connected non-demo catalogue miss), `GET /pengiriman/export.csv` (tenant-admin CSV; 403 operator and demo, 404 anonymous), `GET /kas/laporan/export.csv` (tenant-admin pilot report CSV of a real gerai), `GET /healthz` (anonymous SQL-backed readiness, not provider/mail readiness), and the internal `POST /api/internal/cron/*` routes above | Workspace, tenant admin, none, `CRON_SECRET` respectively |
+| Not present | any webhook or cancel route; live tracking events (T-045); responsibility acceptance at activation | |
 
 `src/app/robots.ts` reads the request host: the production apex allows only the five public pages
 and disallows `/api`, `/admin` and `/masuk`; every other host answers a disallow-all `robots.txt`.
