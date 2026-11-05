@@ -1,7 +1,7 @@
 import { mintStaticJwt } from "../auth/jwt";
-import { dataClient, type Db } from "../db/client";
+import { dataClient, DB_TIMEOUT_MS, SCHEDULED_DB_TIMEOUT_MS, type Db } from "../db/client";
 import { keyMaterialFromBindings } from "../credential-crypto";
-import { listTenantIds } from "../credential-keyring";
+import { tenantIdPage, type TenantIdPage } from "../credential-keyring";
 import type { DispatcherDeps } from "./dispatcher";
 
 // DEC-010: dispatcher dependencies from the environment values, shared by server actions (through
@@ -20,10 +20,13 @@ type Rpc = DispatcherDeps["rpc"];
 
 // The machine identity is the static service_role JWT signed with AUTH_JWT_SECRET. It is minted on the
 // first call and the client is cached per closure, so a run that never reaches the database mints nothing.
+// Only the scheduled tasks inject a fetch (scheduledFetch, bounded by the 270 s cron deadline): their
+// requests get the longer per-request bound; interactive callers keep the default (T-105).
 function machineDb(url: string, jwtSecret: string, fetchImpl?: typeof fetch): () => Promise<Db> {
   let machine: Promise<Db> | null = null;
+  const timeoutMs = fetchImpl ? SCHEDULED_DB_TIMEOUT_MS : DB_TIMEOUT_MS;
   return () =>
-    (machine ??= mintStaticJwt(jwtSecret, "service_role").then((jwt) => dataClient(url, jwt, fetchImpl))).catch((error) => {
+    (machine ??= mintStaticJwt(jwtSecret, "service_role").then((jwt) => dataClient(url, jwt, fetchImpl, timeoutMs))).catch((error) => {
       machine = null;
       throw error;
     });
@@ -64,5 +67,6 @@ export function rewrapDeps(b: MachineBindings, fetchImpl?: typeof fetch) {
   const deps = dispatcherDeps(b, fetchImpl);
   if (!deps) return null;
   const db = machineDb(b.POSTGREST_URL!, b.AUTH_JWT_SECRET!, fetchImpl);
-  return { rpc: deps.rpc, environment: deps.environment, key: deps.credentialKey, tenantIds: async () => listTenantIds(await db()) };
+  const page: TenantIdPage = async (after, limit) => tenantIdPage(await db(), after, limit);
+  return { rpc: deps.rpc, environment: deps.environment, key: deps.credentialKey, page };
 }

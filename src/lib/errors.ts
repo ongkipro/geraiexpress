@@ -111,7 +111,12 @@ const MESSAGES: Record<string, string> = {
   rotation_store_failed: "Kunci baru dibuat di Mengantar tetapi belum tersimpan. Pengiriman dijeda; pilih Ambil kunci terbaru untuk melanjutkan.",
   // T-043 Pickup orders
   pickup_time_invalid: "Jam jemput harus minimal 90 menit dari sekarang (WIB), antara 09.00 dan 18.00. Pilih slot yang lebih lambat lalu cek ongkir lagi.",
+  // T-105: a visitor budget (src/lib/rate-limit.ts) refused the action.
+  rate_limited: "Terlalu banyak percobaan dari jaringan ini. Tunggu satu menit lalu coba lagi.",
 };
+
+// T-105: a code that may travel in a URL or a log line. Raw PostgREST/PostgreSQL text is never one.
+export const isKnownErrorCode = (code: string | null | undefined): code is string => typeof code === "string" && Object.hasOwn(MESSAGES, code);
 
 export function friendlyError(error: { message?: string; code?: string } | null | undefined): string {
   if (!error) return "Terjadi kesalahan. Coba lagi.";

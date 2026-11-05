@@ -95,7 +95,12 @@ export async function startDemoAction(_: DemoState, form: FormData): Promise<Dem
   redirect("/");
 }
 
+// Re-seeding is a heavy write: the same visitor budget as starting a demo (T-105).
 export async function resetDemoAction() {
+  if (!(await withinLimit("DEMO_LIMITER"))) {
+    authThrottleMessage("/masuk");
+    redirect("/pengiriman?galat=rate_limited");
+  }
   const db = await dbServer();
   await db.rpc("reset_demo");
   redirect("/pengiriman?reset=1");

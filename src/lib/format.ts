@@ -90,6 +90,8 @@ export const DISPATCH_INFO: Record<string, string> = {
 // T-056: refusal codes of the admin close commands (?galat=) that the shared error table does not
 // cover; the detail page reads these before falling back to friendlyError.
 export const CLOSE_ERROR: Record<string, string> = {
+  // T-082: reopen_shipment refuses while an active counter payment exists (void it first).
+  payment_recorded: "Pembayaran pelanggan sudah dicatat untuk pengiriman ini. Admin gerai perlu membatalkan catatan itu sebelum draf dibuka lagi.",
   stale_attempt: "Percobaan pembayaran batch sudah berganti sejak halaman ini dibuka. Muat ulang, tinjau lagi, lalu tutup bila masih perlu.",
 };
 

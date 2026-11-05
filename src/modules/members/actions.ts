@@ -9,6 +9,7 @@ import { TENANT_COOKIE, requireWorkspace } from "@/lib/workspace";
 
 export type MemberState = { error?: string; ok?: string; invitedEmail?: string };
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // PR-31 / DEC-007: the tenant comes from the verified workspace, never from the form.
 export async function inviteAction(_: MemberState, form: FormData): Promise<MemberState> {
@@ -62,6 +63,8 @@ export async function acceptInvitationAction(_: MemberState, form: FormData): Pr
   const db = await dbServer();
   const { data, error } = await db.rpc("accept_invitation", { p_id: String(form.get("id")) });
   if (error) return { error: friendlyError(error) };
-  (await cookies()).set(TENANT_COOKIE, data as string, { httpOnly: true, sameSite: "lax", path: "/", secure: process.env.NODE_ENV === "production" });
+  // The selector cookie holds a tenant id only; an odd RPC answer never becomes a broken cookie.
+  if (typeof data !== "string" || !UUID.test(data)) return { error: friendlyError(null) };
+  (await cookies()).set(TENANT_COOKIE, data, { httpOnly: true, sameSite: "lax", path: "/", secure: process.env.NODE_ENV === "production" });
   redirect("/");
 }

@@ -1,5 +1,5 @@
 import { toCsv } from "@/lib/csv";
-import { exportFilename, wibIso } from "@/lib/export-format";
+import { exportFetchAllowed, exportFilename, wibIso } from "@/lib/export-format";
 import { dbServer } from "@/lib/db/server";
 import { loadWorkspace } from "@/lib/workspace";
 import { PILOT_CSV_HEADER, parsePilotRange, pilotCsvRows, pilotDefinitionRows } from "@/modules/payments/pilot-report";
@@ -16,6 +16,7 @@ const text = (message: string, status: number) =>
   });
 
 export async function GET(request: Request) {
+  if (!exportFetchAllowed(request.headers)) return text("Ekspor hanya dapat dibuka dari halaman GeraiExpress.", 403);
   const loaded = await loadWorkspace();
   if (loaded.kind !== "ready") return text("Tidak ditemukan.", 404);
   const ws = loaded.workspace;

@@ -35,7 +35,12 @@ single-edge deployment, not the Coolify start command.
 The app receives an explicit environment allowlist: database owner and authenticator
 credentials are not copied into it. PostgREST has a 10-connection pool and a 5-second pool
 acquisition deadline. `/healthz` performs an anonymous SQL-backed readiness probe with a
-2-second timeout and answers 503 without upstream details on failure.
+2-second timeout and answers 503 without upstream details on failure; since T-105 it is also not
+ready while the server configuration does not load (`src/lib/startup.ts`), and `src/instrumentation.ts`
+refuses a production start with missing or invalid required variables (names only). Every PostgREST
+request carries an application deadline (`src/lib/db/client.ts`: 15 s, scheduled machine requests 60 s);
+there is no SQL-side `statement_timeout` per role yet. `compose.yaml` gives the app and the scheduler a
+300 s `stop_grace_period` (the 270 s cron deadline plus drain).
 
 Migration `20261029130000_backend_audit.sql` serializes first-password initialization at the
 user row, checks the kept session under lock, removes obsolete GoTrue-role grants and API
@@ -241,7 +246,13 @@ flowchart LR
   serve the internal name, and the app refuses the path on every other host, so a public host reaches
   neither. `infra/scheduler/scheduler.mjs` (Node built-ins only, run from the app image) fires on
   wall-clock minutes (UTC minute divisible by 5; minute 0 also cleans up), never stacks a task on its own
-  running call, times a call out after 285 s and holds `CRON_SECRET` only.
+  running call, times a call out after 285 s and holds `CRON_SECRET` only. T-105: each run has a
+  server-generated `correlationId` (`src/lib/log.ts`) stamped on its events and returned in a bounded
+  envelope `{task, result, correlationId, steps?}` (`result` done/partial/disabled/failed; malformed RPC
+  answers are failed, never zero work); the scheduler logs only those fields plus `ok`, and on SIGTERM
+  stops ticking and waits for in-flight calls. Interactive dispatch steps log `dispatch_action` with
+  their own correlation id; shipment actions put only stable codes in `?galat=`/`?info=` and logs, and
+  refuse a non-UUID shipment id before the database.
 - **Egress and the Mengantar allow-list.** Production Partner and Public API calls leave directly from the
   container host, so the **server's fixed IPv4 address is the address registered with Mengantar**; there
   is no gateway (DEC-020 cancels T-052; the safety ideas of ADR-0001 stay valid for any future separate
@@ -540,6 +551,8 @@ observed. Counts and executed checks are under "Verified counts and gates".
   active/superseded state; F1 permits only increasing key versions. The hourly
   `/api/internal/cron/cleanup` invokes environment-scoped rewrap (T-057), emitting
   `credential_rewrap` counts or disabled/failure state; retain old keys until completion is verified.
+  T-105: each run rewraps at most 500 tenants (`rewrapNextBatch`, keyset over `public.tenants` by id)
+  after an in-process cursor; `pending` reports remaining tenants, a restart begins a new idempotent pass.
   `pnpm check:environments` refuses secret values shared between environments, a production
   provider in non-production and Turnstile disabled outside local; it checks the committed templates
   by default and the real files when given. The deploy scripts of the Worker era are gone (T-062); a separate
@@ -775,7 +788,7 @@ observed. Counts and executed checks are under "Verified counts and gates".
   `security_invoker`) and function bodies (`'40001'`, `serialization_failure`), and pins the
   column-scoped writes.
 - **Database hardening (T-104, `20261105180000_db_hardening.sql`).** `service_role` keeps exactly
-  one direct table privilege, SELECT on `public.tenants` (the credential rewrap's `listTenantIds`);
+  one direct table privilege, SELECT on `public.tenants` (the credential rewrap's tenant listing);
   every other table privilege the foundation default ACL had granted it is revoked, so label history,
   shipments and memberships are written only through SECURITY DEFINER RPCs (pinned in
   `tests/db/privileges.test.ts`). `private.lock_member_shipment` rechecks `require_member` after its

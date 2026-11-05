@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { credentialAad, openCredential, sealCredential } from "../../src/lib/credential-crypto";
-import { listTenantIds, reencryptCredentials } from "../../src/lib/credential-keyring";
+import { listTenantIds, reencryptCredentials, tenantIdPage } from "../../src/lib/credential-keyring";
 import { IDS, client, demoVisitor, machine, realOperation, signIn, sql } from "./helpers";
 
 const OWNER_A = "00000000-0000-4000-a000-0000000000a1";
@@ -271,6 +271,9 @@ describe("rewrap_seller_credential (SEC-7 key ring)", () => {
     const ids = await listTenantIds(worker);
     expect(ids).toContain(a.tenant);
     expect(ids).not.toContain(demo.tenant);
+    // T-105: keyset pages resume strictly after the given id, in id order, bounded by the limit.
+    const page = await tenantIdPage(worker, ids[0], 2);
+    expect(page).toEqual(ids.slice(1, 3));
   });
 });
 

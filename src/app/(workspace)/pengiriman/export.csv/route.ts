@@ -1,5 +1,5 @@
 import { toCsv } from "@/lib/csv";
-import { exportFilename } from "@/lib/export-format";
+import { exportFetchAllowed, exportFilename } from "@/lib/export-format";
 import { dbServer } from "@/lib/db/server";
 import { loadWorkspace } from "@/lib/workspace";
 import {
@@ -17,6 +17,7 @@ const text = (message: string, status: number) =>
   });
 
 export async function GET(request: Request) {
+  if (!exportFetchAllowed(request.headers)) return text("Ekspor hanya dapat dibuka dari halaman GeraiExpress.", 403);
   const loaded = await loadWorkspace();
   // No session, no gerai, or a host that serves no workspace: the route does not exist for this caller.
   if (loaded.kind !== "ready") return text("Tidak ditemukan.", 404);

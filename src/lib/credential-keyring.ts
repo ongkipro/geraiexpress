@@ -78,16 +78,56 @@ export async function reencryptCredentials(opts: {
   return summary;
 }
 
-// Every non-demo tenant id, paged, through the machine client (service_role reads public.tenants).
-// Demo tenants hold no provider credential. Throws on a read error: a partial list must not look
-// like a finished run.
+// One keyset page of non-demo tenant ids after `after` (null = from the start), through the machine
+// client (service_role reads public.tenants). Demo tenants hold no provider credential. Throws on a read
+// error or a malformed answer: a partial list must not look like a finished run.
+export type TenantIdPage = (after: string | null, limit: number) => Promise<string[]>;
+export async function tenantIdPage(machine: Db, after: string | null, limit: number): Promise<string[]> {
+  let query = machine.from("tenants").select("id").eq("is_demo", false);
+  if (after) query = query.gt("id", after);
+  const { data, error } = await query.order("id").limit(limit);
+  if (error || !Array.isArray(data) || data.some((r: { id?: unknown }) => typeof r?.id !== "string")) throw new Error("tenant_list_failed");
+  return data.map((r: { id: string }) => r.id);
+}
+
+// Every non-demo tenant id (all pages).
 export async function listTenantIds(machine: Db, pageSize = 500): Promise<string[]> {
   const ids: string[] = [];
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await machine.from("tenants").select("id").eq("is_demo", false)
-      .order("id").range(from, from + pageSize - 1);
-    if (error) throw new Error("tenant_list_failed");
-    ids.push(...(data ?? []).map((r: { id: string }) => r.id));
-    if (!data || data.length < pageSize) return ids;
+  for (;;) {
+    const page = await tenantIdPage(machine, ids.at(-1) ?? null, pageSize);
+    ids.push(...page);
+    if (page.length < pageSize) return ids;
   }
+}
+
+// T-105: bounded, resumable rewrap. Each scheduled run handles at most REWRAP_BATCH tenants after the
+// cursor of the previous run, so a large tenant list never restarts from the beginning and starves the
+// tail. The cursor is in-process (no schema change): a restart begins a new pass, which is safe because
+// the rewrap is idempotent. `pending` = tenants remain after this batch (the next run continues);
+// a run with pending=false ended a pass and the next run starts over. A failed tenant is reported and
+// retried on the next pass; a failed page read keeps the cursor.
+export const REWRAP_BATCH = 500;
+const CURSORS = Symbol.for("geraiexpress.rewrap-cursors");
+const cursorHolder = globalThis as typeof globalThis & { [CURSORS]?: Map<string, string> };
+
+export async function rewrapNextBatch(opts: {
+  rpc: RewrapRpc;
+  key: CredentialKeyMaterial;
+  environment: "sandbox" | "production";
+  page: TenantIdPage;
+  batchSize?: number;
+}): Promise<ReencryptSummary & { pending: boolean }> {
+  const cursors = (cursorHolder[CURSORS] ??= new Map());
+  const limit = opts.batchSize ?? REWRAP_BATCH;
+  const ids = await opts.page(cursors.get(opts.environment) ?? null, limit);
+  const summary = await reencryptCredentials({ rpc: opts.rpc, key: opts.key, environment: opts.environment, tenantIds: ids });
+  const pending = ids.length === limit;
+  if (pending) cursors.set(opts.environment, ids[ids.length - 1]);
+  else cursors.delete(opts.environment);
+  return { ...summary, pending };
+}
+
+// Test hook: forget the rewrap cursors.
+export function resetRewrapCursors() {
+  cursorHolder[CURSORS]?.clear();
 }

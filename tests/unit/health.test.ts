@@ -1,8 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const problems = vi.fn<() => string[]>(() => []);
 vi.mock("@/lib/config", () => ({ config: (name: string) => process.env[name] }));
+vi.mock("@/lib/startup", () => ({ runtimeConfigProblems: () => problems() }));
 import { GET } from "../../src/app/healthz/route";
 
+beforeEach(() => { problems.mockReset(); problems.mockReturnValue([]); });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
 describe("database readiness", () => {
@@ -33,5 +36,16 @@ describe("database readiness", () => {
     expect(result.headers.get("cache-control")).toBe("no-store");
     expect(await result.json()).toEqual({ ok: false, service: "geraiexpress" });
     if (failure === "missing") expect(request).not.toHaveBeenCalled();
+  });
+
+  it("is not ready while the server configuration does not load, and names nothing (T-105)", async () => {
+    vi.stubEnv("POSTGREST_URL", "http://data.internal");
+    problems.mockReturnValue(["AUTH_SECRET must be set and at least 32 bytes long"]);
+    const request = vi.fn().mockResolvedValue(Response.json(true));
+    vi.stubGlobal("fetch", request);
+    const result = await GET();
+    expect(result.status).toBe(503);
+    expect(await result.text()).toBe(JSON.stringify({ ok: false, service: "geraiexpress" }));
+    expect(request).not.toHaveBeenCalled();
   });
 });

@@ -12,7 +12,7 @@ The app exposes `GET /healthz` (`{"ok":true,"service":"geraiexpress"}`,
 `Cache-Control: no-store`) on every host it answers, including the internal host name
 `internal.geraiexpress.local` (`src/lib/hosts.ts`); it is the image `HEALTHCHECK`, the compose
 `service_healthy` condition and the first probe of `pnpm smoke:container` and `pnpm smoke:preview`. It
-is a readiness check: an anonymous `registration_open` RPC must return a boolean within 2 seconds. A missing URL, timeout, refused request or malformed result returns 503 with `ok:false`; no upstream details are exposed. It checks PostgreSQL/PostgREST availability and the application schema, not Mengantar or mail delivery. The canonical proposed
+is a readiness check: the server configuration must load (T-105: `src/lib/startup.ts`, the same validators as startup, sign-in and tracking — PostgREST URL, auth secrets and CAPTCHA setting, tracking secret) and an anonymous `registration_open` RPC must return a boolean within 2 seconds; registration closed is still ready. A missing URL, timeout, refused request or malformed result returns 503 with `ok:false`; no upstream details are exposed. It checks PostgreSQL/PostgREST availability and the application schema, not Mengantar or mail delivery. The canonical proposed
 signal and limit contract is [16-OBSERVABILITY-RATE-LIMITING.md](docs/spec/16-OBSERVABILITY-RATE-LIMITING.md).
 
 The data path is browser → Caddy → app → PostgREST (HTTP, HS256 JWT) → PostgreSQL (ADR-0002, DEC-021);
@@ -21,6 +21,14 @@ shows PostgREST's own output (profile `prod`; locally the `gxdb` stack's contain
 below are the only app-side signals. DEC-022 selects Vultr + Coolify with same-host PostgreSQL as the initial deployment shape. Off-host backup storage, schedule, encryption and RPO/RTO/PITR remain release gates (T-067).
 
 Log events (container stdout, no addresses, codes or secrets):
+
+- Correlation (T-105, `src/lib/log.ts`): dispatch and cron events carry `correlationId`, a server-generated
+  UUID per cron run or per interactive dispatch step (never taken from the request). The cron response
+  envelope returns it, and the scheduler logs it on `scheduler_call`, so one run's events can be found in
+  `docker compose logs app` from the scheduler line. It is a log field only; never use it as a metric label.
+- `startup_config_invalid` (T-105, `src/instrumentation.ts`): `{"problems":[...]}` naming the missing or
+  invalid variables (never a value). In production the server then refuses to start, so the container
+  restarts and never becomes healthy; elsewhere it starts and logs once.
 
 - `auth_mail_failed` (`src/lib/registration-actions.ts`): `{"event":"auth_mail_failed"}`; configured
   transport failed during background delivery. No recipient, code or provider error is logged. Delivery
@@ -66,7 +74,9 @@ means the database or machine identity is failing), a steadily non-zero `reconci
 (Mengantar unreachable or a rotated key blocking lookups), and `dispatch:not_claimed` that does
 not fall (a seller stuck busy). Without the machine bindings it logs `disabled: true`; a
 failing due-list query logs `failed: true`. Interactive steps log `dispatch_action` (step:
-`dispatch`, `reconcile`, `payment`, or `pay_batch`; status; outcome/reason). A `price_mismatch`
+`confirm`, `dispatch`, `reconcile`, `payment`, or `pay_batch`; status; outcome/reason; `correlationId`).
+Since T-105 the `reason` is a stable code; raw database or transport text becomes `unknown` (as in the
+page's `?galat=`/`?info=` flag). A `price_mismatch`
 shipment event (and `priceMismatch` in `dispatch_action`, a count in `dispatch_sweep`) means
 Mengantar's price for the order differs from `customer_charge_idr` (normal tariff for non-COD,
 normal tariff + `cod_fee_idr` for two-pass COD orders — T-025).
@@ -94,7 +104,34 @@ environment-scoped credential rewrap (`src/lib/mengantar/scheduled.ts`):
   failures and unexpected disabled state before retiring an old credential key. Retain old keys
   until completion is verified.
 
-Scheduler events (T-062): `scheduler_call` carries `task`, HTTP `status` or transport `error`, and `ms`; `scheduler_skipped` means a previous call is running. The app logs `cron_skipped` for a held lock and `cron_timeout` at 270 s: it aborts scheduled PostgREST/provider requests and expires the lock, while the DB retains its one-in-flight rule. A missing task call for two periods, a non-200 status or `scheduler_disabled` needs investigation. A 200 can mean disabled: also inspect `dispatch_sweep.disabled`. No secret is logged.
+Task outcomes (T-105): every task event above carries `outcome`: `done`, `partial` (progress made, more
+remains for the next run: `demo_cleanup.hasMore`, `auth_purge.hasMore`, `credential_rewrap.pending`),
+`disabled` (its bindings are missing; demo cleanup and auth purge now log this too) or `failed`. An RPC
+answer of the wrong shape (null, missing or non-numeric counts) is `failed` with `malformed: true`, never
+zero work. `credential_rewrap` handles at most 500 tenants per run, resuming after the previous run's last
+tenant (an in-process cursor: a restart begins a new pass, which is safe because rewrap is idempotent);
+`pending: false` ends a pass. The app logs `cron_run` (`task`, `result`, `steps`) at the end of each run.
+
+Cron response envelope (`POST /api/internal/cron/{task}`, `src/lib/cron.ts`):
+`{"task","result","correlationId","steps"?}`. `result` is `done | partial | disabled | failed | timeout |
+in_flight`; `steps` names each cleanup step's outcome (`demo_cleanup`, `auth_purge`, `credential_rewrap`).
+Status 200 for done/partial/disabled, 500 failed, 504 timeout, 409 in flight.
+
+Scheduler events (T-062, T-105): `scheduler_call` carries `task`, HTTP `status` or transport `error`, `ms`,
+the envelope's `result`, `steps` and `correlationId` (only those known fields, at most 4 KiB read), and `ok`.
+`ok: false` (anything but a 200 with done/partial/disabled) needs investigation. `scheduler_skipped` means
+a previous call is running; `scheduler_stopping` (SIGTERM/SIGINT) lists the calls it waits for before
+exiting. The app logs `cron_skipped` for a held lock and `cron_timeout` at 270 s: it aborts scheduled
+PostgREST/provider requests and expires the lock, while the DB retains its one-in-flight rule. A missing
+task call for two periods, `ok: false` or `scheduler_disabled` needs investigation; a step that stays
+`disabled` means its configuration is missing. No secret is logged. There is still no executable
+freshness check or alert delivery for these signals.
+
+Database request deadline (T-105, `src/lib/db/client.ts`): every PostgREST request is aborted after 15 s
+(scheduled machine requests: 60 s, inside the 270 s task deadline). The caller sees an ordinary error;
+a mutation whose answer did not arrive is reported as an unknown result where the action already handles
+one and is never replayed. PostgreSQL may still finish the statement: there is no per-role
+`statement_timeout` yet (proposed SQL follow-up, TASKS.md T-105).
 
 ## Configuration and release gates (local waves E/F, not deployed preview state)
 

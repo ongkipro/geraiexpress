@@ -1,13 +1,19 @@
 import "server-only";
 import { config } from "@/lib/config";
 import { sweep } from "./dispatcher";
-import { reencryptCredentials } from "../credential-keyring";
+import { rewrapNextBatch } from "../credential-keyring";
+import { logEvent } from "../log";
 import { cleanupRpc, dispatcherDeps, rewrapDeps, type MachineBindings } from "./machine-deps";
 
 // The scheduled work of the former Worker `scheduled` handler (T-024, T-030, T-051), now run by the
 // secret-protected internal cron route that the scheduler container calls (T-062, DEC-020):
 // the dispatcher sweep every 5 minutes, the demo and auth cleanup and the credential rewrap every hour. Both use the machine identity.
 // Counts only in logs: no references, keys or recipient data.
+//
+// T-105 outcome contract: every task event carries `outcome` (done | partial | disabled | failed); an RPC
+// answer of the wrong shape (null, missing or non-numeric counts) is `failed`, never zero work; `partial`
+// means the task made progress and more remains for the next run. Events go through logEvent, so a cron run
+// stamps them with its correlation id.
 
 export function machineBindings(): MachineBindings {
   return {
@@ -20,7 +26,24 @@ export function machineBindings(): MachineBindings {
   };
 }
 
-export type TaskResult = "done" | "disabled" | "failed";
+export type TaskResult = "done" | "partial" | "disabled" | "failed";
+// A task made of several steps reports each one (the cron envelope returns them to the scheduler).
+export type TaskReport = { result: TaskResult; steps: Record<string, TaskResult> };
+
+// The first row of a jsonb or one-row RPC answer when every named field has its type (counts are
+// non-negative safe integers); otherwise null.
+export function rpcRow<F extends string>(data: unknown, fields: Record<F, "count" | "flag">): Record<F, number | boolean> | null {
+  const row: unknown = Array.isArray(data) ? (data.length === 1 ? data[0] : null) : data;
+  if (!row || typeof row !== "object") return null;
+  for (const [name, kind] of Object.entries(fields)) {
+    const value = (row as Record<string, unknown>)[name];
+    if (kind === "count" ? !(Number.isSafeInteger(value) && (value as number) >= 0) : typeof value !== "boolean") return null;
+  }
+  return row as Record<F, number | boolean>;
+}
+
+const worst = (results: TaskResult[]): TaskResult =>
+  results.includes("failed") ? "failed" : results.includes("partial") ? "partial" : results.includes("done") ? "done" : "disabled";
 
 // Every scheduled network operation (database RPCs AND provider calls) observes the same deadline.
 // After abort, no later step can send a request, even if an earlier adapter swallowed the abort error.
@@ -40,7 +63,7 @@ export function scheduledFetch(signal?: AbortSignal, fetchImpl: typeof fetch = f
 export async function runDispatchSweep(env: MachineBindings, signal?: AbortSignal): Promise<TaskResult> {
   const deps = dispatcherDeps(env, scheduledFetch(signal));
   if (!deps) {
-    console.log(JSON.stringify({ event: "dispatch_sweep", disabled: true }));
+    logEvent("dispatch_sweep", { outcome: "disabled", disabled: true });
     return "disabled";
   }
   try {
@@ -49,34 +72,35 @@ export async function runDispatchSweep(env: MachineBindings, signal?: AbortSigna
     for (const r of s.results) tally[`${r.action}:${r.status}`] = (tally[`${r.action}:${r.status}`] ?? 0) + 1;
     const priceMismatch = s.results.filter((r) => r.priceMismatch).length;
     const priceUnknown = s.results.filter((r) => r.priceUnknown).length;
-    console.log(JSON.stringify({ event: "dispatch_sweep", checked: s.checked, failed: s.failed ?? false, tally, priceMismatch, priceUnknown, stuck: s.stuck }));
-    return s.failed ? "failed" : "done";
+    const outcome: TaskResult = s.failed ? "failed" : "done";
+    logEvent("dispatch_sweep", { outcome, checked: s.checked, failed: s.failed ?? false, tally, priceMismatch, priceUnknown, stuck: s.stuck });
+    return outcome;
   } catch {
-    console.log(JSON.stringify({ event: "dispatch_sweep", failed: true }));
+    logEvent("dispatch_sweep", { outcome: "failed", failed: true });
     return "failed";
   }
 }
 
 // Hourly expired-demo cleanup: needs only the PostgREST URL and the JWT secret, so it runs without the
-// dispatcher bindings. Nothing is logged when those two are missing (as before).
+// dispatcher bindings. `hasMore` (another batch remains) is a partial run.
 export async function runDemoCleanup(env: MachineBindings, signal?: AbortSignal): Promise<TaskResult> {
   const rpc = cleanupRpc(env, scheduledFetch(signal));
-  if (!rpc) return "disabled";
+  if (!rpc) {
+    logEvent("demo_cleanup", { outcome: "disabled", disabled: true });
+    return "disabled";
+  }
   try {
     const { data, error } = await rpc("cleanup_expired_demos", { p_max_age_hours: 24 });
-    const row: { deleted_tenants?: number; deleted_users?: number; has_more?: boolean } | null | undefined = Array.isArray(data) ? data[0] : data;
-    console.log(
-      JSON.stringify({
-        event: "demo_cleanup",
-        deletedTenants: row?.deleted_tenants ?? 0,
-        deletedUsers: row?.deleted_users ?? 0,
-        hasMore: row?.has_more ?? false,
-        failed: Boolean(error),
-      }),
-    );
-    return error ? "failed" : "done";
+    const row = error ? null : rpcRow(data, { deleted_tenants: "count", deleted_users: "count", has_more: "flag" });
+    if (!row) {
+      logEvent("demo_cleanup", { outcome: "failed", failed: true, ...(error ? {} : { malformed: true }) });
+      return "failed";
+    }
+    const outcome: TaskResult = row.has_more ? "partial" : "done";
+    logEvent("demo_cleanup", { outcome, deletedTenants: row.deleted_tenants, deletedUsers: row.deleted_users, hasMore: row.has_more, failed: false });
+    return outcome;
   } catch {
-    console.log(JSON.stringify({ event: "demo_cleanup", deletedTenants: 0, deletedUsers: 0, hasMore: false, failed: true }));
+    logEvent("demo_cleanup", { outcome: "failed", failed: true });
     return "failed";
   }
 }
@@ -102,19 +126,25 @@ function authPurgeBatch(data: unknown): AuthPurgeBatch | null {
 // older than 1 day in bounded batches. Like demo cleanup, needs only the PostgREST URL and the JWT secret.
 export async function runAuthPurge(env: MachineBindings, signal?: AbortSignal): Promise<TaskResult> {
   const rpc = cleanupRpc(env, scheduledFetch(signal));
-  if (!rpc) return "disabled";
+  if (!rpc) {
+    logEvent("auth_purge", { outcome: "disabled", disabled: true });
+    return "disabled";
+  }
   let sessions = 0;
   let otpCodes = 0;
   let hasMore = true;
-  const log = (failed: boolean) =>
-    console.log(JSON.stringify({ event: "auth_purge", sessions, otpCodes, hasMore, failed }));
+  const log = (failed: boolean, malformed = false) =>
+    logEvent("auth_purge", {
+      outcome: failed ? "failed" : hasMore ? "partial" : "done",
+      sessions, otpCodes, hasMore, failed, ...(malformed ? { malformed: true } : {}),
+    });
   try {
     for (let batch = 0; hasMore && batch < AUTH_PURGE_MAX_BATCHES; batch++) {
       signal?.throwIfAborted();
       const { data, error } = await rpc("auth_purge_expired", { p_limit: AUTH_PURGE_BATCH });
       const result = error ? null : authPurgeBatch(data);
       if (!result) {
-        log(true);
+        log(true, !error);
         return "failed";
       }
       sessions += result.sessions;
@@ -122,7 +152,8 @@ export async function runAuthPurge(env: MachineBindings, signal?: AbortSignal): 
       hasMore = result.remaining;
     }
     log(false);
-    return "done";
+    // A backlog left after the per-run batch budget is partial work, not completion (OBSERVABILITY.md).
+    return hasMore ? "partial" : "done";
   } catch {
     log(true);
     return "failed";
@@ -131,32 +162,37 @@ export async function runAuthPurge(env: MachineBindings, signal?: AbortSignal): 
 
 // Hourly SEC-7 rewrap (T-057): moves this MENGANTAR_ENV's active credentials sealed under an older
 // key version to CREDENTIAL_KEY_CURRENT. Idempotent (a current row is skipped, the database fences the
-// expected key version). Counts only in logs; never tenant ids, key material or ciphertext.
+// expected key version). Bounded and resumable (T-105): one batch of tenants per run after the previous
+// run's cursor; `pending` (more tenants remain) is a partial run, a failed tenant fails the run.
+// Counts only in logs; never tenant ids, key material or ciphertext.
 export async function runCredentialRewrap(env: MachineBindings, signal?: AbortSignal): Promise<TaskResult> {
   const deps = rewrapDeps(env, scheduledFetch(signal));
   if (!deps) {
-    console.log(JSON.stringify({ event: "credential_rewrap", disabled: true }));
+    logEvent("credential_rewrap", { outcome: "disabled", disabled: true });
     return "disabled";
   }
   try {
-    const s = await reencryptCredentials({ rpc: deps.rpc, key: deps.key, environment: deps.environment, tenantIds: await deps.tenantIds() });
-    console.log(JSON.stringify({
-      event: "credential_rewrap", environment: deps.environment, scanned: s.scanned, rewrapped: s.rewrapped,
-      alreadyCurrent: s.alreadyCurrent, noCredential: s.noCredential, conflicts: s.conflicts, failed: s.failed.length,
-    }));
-    return s.failed.length ? "failed" : "done";
+    const s = await rewrapNextBatch({ rpc: deps.rpc, key: deps.key, environment: deps.environment, page: deps.page });
+    const outcome: TaskResult = s.failed.length ? "failed" : s.pending ? "partial" : "done";
+    logEvent("credential_rewrap", {
+      outcome, environment: deps.environment, scanned: s.scanned, rewrapped: s.rewrapped,
+      alreadyCurrent: s.alreadyCurrent, noCredential: s.noCredential, conflicts: s.conflicts, failed: s.failed.length, pending: s.pending,
+    });
+    return outcome;
   } catch {
-    console.log(JSON.stringify({ event: "credential_rewrap", failed: true }));
+    logEvent("credential_rewrap", { outcome: "failed", failed: true });
     return "failed";
   }
 }
 
-export async function runCleanup(env: MachineBindings, signal?: AbortSignal): Promise<TaskResult> {
-  const demo = await runDemoCleanup(env, signal);
-  if (demo === "disabled") return "disabled";
-  const auth = await runAuthPurge(env, signal);
-  const rewrap = await runCredentialRewrap(env, signal);
-  return demo === "failed" || auth === "failed" || rewrap === "failed" ? "failed" : "done";
+// The hourly cleanup runs every step (a step without its bindings reports itself disabled) and reports each.
+export async function runCleanup(env: MachineBindings, signal?: AbortSignal): Promise<TaskReport> {
+  const steps = {
+    demo_cleanup: await runDemoCleanup(env, signal),
+    auth_purge: await runAuthPurge(env, signal),
+    credential_rewrap: await runCredentialRewrap(env, signal),
+  };
+  return { result: worst(Object.values(steps)), steps };
 }
 
 export const CRON_TASKS = {
