@@ -39,6 +39,8 @@ const AUTHENTICATED_EXECUTE = [
   "public.begin_partner_seller_onboarding(uuid,text,text,text,text,text,boolean)",
   "public.billable_weight_rules(uuid)",
   "public.close_ambiguous_pickup_reservation(uuid,text)",
+  // T-083: member closes an outlet cash period with a server-computed expected cash.
+  "public.close_cash_period(uuid,bigint)",
   "public.close_failed_operation(uuid,text)",
   "public.close_unknown_batch_payment(uuid,uuid,text)",
   "public.confirm_shipment(uuid,uuid,integer,text,integer)",
@@ -91,6 +93,8 @@ const AUTHENTICATED_EXECUTE = [
   "public.record_receipt_print(uuid,uuid,text,text,text)",
   "public.registration_open()",
   "public.remove_seller_credential(uuid,integer)",
+  // T-083: administrator only, reason required; keeps immutable close history.
+  "public.reopen_cash_period(uuid,text)",
   "public.reopen_shipment(uuid)",
   "public.request_label(uuid)",
   "public.request_quotes(uuid,integer)",
@@ -348,7 +352,7 @@ describe("table sweep (DIL-12)", () => {
 
   it("covers the whole public schema", () => {
     expect(tables().length).toBeGreaterThanOrEqual(14);
-    expect(tables().map((table) => table.name)).toEqual(expect.arrayContaining(["cash_periods", "counter_payments"]));
+    expect(tables().map((table) => table.name)).toEqual(expect.arrayContaining(["cash_period_events", "cash_periods", "counter_payments"]));
   });
 
   it("anon holds no privilege on any public table, view, materialized view, foreign table or column", () => {

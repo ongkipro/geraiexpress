@@ -105,7 +105,7 @@ export const ROUTE_FAMILIES: Readonly<Record<RouteFamily, PathRule>> = {
   // Both the gerai sign-in and the platform sign-in (the second factor follows on /verifikasi-2fa).
   signin: { exact: ["/masuk"], prefixes: [] },
   tenant: {
-    exact: ["/akses", "/pilih-gerai", "/undangan", "/api/mengantar/area"],
+    exact: ["/kas", "/akses", "/pilih-gerai", "/undangan", "/api/mengantar/area"],
     prefixes: ["/daftar", "/pengiriman", "/kontak", "/pengaturan", "/anggota"],
   },
   // `/verifikasi-2fa` follows the platform class: the second factor protects the platform workspace.

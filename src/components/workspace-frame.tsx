@@ -38,6 +38,7 @@ export async function WorkspaceFrame({ children }: { children: React.ReactNode }
     { href: "/", label: "Dashboard", icon: "layout-dashboard" },
     { href: "/pengiriman", label: "Pengiriman", icon: "package", group: "Kirim", count: attention },
     { href: "/pengiriman/baru", label: "Buat pengiriman", icon: "package-plus", group: "Kirim" },
+    { href: "/kas", label: "Kas", icon: "audit", group: "Data" },
     { href: "/kontak", label: "Kontak", icon: "contacts", group: "Data" },
     ...(ws.role === "tenant_admin" && !ws.isDemo ? [{ href: "/anggota", label: "Anggota", icon: "members", group: "Pengelolaan" } as NavItem] : []),
     { href: "/pengaturan", label: "Pengaturan", icon: "settings", group: "Pengelolaan" },
