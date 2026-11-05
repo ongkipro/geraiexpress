@@ -890,6 +890,22 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Done when:** (1) `anon` 5 s / 3 s / 15 s, `authenticated` 15 s / 5 s / 30 s, `service_role` 60 s / 10 s / 60 s statement / lock / idle-in-transaction timeouts (aligned with the app's 15 s interactive and 60 s scheduled deadlines) and an `authenticator` 65 s statement upper bound, applied by PostgREST as impersonated-role settings after `notify pgrst, 'reload config'`; a DB test pins the role settings and proves a statement over the authenticated limit is cancelled with 57014; (2) machine-only `public.schema_version()` returns the newest applied migration; `/healthz` answers 503 `reason: "schema_behind"` while it is older than `EXPECTED_SCHEMA_VERSION` (`src/lib/schema-version.ts`, pinned to the newest migration file by a unit test), a newer schema is ready; (3) machine-only `machine_rewrap_candidates(p_env, p_current_version, p_after, p_limit)` lists only non-demo tenants whose active credential of the environment is below the current key version (keyset by tenant id); `rewrapNextBatch` uses it (in-process cursor kept; a rewrapped tenant leaves the set), and `service_role`'s last table privilege (SELECT on `public.tenants`) is revoked; (4) the callerless `platform_tenants()` / `platform_tenant_slugs()` and the unused `auth.users` columns `instance_id`, `confirmation_token`, `recovery_token`, `email_change_token_new`, `raw_user_meta_data` are dropped, with their test probes moved to `platform_tenant_directory` / `raw_app_meta_data`; ARCHITECTURE, OBSERVABILITY, RELEASE and specs 05/15/16 updated; typecheck, unit, full DB and upgrade replay pass; independent review.
 - **Kept on purpose:** `auth.users.aud` (pinned identity-row shape), `auth.mfa_factors.friendly_name` (written by `auth_mfa_enroll`), `public.label_snapshots.template_version` (cheap versioning), and the `supabase_auth_admin` role (`registration_open` and `private.before_user_created` are still granted to it; dropping it needs those grants revoked first). The rewrap cursor stays in-process: persisting it is unnecessary once the candidate list shrinks as tenants are rewrapped.
 
+### [ ] T-112 — Label page queries a quote with a null id (found 2026-11-06; after M1, not part of M1)
+- **Primary requirement:** NFR-1
+- **Finding:** while re-running the gerai-logo label specs (T-109 isolate run, 2026-11-06 ~05:00), the PostgreSQL
+  log showed six `ERROR: invalid input syntax for type uuid: "null"` on a PostgREST `shipment_quotes` select
+  (`/data/tmp/geraiexpress/t109b-isolate/*postgres.log`). No test failed; the page renders without the quote.
+- **Repro:** open `/pengiriman/<id>/label` for a shipment whose `selected_quote_id` is null (e.g. a draft-derived or
+  fixture label shipment without a selected quote, as in `tests/e2e/gerai-logo.spec.ts`) and read the DB log.
+- **Cause (one line):** `src/app/(workspace)/pengiriman/[id]/label/page.tsx:30-31` always runs
+  `.eq("id", s.selected_quote_id)`, so a null id is sent as the string `"null"`; the struk page and
+  `src/modules/tracking/actions.ts` already guard with `s.selected_quote_id ? … : { data: null }`.
+- **Risk Level:** R1 (one read query; no schema, no auth, no write).
+- **Allowed Paths:** `src/app/(workspace)/pengiriman/[id]/label/page.tsx`, `tests/**`, `TASKS.md`
+- **Done when:** the label page skips the quote query when `selected_quote_id` is null (same guard as the struk
+  page); a test proves no `shipment_quotes` request is made for such a shipment and the label still renders; the
+  gerai-logo label spec leaves no `uuid: "null"` error in the DB log; typecheck, unit and the label specs pass.
+
 ### Deferred — Multi-cabang owner (Super Admin → owner → cabang admins), DEC-024 (3)
 Not scheduled. Today one gerai = one cabang with its own admin; another cabang registers separately.
 
