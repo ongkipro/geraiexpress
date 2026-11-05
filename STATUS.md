@@ -5,9 +5,33 @@ Status: Active
 State: INTEGRATING
 Review-Risk: R3
 Primary-Worker: pi-parent-01a1a300
-Independent-Review: T-082, T-096, T-100 and T-101 source runs closed PASS after independent R3 digest approvals (T-101: c28062b3, digest 7b0e4018). This does not close provider, legal or release gates.
-Independent-Reviewer: separate reviewer per run (T-082 decba79d, T-096 708b2380, T-100 1ff03b98, T-101 c28062b3)
-Independent-Review-Head: T-101 commit 0fd1be5 on top of merges ad326cb (T-082), b41b7df (T-096), 45d7534 (T-100); this handoff is a separate docs-only run.
+Independent-Review: wave 3 source runs T-084, T-086, T-087 and T-102 closed PASS after independent GPT-6.1 Sol R3 digest approvals (T-084 9f57d07f, T-086 a997d52b, T-087 6866779d, T-102 3f723e5f). This does not close provider, legal or release gates.
+Independent-Reviewer: separate reviewer per run (T-084 9f57d07f, T-086 a997d52b, T-087 6866779d, T-102 3f723e5f)
+Independent-Review-Head: merges 3202184 (T-102), b16edc6 (T-084), 35f3f13 (T-087), 844f2ca (T-086) on feat/counter-ops-2026-11; this handoff is a separate docs-only run.
+
+## Wave 3 and T-102: T-084, T-087, T-086, framework upgrade (PASS; integrated, not deployed)
+
+Four worktrees, one passing ledger run each, migrations 20261105150000 (masking acceptance),
+20261105160000 (pilot report) and 20261105170000 (return and claim cases); each passed its own gates
+and an independent GPT-6.1 Sol R3 digest review. Merged in order T-102 (3202184), T-084 (b16edc6),
+T-087 (35f3f13), T-086 (844f2ca); doc, host-matrix, nav and crumb conflicts kept both sides.
+- T-102: Next 16.4.5, React 19.3.1, TypeScript 7.0.2, Tailwind 4.3.4, Vitest 5.1.0, Playwright
+  1.64.1 and the UI toolchain, exact pins; lucide-react 1.68.0 held by the 24 h release-age policy.
+  The first full e2e run (the per-task gates had only run related specs) exposed a pre-existing
+  WCAG 2.4.11 failure, proved identical on the pre-upgrade base 05445a2: the intake "Ringkasan
+  biaya" sticky bar covered focused fields on mobile; fixed with a shared scroll-padding hook. One
+  gerai-logo batch timeout in that run did not reproduce (48/48 on a x3 repeat). The reviewer had
+  no network tool, so compatibility rests on packaged exports, usage and the gates, not release notes.
+- T-084: review P1 (the "Resi + invoice" masked print path lacked the return-destination note)
+  fixed with e2e for unverified, verified and unmasked labels; visual PASS at 390/1280.
+- T-087: review P1 (the 390 report was a horizontally scrolled table, UI-7) fixed with record cards;
+  the parent moved the breakpoint to `lg` after a 768 screenshot showed the shell still clipped the
+  table; visual PASS at 390/768/1280.
+- T-086: approved first pass; its P2 (ARCHITECTURE wording on the one-open-case index) fixed here.
+Integrated verification on 844f2ca (logs `/data/tmp/wave3/int/`): typecheck, 1,344 unit, 578 full
+DB, 578 upgrade-replay DB (full suite, replaying from the schema before migration 20261029130000), environment check, image build,
+469 e2e at 390/1280 with the full suite (11 skipped by design), build stage and client bundle scan.
+Not done: courier acceptance evidence (T-048), live statuses/return events (T-045), deploy.
 
 ## Wave 2: T-095, T-083, T-085 (PASS; integrated, not deployed)
 

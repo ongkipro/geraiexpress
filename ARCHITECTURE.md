@@ -305,7 +305,7 @@ flowchart LR
     subgraph Browser["Browser (untrusted)"]
         UI["Server-rendered pages<br/>+ small client islands<br/>(intake form, dialogs, nav sheet)"]
     end
-    subgraph Worker["Application server — Next.js 16.4.3 (self-hosted container, DEC-020)"]
+    subgraph Worker["Application server — Next.js 16.4.5 (self-hosted container, DEC-020)"]
         MW["proxy.ts (Node runtime)<br/>host → audience 404 matrix · session cookie rotation · host-only cookies<br/>Cache-Control: private, no-store · CSP + security headers"]
         Pages["App Router pages<br/>public, auth, workspace and /admin routes<br/>(full list: Runtime route map)"]
         Actions["Server actions<br/>auth · contacts · credentials · shipments · labels · invoices · payments · tenant logos · pricing"]
@@ -488,8 +488,8 @@ observed. Counts and executed checks are under "Verified counts and gates".
   origin check across two tenant-facing hosts; a production-host (TLS) run of the host spec.
 - **CSP, Auth ingress (T-038, T-066).** Enforced CSP: `frame-ancestors 'none'; object-src 'none';
   base-uri 'none'; form-action 'self'` plus `Permissions-Policy`. The nonce `script-src` with
-  `strict-dynamic` and the Turnstile host is Report-Only, because Next.js 16.4.3 router code
-  (`node_modules/next/dist/server/lib/router-utils/resolve-routes.js:463-466`) copies proxy (the former middleware)
+  `strict-dynamic` and the Turnstile host is Report-Only, because Next.js router code (re-checked
+  on 16.4.5: `node_modules/next/dist/server/lib/router-utils/resolve-routes.js:463-466`) copies proxy (the former middleware)
   response headers onto the request headers, so the enforced base policy replaces the
   nonce-carrying request policy and Next finds no nonce (effect inside the standalone server not
   verified, and not re-checked after the rename to `src/proxy.ts`). A server-level enforced nonce CSP is T-055. Rate limits (in-process fixed windows since T-062, see "Self-hosted container runtime"): per-visitor limiters
@@ -635,7 +635,7 @@ observed. Counts and executed checks are under "Verified counts and gates".
   DB/unit/e2e coverage is added in source-named cash-period tests, including a deterministic blocked
   payment/close race and 390/1280 screenshots. Executed and independently reviewed; results are
   recorded in STATUS.md. PR-45 pilot reporting is not part of this slice.
-- **Pilot report and earnings view (T-087, implementation present; runtime verification pending).**
+- **Pilot report and earnings view (T-087, verified locally).**
   `20261105160000_pilot_report.sql` extracts the unchanged per-quote body of
   `gerai_cost_for_quote` into `private.quote_gerai_cost(uuid,uuid)` (no API grant);
   `gerai_cost_for_quote` keeps its signature, ACL and admin check as a thin wrapper.
@@ -652,12 +652,12 @@ observed. Counts and executed checks are under "Verified counts and gates".
   `record_export` is recreated from its latest body with the same signature and ACL and also
   accepts kind `pilot_report` (filters `from`/`to` only; audit `export.pilot_report`).
   Tenant-host `/kas/laporan` (tenant admin only; operators get the workspace not-found page and no
-  nav item) renders the table with definitions, period and data timestamp, unknown as
+  nav item) renders record cards below 1024 px and the table from `lg`, with definitions, period and data timestamp, unknown as
   "Belum diketahui" and demo amounts "contoh". `/kas/laporan/export.csv` (tenant admin of a real
   gerai, `no-store`, audited before any byte, formula guard from `src/lib/csv.ts`) mirrors the
   shipment export contract. Responses at the 1000-row Data API cap fail closed. Tests:
   `tests/db/pilot-report.test.ts`, `tests/unit/pilot-report.test.ts`, `tests/e2e/pilot-report.spec.ts`.
-- **Return and claim cases (T-086, manual flow before T-045; implementation present, runtime verification pending).**
+- **Return and claim cases (T-086, manual flow before T-045; verified locally).**
   `20261105170000_return_claim_cases.sql` adds `private.claim_window_rules` (no API-role grant;
   seeded from Mengantar help 8140017, updated 2026-09-18, with URL and date, unit `working_days`,
   `days` or `hours`, anchor `last_status`, `delivered` or `rts`, optional JNE region), member-readable
@@ -672,8 +672,8 @@ observed. Counts and executed checks are under "Verified counts and gates".
   fence) compute `rule_id`/`deadline_at` in SQL every time (`private.claim_deadline`, mirrored by
   `src/modules/cases/deadline.ts` for display and unit tests; working days skip Saturday/Sunday on
   the WIB calendar, holidays are not excluded and the screen says so). A partial unique index keeps
-  one non-closed case per shipment (stricter than DATA-15's per-type wording: one counter
-  conversation per parcel); a race loser gets `case_open_exists` (55000). `close_shipment_case` is
+  one non-closed case per shipment (as amended in DATA-15: one counter conversation per
+  parcel); a race loser gets `case_open_exists` (55000). `close_shipment_case` is
   tenant-admin only, requires an outcome, and requires amount plus deciding party (`courier` or
   `mengantar`) only for `compensated`. Every transition appends an event and `private.audit`; open
   and close also add a shipment timeline event. Errors are 55000/22023/P0002/42501, never 40001.
@@ -1001,7 +1001,7 @@ Bahasa Indonesia.
 Observed on disk: wave E migrations `20261028230000_environment_scope_key_ring.sql` and
 `20261028240000_discount_recording_and_ui.sql`, followed by F1
 `20261028250000_reconcile_across_key_regeneration.sql` and F2
-`20261028260000_pickup_known_time_ids.sql`, then the auth core `20261029100000_auth_core.sql` (T-066). The package pin is Next.js 16.4.3 (OpenNext was removed by T-062).
+`20261028260000_pickup_known_time_ids.sql`, then the auth core `20261029100000_auth_core.sql` (T-066). The package pin was Next.js 16.4.3 at that point (OpenNext was removed by T-062; current pins in the stack table).
 Counts are recorded by the lead in STATUS.md after the final run. This documentation pass ran
 no build, test, server or environment guard.
 
@@ -1099,8 +1099,8 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
 
 | Component | Actual state | Evidence |
 |---|---|---|
-| Runtime | Next.js 16.4.3 App Router (standalone output in a Node 24 container, DEC-020), React 19.3.0 and TypeScript 6.0.3 are pinned; OpenNext and Wrangler were removed by T-062 | `pnpm typecheck`, `pnpm build`, `pnpm check:bundle`, `docker build`, `pnpm smoke:container` (BUILD-LOG); final counts recorded by the lead in STATUS.md |
-| Adapter decision | Earlier Next 16.4.0/OpenNext 1.20.10 failed in workerd; DEC-005 raised to 16.4.3/1.20.13 (history). DEC-020 removed the adapter: Next.js 16.4.3 runs as `node server.js` from `output: "standalone"` | BUILD-LOG; `Dockerfile`; `scripts/container-smoke.sh` |
+| Runtime | Next.js 16.4.5 App Router (standalone output in a Node 24 container, DEC-020), React 19.3.1, TypeScript 7.0.2 (Next type-checks through the `tsc` CLI, `experimental.useTypeScriptCli`; no compiler-API consumer), Tailwind CSS 4.3.4 and Vitest 5.1.0 are pinned exactly (T-102; lucide-react held at 1.67.0 by the 24 h `minimumReleaseAge` policy); OpenNext and Wrangler were removed by T-062 | `pnpm typecheck`, `pnpm build`, `pnpm check:bundle`, `docker build`, `pnpm smoke:container` (BUILD-LOG); final counts recorded by the lead in STATUS.md |
+| Adapter decision | Earlier Next 16.4.0/OpenNext 1.20.10 failed in workerd; DEC-005 raised to 16.4.3/1.20.13 (history). DEC-020 removed the adapter: Next.js (now 16.4.5, T-102) runs as `node server.js` from `output: "standalone"` | BUILD-LOG; `Dockerfile`; `scripts/container-smoke.sh` |
 | Session handling, hosts & headers | `src/proxy.ts` (Node runtime; the former `src/middleware.ts`) maps the Host header to an audience (`src/lib/hosts.ts`) and answers 404 for a path outside it, then rotates the `gx_at`/`gx_rt` session cookies (`src/lib/db/refresh.ts`: a valid access token that does not expire within 60 s needs nothing on GET/HEAD, other methods also check the session row, an absent or soon-to-expire token with a refresh token triggers one rotation budgeted by `REFRESH_LIMITER`, a definitive failure clears both cookies, a refused budget or an unreachable database answers 503 + `Retry-After: 60` and keeps the cookies), sets `Cache-Control: private, no-store` on every non-static response and attaches `X-Frame-Options: DENY`, the enforced CSP `frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'`, a nonce `script-src` with `strict-dynamic` and the Turnstile host as Report-Only (nonce limitation under "Merged 2026-10-28"), `Permissions-Policy`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, HTTPS `Strict-Transport-Security`, and `X-Robots-Tag: noindex, nofollow` on every host except the production apex. `src/lib/db/cookies.ts` sets the attributes of both session cookies: no `Domain`, `HttpOnly`, `SameSite=Lax`, `Secure` on HTTPS or production builds, path `/`, a 7-day (gerai) or 12-hour (owner) cap that mirrors the server-enforced session lifetime. The `ge_tenant` selector cookie is `httpOnly`, `sameSite: lax`, `secure` in production | `tests/unit/proxy.test.ts`, `tests/unit/db-refresh.test.ts`, `tests/unit/hosts.test.ts`, `tests/unit/csp.test.ts`, `tests/e2e/hosts.spec.ts` (desktop-1280, next dev) |
 | Identity | Application-owned auth (`src/lib/auth/**`): scrypt password sign-in (seeded local fixtures only), emailed 6-digit code sign-in/registration, and anonymous demo sessions (`auth_sign_in_anonymous`); public signup refused by `private.before_user_created`, which `auth_issue_otp` and `auth_verify_otp` call before any account or code exists; email confirmation is the verified code; trigger `private.lock_anonymous_identity` on `auth.users` refuses, for anonymous identities, any email/phone/password change request and any clearing of `is_anonymous`; there is no OAuth or identity-linking path, so a demo session cannot become a real account (PR-31) | `tests/db/isolation.test.ts` registration gate, mutation-checked; `tests/db/auth-core.test.ts` |
 | Auth core (T-065, T-066) | `auth.sessions` (hashed rotating refresh tokens, reuse detection with a 10-second `recent_reuse` grace, absolute 7 days or 12 hours for a platform-grant holder, idle bound, revocation on deactivation), `auth.otp_codes` (HMAC-hashed, 10 minutes, 5 guesses per code, 20 per address per hour, one code per 30 seconds), `auth.mfa_factors` (sealed TOTP secret, replay guard); 14 machine-only `public.auth_*` functions in `20261029100000_auth_core.sql`; HS256 access tokens (10 minutes) verified by PostgREST and by `dbServer()`/`currentUser()` | `tests/db/auth-core.test.ts`, `tests/db/captcha.test.ts`, `tests/unit/auth-service.test.ts`, `auth-jwt`, `auth-password`, `auth-otp`, `auth-totp`, `auth-turnstile` unit tests |

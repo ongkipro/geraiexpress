@@ -317,7 +317,7 @@ DEC-016: no platform fee is collected in the first release.
 
 Decision (DEC-005, DEC-020, DEC-021, ADR-0002): Next.js App Router + TypeScript +
 shadcn/ui for the authenticated application, running as a self-hosted Node.js standalone
-container (`Dockerfile`, `compose.yaml`, T-062) with exact Next.js pins (Next.js 16.4.3).
+container (`Dockerfile`, `compose.yaml`, T-062) with exact Next.js pins (Next.js 16.4.5 since T-102).
 Plain PostgreSQL 17 behind PostgREST (`@supabase/postgrest-js` as a stand-alone query
 builder) and an application-owned auth module (`src/lib/auth/**`, `db/migrations/20261029100000_auth_core.sql`,
 T-064..T-066; T-067 review open) supply authentication, PostgreSQL constraints, RLS and
@@ -597,14 +597,14 @@ tasks are table rows there and are written here as bare numbers (for example 003
 | PR-36 · Host topology | Partial | T-042, T-055, T-062, T-066 | `src/lib/hosts.ts`, `src/proxy.ts`, `src/lib/db/cookies.ts` (`gx_at`/`gx_rt`) and Caddy templates built; DNS/TLS, cross-host Server Actions and production host cutover remain unproved |
 | PR-37 · Tenant slug and reference | Implemented | T-049 | slug, prefix and counter built and tested locally; the prefix is assigned at approval by a trigger |
 | PR-38 · Counter payment and receipt | Implemented and behaviorally verified locally; verification recorded in STATUS.md | Receipt content/identity accepted by DEC-026; contract UX-17, DATA-11; T-082 | gap analysis J5; `invoice-content.ts` states the invoice is not a receipt |
-| PR-39 · Shift and day close | Not implemented | Proposed; contract UX-17, DATA-11; T-083 | gap analysis J6 |
-| PR-40 · Resi message and tracking link | Not implemented | Proposed; contract UX-18, DATA-12, SEC-8; T-085 (needs T-045) | gap analysis J9/J10; only `wa.me` link is marketing |
+| PR-39 · Shift and day close | Implemented and verified locally (not deployed); verification recorded in STATUS.md | Contract UX-17, DATA-11; T-083 | gap analysis J6 |
+| PR-40 · Resi message and tracking link | Partial: share link and public page implemented and verified locally (not deployed); live statuses need T-045 | Contract UX-18, DATA-12, SEC-8; T-085 | gap analysis J9/J10; only `wa.me` link is marketing |
 | PR-41 · Content declaration | Implemented locally; verification recorded in STATUS.md | Contract UX-19, DATA-13; T-081 | Wording provisional until the Mengantar sync; gap analysis J3; Permenkomdigi 8/2025 Art 22 |
 | PR-42 · Insurance offer | Not implemented (insurance Deferred, DEC-013) | none (Proposed) | gap analysis J4; Permenkomdigi 8/2025 Art 27 |
 | PR-43 · Measured and billable weight | Implemented locally; verification recorded in STATUS.md | Contract UX-19, DATA-14; T-080 | Regular and supported non-COD cargo wired; full T-080 remains open for authenticated provider/route/order evidence |
-| PR-44 · Return and claim cases | Not implemented | Proposed; contract UX-20, DATA-15; T-086 (needs T-045) | gap analysis J11/J12 |
-| PR-45 · Pilot measurement and earnings | Not implemented | Proposed; contract UX-17; T-087 | gap analysis J13; PRD evaluation measures have no instrument |
-| PR-46 · Masked-label acceptance gate | Not implemented | Proposed; contract UX-9 (amended); T-084 (T-048 evidence) | gap analysis section 6 (Art 77); Mengantar Java-only return address |
+| PR-44 · Return and claim cases | Partial: manual case flow implemented and verified locally (not deployed); return events and the Lost suggestion need T-045 | Contract UX-20, DATA-15; T-086 | gap analysis J11/J12 |
+| PR-45 · Pilot measurement and earnings | Implemented and verified locally (not deployed); verification recorded in STATUS.md | Contract UX-17; T-087 | gap analysis J13 |
+| PR-46 · Masked-label acceptance gate | Implemented and verified locally (not deployed); per-courier evidence still comes from T-048 | Contract UX-9 (amended); T-084 | gap analysis section 6 (Art 77); Mengantar Java-only return address |
 | NFR-1 · Isolation proof | Partial | 002, T-032, T-035, T-064, T-065 | `tests/db` (27 files / 410 tests against PostgreSQL 17 + PostgREST); seller binding closed; signature-based catalog test includes the 14 `auth_*` machine functions; local database only |
 | NFR-2 · Duplicate and interrupted operations | Partial | 005, 022, 024, T-026, T-033, T-043 | dispatcher tests; payment replay closed locally by the attempt table; live behavior unproven |
 | NFR-3 · Private payloads | Implemented | 001, 015, T-030, T-038, T-066 | client-bundle scan (including `AUTH_JWT_SECRET`, `AUTH_SECRET`, `SERVICE_ROLE_JWT`); no-store `src/proxy.ts`; HttpOnly `gx_at`/`gx_rt` cookies, CSP base policy and account limiters (T-038, T-066); the script CSP is Report-Only |

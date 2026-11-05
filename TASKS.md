@@ -683,7 +683,8 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** T-082
 - **Done when:** (tables come from T-082) close stores counted, expected and variance; reopen clears `closed_at` and keeps the earlier close in `cash_period_events` (RLS on, member SELECT, RPC-only writes, allowlist updated); a closed period refuses changes; reopen is admin-only with a reason and audited; `/kas` lists the open period by method and staff; DB tests for a payment after midnight joining the still-open period, closed-period refusal and concurrency (two closes); e2e at 390 and 1280.
 
-### [ ] T-084 — Masking acceptance gate and return-destination note (PR-46)
+### [x] T-084 — Masking acceptance gate and return-destination note (PR-46)
+- **Result (2026-11-05):** run `RUN-20261105T025528Z-405b3907` PASS; R3 approval 9f57d07f after re-review (first review P1: the "Resi + invoice" masked print path lacked the return-destination note; fixed with e2e for unverified, verified and unmasked labels); commit 05759cf, merged b16edc6. `record_label_print(p_snapshot, p_acknowledged)` without default (old signature dropped; label, batch and invoice callers updated); `masking_acknowledgement_required` 55000; one batch acknowledgement covers every masked label; `label_return_routes` provinces only; Super Admin `platform_set_masking_acceptance` (integration_operations + aal2 + reason + audit, evidence for verified/refused). Migration `20261105150000`. Courier evidence itself still comes from T-048.
 - **Primary requirement:** PR-46
 - **Constraints:** UX-9 acceptance-gate row; DATA-10 amendment; PR-34, PR-35, DEC-017, DEC-018, DEC-023; no change to label layout
 - **Risk Level:** R2
@@ -700,7 +701,8 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** none for the share action and empty-timeline page; T-045 for live statuses
 - **Done when:** UX-18 items 1–7 and SEC-8 items 1–6 hold; a host-matrix unit test proves `/lacak/*` is apex-only; the link is built from `SITE_ORIGIN` (per-environment configuration), never from request headers; the token is HMAC-derived so a repeat share returns the same link; masking is read from the latest label snapshot and a shipment with no snapshot hides gerai name and sender initials (fail closed); a unit test asserts the public projection type has no personal or money field; an e2e test opens a link anonymously at 390 px and finds no full name, phone or address of the seeded shipment; a revoked link answers 404; rate limit test; bundle scan passes.
 
-### [ ] T-086 — Return and claim cases (PR-44)
+### [x] T-086 — Return and claim cases (PR-44)
+- **Result (2026-11-05):** run `RUN-20261105T025530Z-6242274f` PASS; R3 approval a997d52b (visual PASS at 390/1280); commit 97646b5, merged 844f2ca. Manual flow before T-045: one non-closed case per shipment, SQL-computed deadlines from help 8140017 (NULL where the source states no anchor), staff-entered anchor labelled "dimasukkan petugas", admin-only close with outcome rules, `/kasus` and shipment detail "Retur dan kasus". Migration `20261105170000`. Return events and the Lost-status suggestion remain with T-045.
 - **Primary requirement:** PR-44
 - **Constraints:** UX-20, DATA-15, PR-12, IAM-1 counter rows
 - **Risk Level:** R3
@@ -708,7 +710,8 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** T-045 (return events); the manual case flow can start before it
 - **Done when:** cases open, update and close per UX-20 with outcome rules; claim-window rules are seeded from help 8140017 with URL and date, each with its unit (working days, days, hours), anchor event (last status, RTS, delivered) and optional region set (JNE 45 working days for Java/Sumatra/Bali/NTB, 60 elsewhere); the case records one provider claim type (return, full value, other) and shows the 14-day provider processing ceiling (help 5207011) as information, not a promise; a Lost status, once T-045 observes it, suggests a case and the 3×24 h lost-claim window is tested; the exclusions (damage reported after 3 days, no unboxing video, liquids over 100 ml, live plants) appear as guidance copy; deadline computation has unit tests per rule unit (working days excluding weekends, days, hours) and NULL when no rule applies; the copy test proves no promise wording (UX-20 item 6); return state appears in list, detail and dashboard attention; DB tests for one-open-case, admin-only close and cross-tenant denial; e2e at 390 and 1280.
 
-### [ ] T-087 — Pilot report and earnings view (PR-45)
+### [x] T-087 — Pilot report and earnings view (PR-45)
+- **Result (2026-11-05):** run `RUN-20261105T025528Z-7a3221ac` PASS; R3 approval 6866779d after re-review (first review P1: the 390 report was a horizontally scrolled table; below 1024 px it now renders record cards, the table only from `lg` because the 768 shell clipped it); commit a062ebd, merged 35f3f13. Admin-only `/kas/laporan` + audited CSV, GROUPING SETS totals, earnings NULL when any cost is unknown, `private.quote_gerai_cost` with parity test. Migration `20261105160000`.
 - **Primary requirement:** PR-45
 - **Constraints:** UX-17 item 6; DATA-11 read model; PR-22, PR-23; operators never see earnings
 - **Risk Level:** R2
@@ -827,7 +830,8 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** T-023
 - **Done when:** a migration creates the reference table with id/postal/name checks and search indexes plus a member-only search RPC; a loader script upserts the committed gzipped dataset (validated, idempotent, never deletes) into the local DB; the area route answers from the catalogue for every member (demo included; the demo intake keeps its free-text area/postal fields, a parent scope decision 2026-11-05 to avoid a second `recipient_area` field) and falls back to live Mengantar only when the catalogue has no match and the gerai is connected; DB tests (grants: no anon/insert, search ranking by kelurahan/kecamatan/kota/kode pos, limit) and unit tests (loader validation, route fallback); e2e area pick at 390 and 1280; ARCHITECTURE system map updated.
 
-### [ ] T-102 — Framework and toolchain to current releases (owner, 2026-11-05)
+### [x] T-102 — Framework and toolchain to current releases (owner, 2026-11-05)
+- **Result (2026-11-05):** run `RUN-20261105T043711Z-50929a27` PASS; R3 approval 3f723e5f; commit cf2bc16, merged 3202184. Next 16.4.5, React 19.3.1, TypeScript 7.0.2, Tailwind 4.3.4, Vitest 5.1.0, Playwright 1.64.1, radix-ui 1.8.1, shadcn 4.23.0, cn 0.5.2, lucide-react 1.67.0, postgrest-js 2.118.0, @types/node 26.6.6. Held: lucide-react 1.68.0 was younger than the pnpm `minimumReleaseAge` (24 h) supply-chain policy; bump when it ages in. The full e2e suite exposed a pre-existing WCAG 2.4.11 failure (identical on the pre-upgrade base): the intake "Ringkasan biaya" sticky bar covered focused fields on mobile; fixed with the shared `useStickyScrollPadding` hook. Reviewer could not fetch release notes (no network tool); compatibility rests on packaged exports, usage and the gates.
 - **Primary requirement:** NFR-1
 - **Constraints:** Owner (2026-11-05): "pastikan gerai express pakai next dan paket framework keseluruhan termasuk tailwind dan typescript terbaru". Exact pins stay exact (no ranges). TypeScript 7 ships no JavaScript compiler API; Next.js 16.4 type-checks through the project `tsc` CLI by default (`experimental.useTypeScriptCli`), so the upgrade is allowed only if `next build` (Docker image) and `tsc --noEmit` pass; any TypeScript-6-only consumer stays on `@typescript/typescript6`. Major upgrades of other packages need their release notes read; no unrelated refactors.
 - **Risk Level:** R3 (build toolchain, runtime framework)

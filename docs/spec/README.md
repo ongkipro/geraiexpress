@@ -81,7 +81,7 @@ PostgREST (`@supabase/postgrest-js` as a stand-alone HTTP-to-SQL query builder) 
 application-owned auth module (`src/lib/auth/**`, `db/migrations/20261029100000_auth_core.sql`,
 DEC-021, ADR-0002, T-064..T-066; T-067 security review open) for identity and tenant data.
 Cloudflare Turnstile remains the CAPTCHA widget. Decision (DEC-005): exact Next.js pins
-(Next.js 16.4.3) remain; the earlier Cloudflare Workers / `@opennextjs/cloudflare` adapter
+(Next.js 16.4.5 since T-102) remain; the earlier Cloudflare Workers / `@opennextjs/cloudflare` adapter
 and the Supabase GoTrue / CLI stack (recorded as historical context in CTX-7, CTX-8 and
 CTX-20) are superseded by DEC-020 and DEC-021. The earlier React/Vite proposal is superseded.
 
