@@ -13,6 +13,12 @@ esac
 if $reset; then
   # Only the disposable local database may be dropped: gx-prefixed name AND loopback host or the compose container.
   [[ "$GX_DB_NAME" =~ ^gx[a-zA-Z0-9_]*$ ]] || { echo '--reset requires a gx-prefixed database name' >&2; exit 1; }
+  # Dropping is never implied by a script name (db:reset, db:verify): the caller names the database
+  # it intends to destroy. Take `pnpm db:backup` first when the local data matters.
+  [[ "${GX_CONFIRM_RESET:-}" == "$GX_DB_NAME" ]] || {
+    echo "--reset drops database $GX_DB_NAME and all its data. Back it up (pnpm db:backup), then rerun with GX_CONFIRM_RESET=$GX_DB_NAME" >&2
+    exit 1
+  }
   if [[ -n "${DATABASE_URL:-}" ]]; then
     case "${PGHOST:-}" in
       localhost|127.0.0.1|::1) ;;

@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { IDS, client, demoVisitor, signIn, signInAal2, sql, verifiedNewUser } from "./helpers";
+import { IDS, client, demoVisitor, signIn, signInAal2, sql, verifiedNewUser, containsAmount } from "./helpers";
 
 const OWNER_A = "00000000-0000-4000-a000-0000000000a1";
 const OPERATOR_A = "00000000-0000-4000-a000-0000000000a2";
@@ -290,8 +290,8 @@ describe("create_label_snapshot (TD-13, DATA-10)", () => {
     // No cost, discount or price column exists, and no sentinel amount leaks into any value.
     const columns = sql(`select string_agg(column_name, ',') from information_schema.columns where table_schema = 'public' and table_name = 'label_snapshots'`);
     expect(columns).not.toMatch(/cost|net_|discount|charge|tariff|price|fee/);
-    expect(JSON.stringify(row)).not.toContain(String(NET_COST_SENTINEL));
-    expect(JSON.stringify(row)).not.toContain(String(CHARGE_SENTINEL));
+    expect(containsAmount(row, NET_COST_SENTINEL)).toBe(false);
+    expect(containsAmount(row, CHARGE_SENTINEL)).toBe(false);
   });
 
   it("a reprint is a print event on the same snapshot; the history is append-only and records the actor and size", async () => {

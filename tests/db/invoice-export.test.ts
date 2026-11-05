@@ -4,7 +4,7 @@
 // tenant administrators. Nothing here reaches Mengantar.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { IDS, client, demoVisitor, signIn, sql } from "./helpers";
+import { IDS, client, demoVisitor, signIn, sql, containsAmount } from "./helpers";
 
 const OWNER_A = "00000000-0000-4000-a000-0000000000a1";
 const NET_COST_SENTINEL = 13579;
@@ -96,9 +96,9 @@ describe("create_invoice_snapshot (PR-16, DATA-10)", () => {
     const snap = (await owner.rpc("create_invoice_snapshot", { p_shipment: id })).data as string;
     const row = snapshotRow(snap);
     expect(Object.keys(row).filter((k) => /net|cost|discount|diskon|margin|remainder|percent/.test(k))).toEqual([]);
-    expect(JSON.stringify(row)).not.toContain(String(NET_COST_SENTINEL));
+    expect(containsAmount(row, NET_COST_SENTINEL)).toBe(false);
     const readBack = await owner.from("invoice_snapshots").select("*").eq("id", snap).single();
-    expect(JSON.stringify(readBack.data)).not.toContain(String(NET_COST_SENTINEL));
+    expect(containsAmount(readBack.data, NET_COST_SENTINEL)).toBe(false);
   });
 
   it("is idempotent: a repeated call returns the same snapshot and consumes no number", async () => {
@@ -284,6 +284,6 @@ describe("record_export audits a CSV export (PR-16)", () => {
     expect(error).toBeNull();
     expect(data).toHaveLength(1);
     expect(data![0]).toMatchObject({ quote: { courier: "JT", service: "REG" }, labels: [], customer_charge_idr: CHARGE_SENTINEL });
-    expect(JSON.stringify(data)).not.toContain(String(NET_COST_SENTINEL));
+    expect(containsAmount(data, NET_COST_SENTINEL)).toBe(false);
   });
 });

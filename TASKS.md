@@ -838,6 +838,13 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Allowed Paths:** `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, `next.config.ts`, `src/**` (only where an upgrade requires it), `tests/**`, `Dockerfile`, `README.md`, `ARCHITECTURE.md`, `TASKS.md`, `STATUS.md`
 - **Done when:** next, react, react-dom, tailwindcss, @tailwindcss/postcss, typescript, @types/*, vitest, @playwright/test, radix-ui, lucide-react, cn, shadcn, @supabase/postgrest-js at their current latest release (or a documented reason to hold); typecheck, unit, full DB, Docker image build (next build), bundle scan, environment check and e2e at 390/1280 pass; ARCHITECTURE stack line updated.
 
+### [x] T-103 — Explicit confirmation for destructive local DB reset (2026-11-05)
+- **Primary requirement:** NFR-1
+- **Constraints:** On 2026-11-05 the parent ran `pnpm db:verify` as a check after applying migrations to the local `gxdb`; it silently ran `db-migrate.sh --reset`, dropping local data (restored from the backup taken two minutes earlier; row counts and migration checksums matched). A command named "verify" must not destroy data by default.
+- **Risk Level:** R2
+- **Allowed Paths:** `scripts/db-migrate.sh`, `scripts/db-verify.sh`, `README.md`, `TASKS.md`, `STATUS.md`, `tests/unit/**`; scope expansion `tests/db/helpers.ts`, `tests/db/masked-label.test.ts`, `tests/db/invoice-export.test.ts` (sentinel substring false positive found by the full DB gate)
+- **Done when:** `--reset` (and therefore `db:reset` and `db:verify`) refuses unless `GX_CONFIRM_RESET` equals the target database name, before any database call; README marks both commands destructive and points to `scripts/test-backend-isolated.mjs` for tests that must not touch `gxdb`; a unit test proves refusal without/with a wrong confirmation and pass-through with the right one.
+
 ### Deferred — Multi-cabang owner (Super Admin → owner → cabang admins), DEC-024 (3)
 Not scheduled. Today one gerai = one cabang with its own admin; another cabang registers separately.
 

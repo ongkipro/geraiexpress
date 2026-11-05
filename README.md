@@ -81,10 +81,14 @@ pnpm db:migrate   # applies only new migrations; serializes deploys and refuses 
 pnpm db:areas     # T-100 (owner 2026-11-05): owner-only load of committed Mengantar gzip; validated upsert, never delete
 pnpm db:backup /secure/path/gxdb.dump  # custom-format archive; exclusive create, mode 0600 (or set BACKUP_DIR)
 pnpm db:restore-check /secure/path/gxdb.dump gxrestore_drill # NEW scratch DB, row counts + ledger, then drop
-pnpm db:reset     # drops and recreates database gxdb, then migrates (loopback host and gx* name only; no seed)
-pnpm db:verify    # lock, reset, seed, restart PostgREST, wait until ready, then vitest tests/db (or the args you pass)
+GX_CONFIRM_RESET=gxdb pnpm db:reset   # DESTRUCTIVE: drops and recreates gxdb, then migrates (loopback host and gx* name only; no seed)
+GX_CONFIRM_RESET=gxdb pnpm db:verify  # DESTRUCTIVE: lock, reset, seed, restart PostgREST, wait, then vitest tests/db (or the args you pass)
 pnpm db:down      # stops the stack and removes its volume
 ```
+
+`--reset` (used by `db:reset` and `db:verify`) refuses unless `GX_CONFIRM_RESET` names the database it
+will drop, so a verification command can never silently wipe local data; back up first. For tests that
+must not touch `gxdb`, use `node scripts/test-backend-isolated.mjs` (disposable containers).
 
 Backup/restore scripts default to local gxdb; export operator `DATABASE_URL` for a remote server with PostgreSQL
 17 client tools on PATH (password passed via libpq environment, never argv). Quiesce writers for count comparison.
@@ -216,7 +220,8 @@ Whether the seeded rows and `tests/totp.ts` agree for the admin e2e is not estab
 
 ```bash
 pnpm typecheck && pnpm test:unit
-pnpm db:verify                                # plain PostgreSQL stack: reset + seed + restart PostgREST + tests/db
+node scripts/test-backend-isolated.mjs       # tests/db against disposable PostgreSQL + PostgREST containers (gxdb untouched)
+GX_CONFIRM_RESET=gxdb pnpm db:verify         # DESTRUCTIVE: resets the local gxdb, then seed + PostgREST restart + tests/db
 pnpm exec vitest run tests/db/privileges.test.ts   # catalog test: function signatures, relation sweep, seed marker
 export APP_ORIGIN=http://127.0.0.1:8080         # local build only; choose the real app host for deploys
 pnpm build && pnpm check:bundle               # standalone output in .next/standalone; bundle and baked-secret scan

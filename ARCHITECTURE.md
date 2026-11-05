@@ -1124,7 +1124,7 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
 | Quote reuse | `request_quotes` returns the unexpired set of the current revision instead of inserting another (migration `20261014090000`) | `tests/db/shipment-flow.test.ts` |
 | Presentation | shadcn/ui (radix base, rhea style) remapped to UI-2 tokens; system font; Tailwind names `text-base/sm/xs/xl/3xl` carry the UI-2 sizes so `cn()` merges correctly; ≥44px targets | e2e touch-target, overflow and keyboard checks at 390/768/1280 |
 | Identity of tenants and references | Tenant slug and shipment prefix immutable by trigger; references from per-tenant per-day counters; a slug authorizes nothing | `tests/db/tenant-slug-reference.test.ts` (parallel drafts, isolation) |
-| Privilege catalog | Signature-based EXECUTE allowlists, table and relation sweeps, `'40001'` sweep, seed marker | `tests/db/privileges.test.ts` (run with `pnpm exec vitest run tests/db/privileges.test.ts` after a `pnpm db:reset`; also part of `pnpm test:db`) |
+| Privilege catalog | Signature-based EXECUTE allowlists, table and relation sweeps, `'40001'` sweep, seed marker | `tests/db/privileges.test.ts` (run with `pnpm exec vitest run tests/db/privileges.test.ts` after `GX_CONFIRM_RESET=gxdb pnpm db:reset` (destructive), or in the disposable stack of `node scripts/test-backend-isolated.mjs`; also part of `pnpm test:db`) |
 
 ## Not implemented (gated)
 

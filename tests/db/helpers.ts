@@ -218,3 +218,4 @@ export async function realOperation(opts: { tenant?: string; outlet?: string; co
   return { tenant, shipment, op };
 }
 
+export { containsAmount } from "../contains-amount";

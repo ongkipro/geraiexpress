@@ -9,6 +9,23 @@ Independent-Review: wave 3 source runs T-084, T-086, T-087 and T-102 closed PASS
 Independent-Reviewer: separate reviewer per run (T-084 9f57d07f, T-086 a997d52b, T-087 6866779d, T-102 3f723e5f)
 Independent-Review-Head: merges 3202184 (T-102), b16edc6 (T-084), 35f3f13 (T-087), 844f2ca (T-086) on feat/counter-ops-2026-11; this handoff is a separate docs-only run.
 
+## T-103 Local gxdb reset guard (local tooling)
+
+After the wave 3 push the parent applied migrations 20261105120000–170000 to the local `gxdb` (backup
+`/data/backups/geraiexpress/gxdb-before-wave3-20261105T071055Z.dump`, SHA-256 in `.sha256`), then ran
+`pnpm db:verify` as a check without reading it; it reset and reseeded `gxdb`. Recovered with owner
+approval: drop/create from template0, `pg_restore --single-transaction` of that backup,
+`db:restore-check` (38 tables row counts MATCH, 56 migration checksums MATCH), `pnpm db:up` (6 migrations
+applied, checksums equal the files), catalogue reload `changed=0` (79,391 rows), PostgREST 200. The
+`--reset` path now requires `GX_CONFIRM_RESET=<database>`.
+The T-103 full DB gate also exposed a latent test false positive: the net-cost sentinel 13579 matched
+`created_at` microseconds as a JSON substring in `tests/db/masked-label.test.ts`. Sentinel checks in
+that file and `tests/db/invoice-export.test.ts` now use `containsAmount` (JSON numbers, or digit runs
+in strings not adjacent to other digits; timestamp and UUID strings are skipped; unit-tested controls). The first T-103 run closed BLOCKED (the
+ledger rejects scope expansions after any historical FAIL; dotfiles follow-up), and a fresh run
+carries the same surface. The ledger also reported one boundary PASS while a just-recorded check had
+FAILED; that boundary was not used (dotfiles follow-up).
+
 ## Wave 3 and T-102: T-084, T-087, T-086, framework upgrade (PASS; integrated, not deployed)
 
 Four worktrees, one passing ledger run each, migrations 20261105150000 (masking acceptance),
