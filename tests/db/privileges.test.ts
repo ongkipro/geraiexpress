@@ -38,10 +38,16 @@ const AUTHENTICATED_EXECUTE = [
   "public.begin_partner_seller_key_recovery(uuid)",
   "public.begin_partner_seller_onboarding(uuid,text,text,text,text,text,boolean)",
   "public.billable_weight_rules(uuid)",
+  // T-086: member read of returns/open cases for dashboard and shell; bounded limit.
+  "public.case_attention(uuid,integer)",
+  // T-086: member read of the sourced claim-window rules (private table, no actor id).
+  "public.claim_window_rules(uuid)",
   "public.close_ambiguous_pickup_reservation(uuid,text)",
   // T-083: member closes an outlet cash period with a server-computed expected cash.
   "public.close_cash_period(uuid,bigint)",
   "public.close_failed_operation(uuid,text)",
+  // T-086: tenant administrator only; outcome required, amount only with a compensation.
+  "public.close_shipment_case(uuid,text,bigint,text,text)",
   "public.close_unknown_batch_payment(uuid,uuid,text)",
   "public.confirm_shipment(uuid,uuid,integer,text,integer)",
   // Per-record charge/void administrative details (T-082); current tenant administrator only.
@@ -54,6 +60,8 @@ const AUTHENTICATED_EXECUTE = [
   "public.invite_member(uuid,text,text)",
   "public.my_account_state()",
   "public.my_invitations()",
+  // T-086: member opens one non-closed case on an issued shipment; deadline computed in SQL.
+  "public.open_shipment_case(uuid,text,text,text,text[],text,text,timestamp with time zone)",
   "public.partner_onboarding_status(uuid)",
   "public.platform_add_declaration_text(text,text[],text,boolean,text)",
   "public.platform_admins()",
@@ -116,6 +124,8 @@ const AUTHENTICATED_EXECUTE = [
   "public.tenant_invitations_list(uuid)",
   "public.tenant_logo(uuid)", // T-096: member-scoped read; version rows have no direct grants.
   "public.tenant_members(uuid)",
+  // T-086: member updates a non-closed case with a revision fence; deadline recomputed in SQL.
+  "public.update_shipment_case(uuid,integer,text,text,text,text[],text,text,timestamp with time zone)",
   // Counter payment void (T-082); tenant administrator only, reason required, row kept.
   "public.void_counter_payment(uuid,text)",
   "public.withdraw_application(uuid,integer)",
@@ -352,7 +362,7 @@ describe("table sweep (DIL-12)", () => {
 
   it("covers the whole public schema", () => {
     expect(tables().length).toBeGreaterThanOrEqual(14);
-    expect(tables().map((table) => table.name)).toEqual(expect.arrayContaining(["cash_period_events", "cash_periods", "counter_payments"]));
+    expect(tables().map((table) => table.name)).toEqual(expect.arrayContaining(["cash_period_events", "cash_periods", "counter_payments", "shipment_case_events", "shipment_cases"]));
   });
 
   it("anon holds no privilege on any public table, view, materialized view, foreign table or column", () => {

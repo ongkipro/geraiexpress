@@ -6,6 +6,7 @@ const LABELS: Record<string, string> = {
   "/pengiriman/baru": "Buat pengiriman",
   "/pengiriman/cetak": "Cetak label massal",
   "/kas": "Kas",
+  "/kasus": "Kasus",
   "/kontak": "Kontak",
   "/anggota": "Anggota",
   "/pengaturan": "Pengaturan",
@@ -23,6 +24,7 @@ const LABELS: Record<string, string> = {
 const RECORD: Record<string, string> = {
   "/pengiriman": "Detail",
   "/kontak": "Detail",
+  "/kasus": "Detail kasus",
   "/admin/tenant": "Detail gerai",
   "/admin/diskon": "Atur diskon",
 };

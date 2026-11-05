@@ -23,7 +23,7 @@ const PATHS: Record<RouteFamily, string[]> = {
   signin: ["/masuk"],
   tenant: [
     "/akses", "/pilih-gerai", "/undangan", "/daftar", "/daftar/gerai", "/daftar/kata-sandi", "/pengiriman",
-    "/kas", "/pengiriman/baru", "/pengiriman/abc/label", "/kontak", "/kontak/abc", "/pengaturan", "/anggota",
+    "/kas", "/kasus", "/kasus/abc", "/pengiriman/baru", "/pengiriman/abc/label", "/kontak", "/kontak/abc", "/pengaturan", "/anggota",
     "/api/mengantar/area",
   ],
   platform: ["/admin", "/admin/pengajuan", "/admin/integrasi", "/admin/akses", "/admin/audit", "/verifikasi-2fa"],

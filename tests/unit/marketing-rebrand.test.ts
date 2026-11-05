@@ -218,6 +218,7 @@ describe("Public marketing claims are approved and implemented (PR-35, T-036)", 
       disallow: [
         "/pengiriman",
         "/kas",
+        "/kasus",
         "/kontak",
         "/pengaturan",
         "/anggota",

@@ -14,3 +14,13 @@ export const attentionCount = cache(async (tenantId: string): Promise<number | n
     .eq("tenant_id", tenantId).in("submission_state", ATTENTION_STATES);
   return error ? null : (count ?? 0);
 });
+
+// T-086 / UX-20 item 1: returning shipments and non-closed cases, for the "Kasus" nav badge. Null
+// when unreadable (the badge hides). Cases open only on issued shipments, so this never double-counts
+// the submission-state tier above.
+export const caseAttentionCount = cache(async (tenantId: string): Promise<number | null> => {
+  const db = await dbServer();
+  const { data, error } = await db.rpc("case_attention", { p_tenant: tenantId, p_limit: 1 });
+  const count = (data as { count?: unknown } | null)?.count;
+  return error || typeof count !== "number" ? null : count;
+});

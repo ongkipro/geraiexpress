@@ -8,7 +8,7 @@ import { SubmitButton } from "@/components/submit-button";
 import type { NavItem } from "@/components/workspace-nav";
 import { resetDemoAction, signOutAction } from "@/lib/auth-actions";
 import { TENANT_COOKIE, requireWorkspace } from "@/lib/workspace";
-import { attentionCount } from "@/modules/shell/attention";
+import { attentionCount, caseAttentionCount } from "@/modules/shell/attention";
 
 // UX-11: leave the current gerai without signing out. Only the selector cookie is cleared; the
 // session stays, and /pilih-gerai lists the memberships and validates the next choice against them.
@@ -31,13 +31,14 @@ function personInitials(email: string | null, fallback: string): string {
 export async function WorkspaceFrame({ children }: { children: React.ReactNode }) {
   const ws = await requireWorkspace();
   const hasSeveralGerai = ws.activeMembershipCount > 1;
-  const attention = await attentionCount(ws.tenant.id);
+  const [attention, caseAttention] = await Promise.all([attentionCount(ws.tenant.id), caseAttentionCount(ws.tenant.id)]);
   const gerai = ws.tenant.name.trim().charAt(0).toUpperCase() || "G";
   // DEC-008: member management is a tenant-admin page of a real gerai.
   const items: NavItem[] = [
     { href: "/", label: "Dashboard", icon: "layout-dashboard" },
     { href: "/pengiriman", label: "Pengiriman", icon: "package", group: "Kirim", count: attention },
     { href: "/pengiriman/baru", label: "Buat pengiriman", icon: "package-plus", group: "Kirim" },
+    { href: "/kasus", label: "Kasus", icon: "cases", group: "Kirim", count: caseAttention },
     { href: "/kas", label: "Kas", icon: "audit", group: "Data" },
     { href: "/kontak", label: "Kontak", icon: "contacts", group: "Data" },
     ...(ws.role === "tenant_admin" && !ws.isDemo ? [{ href: "/anggota", label: "Anggota", icon: "members", group: "Pengelolaan" } as NavItem] : []),

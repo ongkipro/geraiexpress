@@ -77,6 +77,7 @@ export const NOINDEX_HEADER = "noindex, nofollow";
 const APP_PATHS_DISALLOWED = [
   "/pengiriman",
   "/kas",
+  "/kasus",
   "/kontak",
   "/pengaturan",
   "/anggota",

@@ -27,6 +27,8 @@ export type ShipmentRecord = {
   content_declared_by_email?: string | null;
   content_declared_at?: string | null;
   submitted_at: string | null;
+  // Provider delivery dimension; 'returned' is set once T-045 ingests return events (UX-20 item 1).
+  delivery_state?: string | null;
   selected_quote_id: string | null;
   pickup_snapshot: unknown;
 };

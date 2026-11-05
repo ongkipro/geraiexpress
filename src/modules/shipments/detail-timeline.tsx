@@ -22,6 +22,9 @@ const EVENT_LABEL: Record<string, string> = {
   pickup_reserved: "Slot jemput dipesan",
   payment_count_mismatch: "Jumlah pembayaran berbeda",
   payment_closed: "Pembayaran ditutup admin",
+  // T-086: case lifecycle on the shipment history (details live on the case).
+  case_opened: "Kasus dibuka",
+  case_closed: "Kasus ditutup",
 };
 
 // Dot tone on the spine; the event name always carries the meaning in text.

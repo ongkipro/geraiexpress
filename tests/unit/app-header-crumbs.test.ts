@@ -9,6 +9,8 @@ describe("crumbsFor", () => {
 
   it("labels known gerai routes and names a record by its list", () => {
     expect(crumbsFor("/kas")).toEqual([{ href: "/kas", label: "Kas" }]);
+    expect(crumbsFor("/kasus")).toEqual([{ href: "/kasus", label: "Kasus" }]);
+    expect(crumbsFor("/kasus/abc").map((c) => c.label)).toEqual(["Kasus", "Detail kasus"]);
     expect(crumbsFor("/pengiriman")).toEqual([{ href: "/pengiriman", label: "Pengiriman" }]);
     expect(crumbsFor("/pengiriman/baru").map((c) => c.label)).toEqual(["Pengiriman", "Buat pengiriman"]);
     const id = "00000000-0000-4000-e000-00000000000a";

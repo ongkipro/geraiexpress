@@ -106,7 +106,7 @@ export const ROUTE_FAMILIES: Readonly<Record<RouteFamily, PathRule>> = {
   signin: { exact: ["/masuk"], prefixes: [] },
   tenant: {
     exact: ["/kas", "/akses", "/pilih-gerai", "/undangan", "/api/mengantar/area"],
-    prefixes: ["/daftar", "/pengiriman", "/kontak", "/pengaturan", "/anggota"],
+    prefixes: ["/daftar", "/pengiriman", "/kasus", "/kontak", "/pengaturan", "/anggota"],
   },
   // `/verifikasi-2fa` follows the platform class: the second factor protects the platform workspace.
   platform: { exact: ["/verifikasi-2fa"], prefixes: ["/admin"] },

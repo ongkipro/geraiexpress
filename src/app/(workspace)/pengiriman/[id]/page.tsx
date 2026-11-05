@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Notice } from "@/components/notice";
 import { dbServer } from "@/lib/db/server";
 import { requireWorkspace } from "@/lib/workspace";
+import { ShipmentCaseCard } from "@/modules/cases/shipment-case-card";
 import { COUNTER_PAYMENT_COLUMNS, CounterPaymentCard, type CounterPaymentRecord, type CounterPaymentAdminDetails } from "@/modules/payments/counter-payment-card";
 import { geraiCostForQuote } from "@/modules/pricing/gerai-cost";
 import { ShipmentFacts } from "@/modules/shipments/detail-facts";
@@ -91,6 +92,8 @@ export default async function ShipmentPage({
             payments={(counterPayments ?? []) as CounterPaymentRecord[]}
             adminDetails={(paymentAdminDetails ?? []) as CounterPaymentAdminDetails[]}
           />}
+          {/* T-086 / UX-20 items 1-2: return state and the shipment's case. */}
+          <ShipmentCaseCard tenantId={ws.tenant.id} shipment={shipment} courier={quote?.courier ?? null} viewerId={ws.userId} isAdmin={isAdmin} isDemo={ws.isDemo} />
           <ShipmentFacts s={shipment} quote={quote} op={operation} pickup={pickup} isPickup={isPickup} reservationText={reservationText} geraiCost={geraiCost} viewerId={ws.userId} />
         </div>
         <ShipmentTimeline events={(events ?? []) as ShipmentEvent[]} className="xl:sticky xl:top-8" />

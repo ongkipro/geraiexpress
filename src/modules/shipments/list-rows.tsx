@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/status-badge";
 import { courierName, formatIdr, formatWibShort } from "@/lib/format";
+import { CaseBadge, caseMark } from "@/modules/cases/case-badge";
 
 export type ShipmentRow = {
   id: string;
@@ -22,7 +23,12 @@ export type ShipmentRow = {
   updated_at: string;
   is_simulated: boolean;
   quote: { courier: string; service: string } | null;
+  // T-086: provider delivery dimension and the non-closed case (at most one per shipment).
+  delivery_state?: string | null;
+  cases?: { case_type: string; state: string }[] | null;
 };
+
+const rowMark = (s: ShipmentRow) => caseMark(s.delivery_state, s.cases?.find((c) => c.state !== "closed")?.case_type ?? null);
 
 // Resi + invoice (T-047) is offered for a real issued shipment with an AWB only, like the label.
 const printable = (s: ShipmentRow) => !s.is_simulated && s.submission_state === "issued" && Boolean(s.awb);
@@ -69,7 +75,7 @@ export function ShipmentRows({ rows }: { rows: ShipmentRow[] }) {
                   <span className="font-semibold tabular [overflow-wrap:anywhere]" data-testid="shipment-ref">{s.reference}</span>
                   {s.is_cod ? <CodBadge /> : null}
                 </span>
-                <StatusBadge state={s.submission_state} />
+                <span className="flex shrink-0 flex-wrap justify-end gap-1"><StatusBadge state={s.submission_state} /><CaseBadge mark={rowMark(s)} /></span>
               </span>
               <span className="truncate text-[15px]">
                 {s.recipient_name ?? "Penerima belum diisi"}
@@ -121,7 +127,7 @@ export function ShipmentRows({ rows }: { rows: ShipmentRow[] }) {
                   <span className="block truncate">{s.recipient_name ?? "—"}</span>
                   <span className="block truncate text-sm text-muted-foreground">{s.recipient_area ?? "Alamat belum diisi"}</span>
                 </TableCell>
-                <TableCell><StatusBadge state={s.submission_state} /></TableCell>
+                <TableCell><span className="flex flex-wrap gap-1"><StatusBadge state={s.submission_state} /><CaseBadge mark={rowMark(s)} /></span></TableCell>
                 <TableCell className="hidden max-w-[200px] lg:table-cell">
                   <span className="block truncate">{service(s) ?? "—"}</span>
                   <span className="block truncate text-sm text-muted-foreground tabular">{s.awb ?? "Belum ada resi"}</span>

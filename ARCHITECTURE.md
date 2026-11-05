@@ -547,6 +547,34 @@ observed. Counts and executed checks are under "Verified counts and gates".
   DB/unit/e2e coverage is added in source-named cash-period tests, including a deterministic blocked
   payment/close race and 390/1280 screenshots. Executed and independently reviewed; results are
   recorded in STATUS.md. PR-45 pilot reporting is not part of this slice.
+- **Return and claim cases (T-086, manual flow before T-045; implementation present, runtime verification pending).**
+  `20261105170000_return_claim_cases.sql` adds `private.claim_window_rules` (no API-role grant;
+  seeded from Mengantar help 8140017, updated 2026-09-18, with URL and date, unit `working_days`,
+  `days` or `hours`, anchor `last_status`, `delivered` or `rts`, optional JNE region), member-readable
+  `shipment_cases` and append-only `shipment_case_events` (immutable-history guard, same-tenant
+  composite FKs, RPC-only writes). Anchors are seeded only where the source states them
+  (SiCepat, iDexpress, AnterAja, Pos from the last status; SPX from RTS); JNE 45/60 working days,
+  SAP 60 days, J&T/Lion 30 days and the iDexpress/J&T 3x24 h lost-claim window have no stated anchor,
+  so their `deadline_at` stays NULL ("Tenggat tidak diketahui"); the 7–15 day dispute range is not
+  seeded. Before T-045 no provider status exists, so staff may enter the anchor instant (WIB) read
+  from the Mengantar app; it is stored with `anchor_entered_by/at` and shown "dimasukkan petugas".
+  `open_shipment_case` (member, issued shipments only) and `update_shipment_case` (member, revision
+  fence) compute `rule_id`/`deadline_at` in SQL every time (`private.claim_deadline`, mirrored by
+  `src/modules/cases/deadline.ts` for display and unit tests; working days skip Saturday/Sunday on
+  the WIB calendar, holidays are not excluded and the screen says so). A partial unique index keeps
+  one non-closed case per shipment (stricter than DATA-15's per-type wording: one counter
+  conversation per parcel); a race loser gets `case_open_exists` (55000). `close_shipment_case` is
+  tenant-admin only, requires an outcome, and requires amount plus deciding party (`courier` or
+  `mengantar`) only for `compensated`. Every transition appends an event and `private.audit`; open
+  and close also add a shipment timeline event. Errors are 55000/22023/P0002/42501, never 40001.
+  `/kasus` (open/closed filter) and `/kasus/[id]` are tenant routes in the host matrix, nav (with a
+  count from `case_attention`), crumbs and robots; the shipment detail shows "Retur dan kasus" with
+  the return-destination rule, the list rows a "Retur"/"Kasus terbuka" badge and the dashboard a
+  "Retur dan kasus" region. "Retur" derives from `delivery_state = 'returned'` (never set before
+  T-045) or a non-closed return case. The 14-day processing ceiling (help 5207011) and exclusions
+  (help 6046101) are information copy; `tests/unit/cases-copy.test.ts` proves no promise wording and
+  no rupiah amount in case copy. Deferred to T-045: the Lost-status case suggestion (no status
+  source exists) and return events; the 3x24 h window computation is unit-tested.
 - **Counter payments and receipts (T-082, verified locally).**
   `20261104120000_counter_payments.sql` adds member-readable, RPC-only `counter_payments` and
   `cash_periods`. Payment reads are column-scoped: members receive payment/receipt facts, not stored
@@ -829,7 +857,7 @@ API.
 | Audience (host) | Routes served | Access |
 |---|---|---|
 | Public (apex `geraiexpress.com`, `staging.`) | `/` (marketing, without session resolution), `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`, `/robots.txt`, `/sitemap.xml`, `/healthz` | No session; the proxy resolves no session on this host |
-| Gerai application (`app.`, `app-staging.`) | `/` (gerai dashboard after account/workspace checks), `/masuk`, `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/undangan`, `/akses`, `/pilih-gerai`, `/api/mengantar/area`, `/robots.txt`, `/healthz`, and the workspace: `/pengiriman`, `/pengiriman/baru`, `/pengiriman/cetak`, `/pengiriman/[id]`, `/pengiriman/[id]/label`, `/pengiriman/[id]/invoice`, `/pengiriman/[id]/struk`, `/pengiriman/export.csv`, `/kas`, `/kontak`, `/kontak/[id]`, `/pengaturan`, `/anggota` | Workspace group: verified active membership; tenant from the `ge_tenant` selector validated against memberships; `/anggota` and the CSV export are tenant admin only |
+| Gerai application (`app.`, `app-staging.`) | `/` (gerai dashboard after account/workspace checks), `/masuk`, `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/undangan`, `/akses`, `/pilih-gerai`, `/api/mengantar/area`, `/robots.txt`, `/healthz`, and the workspace: `/pengiriman`, `/pengiriman/baru`, `/pengiriman/cetak`, `/pengiriman/[id]`, `/pengiriman/[id]/label`, `/pengiriman/[id]/invoice`, `/pengiriman/[id]/struk`, `/pengiriman/export.csv`, `/kas`, `/kasus`, `/kasus/[id]`, `/kontak`, `/kontak/[id]`, `/pengaturan`, `/anggota` | Workspace group: verified active membership; tenant from the `ge_tenant` selector validated against memberships; `/anggota` and the CSV export are tenant admin only |
 | Super Admin (`owner.`, `owner-staging.`) | `/`, `/masuk` (demo and registration hidden), `/verifikasi-2fa`, `/admin` (tenant directory with slug), `/admin/tenant/[id]` (masking control), `/admin/pengajuan`, `/admin/konfigurasi`, `/admin/pantau-pengajuan`, `/admin/pelanggan`, `/admin/pelanggan/[tenant]`, `/admin/integrasi`, `/admin/akses`, `/admin/audit`, `/admin/diskon`, `/admin/diskon/[tenant]`, `/robots.txt`, `/healthz` | Platform grant plus capability plus `aal2` with recent TOTP (`requirePlatform`) |
 | Hooks (`hooks.`, `hooks-staging.`) | the reserved prefix `/api/webhooks` (no route exists), `/healthz` | None today; cookies are stripped and none is set (the Send Email Hook route `/api/auth/send-email` was removed by T-066) |
 | Shared (loopback in a non-production build, or `HOST_SHARED_MODE=1`, e.g. the local container behind the local proxy profile) | Every route above on one origin (not the internal cron routes) | As the route's own audience |
