@@ -827,6 +827,13 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Depends On:** T-023
 - **Done when:** a migration creates the reference table with id/postal/name checks and search indexes plus a member-only search RPC; a loader script upserts the committed gzipped dataset (validated, idempotent, never deletes) into the local DB; the area route answers from the catalogue for every member (demo included; the demo intake keeps its free-text area/postal fields, a parent scope decision 2026-11-05 to avoid a second `recipient_area` field) and falls back to live Mengantar only when the catalogue has no match and the gerai is connected; DB tests (grants: no anon/insert, search ranking by kelurahan/kecamatan/kota/kode pos, limit) and unit tests (loader validation, route fallback); e2e area pick at 390 and 1280; ARCHITECTURE system map updated.
 
+### [ ] T-102 — Framework and toolchain to current releases (owner, 2026-11-05)
+- **Primary requirement:** NFR-1
+- **Constraints:** Owner (2026-11-05): "pastikan gerai express pakai next dan paket framework keseluruhan termasuk tailwind dan typescript terbaru". Exact pins stay exact (no ranges). TypeScript 7 ships no JavaScript compiler API; Next.js 16.4 type-checks through the project `tsc` CLI by default (`experimental.useTypeScriptCli`), so the upgrade is allowed only if `next build` (Docker image) and `tsc --noEmit` pass; any TypeScript-6-only consumer stays on `@typescript/typescript6`. Major upgrades of other packages need their release notes read; no unrelated refactors.
+- **Risk Level:** R3 (build toolchain, runtime framework)
+- **Allowed Paths:** `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, `next.config.ts`, `src/**` (only where an upgrade requires it), `tests/**`, `Dockerfile`, `README.md`, `ARCHITECTURE.md`, `TASKS.md`, `STATUS.md`
+- **Done when:** next, react, react-dom, tailwindcss, @tailwindcss/postcss, typescript, @types/*, vitest, @playwright/test, radix-ui, lucide-react, cn, shadcn, @supabase/postgrest-js at their current latest release (or a documented reason to hold); typecheck, unit, full DB, Docker image build (next build), bundle scan, environment check and e2e at 390/1280 pass; ARCHITECTURE stack line updated.
+
 ### Deferred — Multi-cabang owner (Super Admin → owner → cabang admins), DEC-024 (3)
 Not scheduled. Today one gerai = one cabang with its own admin; another cabang registers separately.
 

@@ -3,26 +3,12 @@
 // UX-14 item 2: below 640 px the issued shipment's actions stay in thumb reach in a bar pinned to the
 // bottom of the screen. While the bar is shown, the page's bottom scroll padding equals its height, so a
 // control that receives focus is scrolled clear of it and never sits underneath (WCAG 2.4.11).
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import { useStickyScrollPadding } from "@/lib/use-sticky-scroll-padding";
 
 export function StickyActionBar({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const bar = ref.current;
-    if (!bar) return;
-    const root = document.documentElement;
-    const update = () => {
-      // display:none (>= 640 px) reports 0, which clears the padding.
-      root.style.scrollPaddingBottom = bar.offsetHeight ? `${bar.offsetHeight + 8}px` : "";
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(bar);
-    return () => {
-      observer.disconnect();
-      root.style.scrollPaddingBottom = "";
-    };
-  }, []);
+  useStickyScrollPadding(ref);
   return (
     <div
       ref={ref}
