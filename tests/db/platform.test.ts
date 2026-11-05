@@ -10,6 +10,8 @@ import { DB_CONTAINER, DB_NAME, IDS, authService, client, demoVisitor, passwordU
 
 const TENANT_C = "00000000-0000-4000-b000-00000000000c";
 const ADMIN_2 = "00000000-0000-4000-a000-0000000000f2";
+// T-109: the tenant directory replaces the dropped platform_tenants() as the platform read probe.
+const DIRECTORY = { p_query: null, p_lifecycle: null, p_limit: 100, p_offset: 0 };
 
 describe("platform access boundary", () => {
   it("tenant, demo, signed-out and aal1 sessions are denied every platform read and command", async () => {
@@ -21,7 +23,7 @@ describe("platform access boundary", () => {
       noFactor: await signIn("admin-new@geraiexpress.test"),
     };
     for (const [who, c] of Object.entries(callers)) {
-      expect((await c.rpc("platform_tenants")).error, who).not.toBeNull();
+      expect((await c.rpc("platform_tenant_directory", DIRECTORY)).error, who).not.toBeNull();
       expect((await c.rpc("platform_admins")).error, who).not.toBeNull();
       expect((await c.rpc("platform_set_tenant_lifecycle", { p_tenant: TENANT_C, p_expected: "active", p_lifecycle: "suspended", p_reason: "probe probe" })).error, who).not.toBeNull();
       expect((await c.rpc("platform_set_grant", { p_email: "owner-a@geraiexpress.test", p_capabilities: ["access_governance"], p_reason: "probe probe" })).error, who).not.toBeNull();
@@ -33,12 +35,14 @@ describe("platform access boundary", () => {
 
   it("an aal2 platform administrator sees only the safe tenant projection", async () => {
     const admin = await signInAal2("admin@geraiexpress.test");
-    const { data, error } = await admin.rpc("platform_tenants");
+    const { data, error } = await admin.rpc("platform_tenant_directory", { ...DIRECTORY, p_query: "Gerai Uji" });
     expect(error).toBeNull();
-    const names = (data as { name: string }[]).map((t) => t.name);
-    expect(names).toEqual(expect.arrayContaining(["Gerai Uji A", "Gerai Uji B", "Gerai Uji C"]));
-    expect(names.some((n) => n.startsWith("Gerai Contoh"))).toBe(false);
-    expect(Object.keys((data as object[])[0]).sort()).toEqual(["created_at", "id", "lifecycle", "member_count", "name", "shipment_count"]);
+    const rows = (data as { rows: { name: string }[] }).rows;
+    expect(rows.map((t) => t.name)).toEqual(expect.arrayContaining(["Gerai Uji A", "Gerai Uji B", "Gerai Uji C"]));
+    const demos = (await admin.rpc("platform_tenant_directory", { ...DIRECTORY, p_query: "Gerai Contoh" })).data as { rows: { name: string }[] };
+    expect(demos.rows.some((t) => t.name.startsWith("Gerai Contoh"))).toBe(false);
+    expect(Object.keys(rows[0]).sort()).toEqual(["connected", "created_at", "id", "last_shipment_at", "lifecycle", "member_count", "name",
+      "open_problems", "pickup_ready", "shipment_prefix", "shipments_30d", "slug"]);
     // The platform role is not tenant membership: tenant data stays invisible.
     expect((await admin.from("contacts").select("id")).data).toEqual([]);
     expect((await admin.from("shipments").select("id").eq("tenant_id", IDS.tenantA)).data).toEqual([]);
@@ -52,14 +56,14 @@ describe("platform access boundary", () => {
     const me = sessionClient(login.session);
     expect((await me.from("platform_grants").insert({ user_id: user.id, capabilities: ["access_governance"] })).error).not.toBeNull();
     // Whatever an attacker could write into the identity's metadata is never read as authority.
-    sql(`update auth.users set raw_user_meta_data = '{"role":"super_admin","platform":true,"aal":"aal2"}'::jsonb,
+    sql(`update auth.users set
       raw_app_meta_data = raw_app_meta_data || '{"role":"super_admin","platform":true,"aal":"aal2","capabilities":["access_governance"]}'::jsonb where id = '${user.id}'`);
-    expect((await me.rpc("platform_tenants")).error?.message).toBe("platform_access_required");
+    expect((await me.rpc("platform_tenant_directory", DIRECTORY)).error?.message).toBe("platform_access_required");
     // A token minted after the tampering (refresh and a fresh sign-in) carries no platform authority either.
     const refreshed = await auth.refresh(login.session.refreshToken!);
     if (!refreshed.ok) throw new Error(`refresh: ${refreshed.reason}`);
     expect(await auth.verifyAccessToken(refreshed.session.accessToken)).toMatchObject({ ok: true, claims: { role: "authenticated", aal: "aal1" } });
-    expect((await sessionClient(refreshed.session).rpc("platform_tenants")).error?.message).toBe("platform_access_required");
+    expect((await sessionClient(refreshed.session).rpc("platform_tenant_directory", DIRECTORY)).error?.message).toBe("platform_access_required");
     const again = await auth.signInWithPassword({ email: user.email, password: user.password, captchaToken: undefined });
     if (!again.ok) throw new Error(`sign-in: ${again.reason}`);
     expect((await sessionClient(again.session).rpc("platform_admins")).error?.message).toBe("platform_access_required");
@@ -69,7 +73,9 @@ describe("platform access boundary", () => {
   it("a monitoring-only administrator cannot govern tenants or access", async () => {
     // An aal2 session (minted; real TOTP is T-065) without the capability is still refused.
     const c = await signInAal2("admin-new@geraiexpress.test");
-    expect((await c.rpc("platform_tenants")).error?.message).toBe("platform_access_required");
+    // The directory is a monitoring read; tenant governance (here its masking read) stays refused.
+    expect((await c.rpc("platform_tenant_directory", DIRECTORY)).error).toBeNull();
+    expect((await c.rpc("platform_tenant_masking", { p_tenant: TENANT_C })).error?.message).toBe("platform_access_required");
     expect((await c.rpc("platform_admins")).error?.message).toBe("platform_access_required");
     expect((await c.from("audit_events").select("id")).error).toBeNull(); // audit_review allowed
   });
@@ -106,7 +112,7 @@ describe("access governance (DEC-008)", () => {
     const admin = await signInAal2("admin@geraiexpress.test");
     expect((await admin.rpc("platform_set_grant", { p_email: "nobody@geraiexpress.test", p_capabilities: ["audit_review"], p_reason: "probe probe" })).error?.message).toBe("user_not_found");
     const admin2 = await signInAal2("admin-2@geraiexpress.test");
-    expect((await admin2.rpc("platform_tenants")).error).toBeNull();
+    expect((await admin2.rpc("platform_tenant_directory", DIRECTORY)).error).toBeNull();
     const rev = Number(sql(`select revision from public.platform_grants where user_id = '${ADMIN_2}'`));
     try {
       expect((await admin.rpc("platform_revoke_grant", { p_user: ADMIN_2, p_expected_revision: null, p_reason: "null revision probe" })).error?.message).toBe("stale_state");
@@ -114,13 +120,13 @@ describe("access governance (DEC-008)", () => {
       expect((await admin.rpc("platform_revoke_grant", { p_user: ADMIN_2, p_expected_revision: rev + 5, p_reason: "stale probe" })).error?.message).toBe("stale_state");
       expect((await admin.rpc("platform_revoke_grant", { p_user: ADMIN_2, p_expected_revision: rev, p_reason: "Uji pencabutan" })).error).toBeNull();
       // Same token, still aal2: access is gone because authority is read from the table.
-      expect((await admin2.rpc("platform_tenants")).error?.message).toBe("platform_access_required");
+      expect((await admin2.rpc("platform_tenant_directory", DIRECTORY)).error?.message).toBe("platform_access_required");
     } finally {
       expect((await admin.rpc("platform_set_grant", { p_email: "admin-2@geraiexpress.test",
         p_capabilities: ["tenant_governance", "platform_monitoring", "integration_operations", "access_governance", "audit_review"],
         p_reason: "Pulihkan fixture" })).error).toBeNull();
     }
-    expect((await admin2.rpc("platform_tenants")).error).toBeNull();
+    expect((await admin2.rpc("platform_tenant_directory", DIRECTORY)).error).toBeNull();
   });
 
   it("the last access governor with an authenticator cannot be revoked or demoted", async () => {
@@ -199,7 +205,7 @@ it("T-054 rejects a 13-hour-old or missing TOTP proof at the platform RPC bounda
   const now = Math.floor(Date.now() / 1000);
   for (const amr of [[], [{ method: "totp", timestamp: now - 13 * 3600 }], [{ method: "totp", timestamp: now + 60 }]]) {
     const c = dataClient(process.env.POSTGREST_URL!, mintJwt({ sub: "00000000-0000-4000-a000-0000000000f1", role: "authenticated", aal: "aal2", amr }));
-    expect((await c.rpc("platform_tenants")).error?.message).toBe("platform_access_required");
+    expect((await c.rpc("platform_tenant_directory", DIRECTORY)).error?.message).toBe("platform_access_required");
   }
-  expect((await (await signInAal2("admin@geraiexpress.test")).rpc("platform_tenants")).error).toBeNull();
+  expect((await (await signInAal2("admin@geraiexpress.test")).rpc("platform_tenant_directory", DIRECTORY)).error).toBeNull();
 });

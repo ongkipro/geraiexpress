@@ -393,14 +393,17 @@ describe("slug and prefix never authorize (TEN-6)", () => {
     expect(sql(`select has_function_privilege('authenticated', 'private.next_reference(uuid)', 'execute')`)).toBe("f");
   });
 
-  it("the slug list is a Super Admin read: tenant users are denied and demo tenants are not listed", async () => {
+  it("slugs are a Super Admin read: tenant users are denied and demo tenants are not listed", async () => {
+    // T-109: platform_tenant_slugs() is dropped; the tenant directory carries slug and prefix.
+    const args = { p_query: null, p_lifecycle: null, p_limit: 100, p_offset: 0 };
     const owner = await signIn("owner-a@geraiexpress.test");
-    expect((await owner.rpc("platform_tenant_slugs")).error).not.toBeNull();
+    expect((await owner.rpc("platform_tenant_directory", args)).error).not.toBeNull();
     const admin = await signInAal2("admin@geraiexpress.test");
-    const { data, error } = await admin.rpc("platform_tenant_slugs");
+    const { data, error } = await admin.rpc("platform_tenant_directory", { ...args, p_query: "gerai-uji-a" });
     expect(error).toBeNull();
-    const rows = data as { id: string; slug: string; shipment_prefix: string }[];
-    expect(rows.find((r) => r.id === IDS.tenantA)).toEqual({ id: IDS.tenantA, slug: "gerai-uji-a", shipment_prefix: "GERA" });
-    expect(rows.some((r) => /^demo-[0-9a-f]{8}$/.test(r.slug))).toBe(false);
+    const rows = (data as { rows: { id: string; slug: string; shipment_prefix: string }[] }).rows;
+    expect(rows.find((r) => r.id === IDS.tenantA)).toMatchObject({ id: IDS.tenantA, slug: "gerai-uji-a", shipment_prefix: "GERA" });
+    const demo = (await admin.rpc("platform_tenant_directory", { ...args, p_query: "demo-" })).data as { rows: { slug: string }[] };
+    expect(demo.rows.some((r) => /^demo-[0-9a-f]{8}$/.test(r.slug))).toBe(false);
   });
 });

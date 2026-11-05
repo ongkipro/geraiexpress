@@ -273,7 +273,9 @@ describe("registration gate (PR-29)", () => {
     expect(sql(`select count(*) from auth.users where email = '${probe}'`)).toBe("0");
     const probeSession = await auth.verifyEmailCode({ email: probe, code: probeCode.code, captchaToken: undefined });
     if (!probeSession.ok) throw new Error("probe not verified");
-    expect(sql(`select raw_user_meta_data::text from auth.users where email = '${probe}'`)).toBe("{}");
+    // T-109: no profile-metadata column exists; the only metadata column holds the server-written provider facts.
+    expect(sql(`select to_jsonb(u)::text from auth.users u where email = '${probe}'`)).not.toMatch(/planted|tenant_admin/);
+    expect(sql(`select raw_app_meta_data::text from auth.users where email = '${probe}'`)).not.toMatch(/planted|role/);
     expect(JSON.stringify(await auth.verifyAccessToken(probeSession.session.accessToken))).not.toContain("planted");
 
     // The attacker's only way to hold a password on a stranger's address is a row nobody confirmed.

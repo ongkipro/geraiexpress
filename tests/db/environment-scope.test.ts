@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { credentialAad, openCredential, sealCredential } from "../../src/lib/credential-crypto";
-import { listTenantIds, reencryptCredentials, tenantIdPage } from "../../src/lib/credential-keyring";
+import { reencryptCredentials, rewrapCandidatePage } from "../../src/lib/credential-keyring";
 import { IDS, client, demoVisitor, machine, realOperation, signIn, sql } from "./helpers";
 
 const OWNER_A = "00000000-0000-4000-a000-0000000000a1";
@@ -266,14 +266,49 @@ describe("rewrap_seller_credential (SEC-7 key ring)", () => {
     expect(prod).toMatchObject({ rewrapped: 1, failed: [] });
     expect((await open(b.tenant, "production")).row.key_version).toBe("v2");
 
-    // The tenant listing skips demo tenants.
+  });
+
+  it("lists only tenants whose active credential of this environment is below the current key (T-109)", async () => {
+    const worker = machine();
+    const rpc = (fn: string, args: Record<string, unknown>) => worker.rpc(fn, args);
+    const [old1, old2, current, prod] = [await realOperation(), await realOperation(), await realOperation(),
+      await realOperation({ credentialEnv: "production" })];
+    const none = await realOperation({ noCredential: true });
     const demo = await demoVisitor();
-    const ids = await listTenantIds(worker);
-    expect(ids).toContain(a.tenant);
-    expect(ids).not.toContain(demo.tenant);
-    // T-105: keyset pages resume strictly after the given id, in id order, bounded by the limit.
-    const page = await tenantIdPage(worker, ids[0], 2);
-    expect(page).toEqual(ids.slice(1, 3));
+    sql(`update private.seller_credentials set key_version = 'v3' where tenant_id = '${current.tenant}'`);
+    const all = async (env: string, version: string) => {
+      const ids: string[] = [];
+      for (;;) {
+        const page = await rewrapCandidatePage(rpc, env, version, ids.at(-1) ?? null, 1000);
+        ids.push(...page);
+        if (page.length < 1000) return ids;
+      }
+    };
+    const sandbox = await all("sandbox", "v2");
+    expect(sandbox).toEqual(expect.arrayContaining([old1.tenant, old2.tenant]));
+    // Current/higher, other-environment, credential-less and demo tenants are never candidates.
+    for (const skipped of [current.tenant, prod.tenant, none.tenant, demo.tenant]) expect(sandbox).not.toContain(skipped);
+    expect(sandbox).toEqual([...sandbox].sort());
+    expect(await all("production", "v2")).toContain(prod.tenant);
+    expect(await all("sandbox", "v1")).toEqual([]);
+    // Keyset pages resume strictly after the given id, in id order, bounded by the limit.
+    expect(await rewrapCandidatePage(rpc, "sandbox", "v2", sandbox[0], 2)).toEqual(sandbox.slice(1, 3));
+    // A rewrapped tenant leaves the set by itself.
+    expect(await reencryptCredentials({ rpc, key: RING, environment: "sandbox", tenantIds: [old1.tenant] })).toMatchObject({ rewrapped: 1 });
+    expect(await all("sandbox", "v2")).not.toContain(old1.tenant);
+    // Invalid input is refused (22023); callers other than the machine identity cannot call it.
+    for (const args of [{ p_env: "staging", p_current_version: "v2", p_after: null, p_limit: 10 },
+      { p_env: "sandbox", p_current_version: "2", p_after: null, p_limit: 10 },
+      { p_env: "sandbox", p_current_version: "v2", p_after: null, p_limit: 0 },
+      { p_env: "sandbox", p_current_version: "v2", p_after: null, p_limit: 1001 }]) {
+      expect((await worker.rpc("machine_rewrap_candidates", args)).error, JSON.stringify(args)).toMatchObject({ code: "22023", message: "invalid_input" });
+    }
+    for (const c of [client(), await signIn("owner-a@geraiexpress.test"), demo.c]) {
+      const refused = await c.rpc("machine_rewrap_candidates", { p_env: "sandbox", p_current_version: "v2", p_after: null, p_limit: 10 });
+      expect(refused.error?.code).toBe("42501");
+    }
+    // The machine identity reads no table directly any more.
+    expect(sql("select has_table_privilege('service_role', 'public.tenants', 'select')")).toBe("f");
   });
 });
 

@@ -9,8 +9,10 @@ import type { TaskResult } from "../../src/lib/mengantar/scheduled";
 const sweepMock = vi.fn<(...args: unknown[]) => Promise<SweepSummary>>();
 const rpcMock = vi.fn<(...args: unknown[]) => Promise<{ data: unknown; error: { message: string } | null }>>();
 const clientOptions = vi.fn();
-// tenantIdPage (T-057 rewrap, T-105 keyset) pages public.tenants through from().select().eq()[.gt()].order().limit().
-const tenantPages = vi.fn<(after: string | null, limit: number) => Promise<{ data: { id: string }[] | null; error: { message: string } | null }>>();
+// The rewrap selection (T-057 rewrap, T-105 keyset, T-109 RPC): machine_rewrap_candidates is answered by
+// tenantPages(after, limit); every other machine RPC goes to rpcMock. The machine identity reads no table.
+const tenantPages = vi.fn<(after: string | null, limit: number) => Promise<{ data: string[] | null; error: { message: string } | null }>>();
+const candidateArgs = vi.fn();
 
 vi.mock("server-only", () => ({}));
 vi.mock("@supabase/postgrest-js", () => ({
@@ -18,24 +20,15 @@ vi.mock("@supabase/postgrest-js", () => ({
     constructor(url: string, options: unknown) {
       clientOptions(url, options);
     }
-    rpc(...args: unknown[]) {
-      return rpcMock(...args);
+    rpc(fn: string, args: { p_after?: string | null; p_limit?: number }) {
+      if (fn === "machine_rewrap_candidates") {
+        candidateArgs(args);
+        return tenantPages(args.p_after ?? null, args.p_limit!);
+      }
+      return rpcMock(fn, args);
     }
     from(table: string) {
-      let after: string | null = null;
-      const chain = {
-        select: () => chain, eq: (column: string, value: unknown) => {
-          expect([table, column, value]).toEqual(["tenants", "is_demo", false]);
-          return chain;
-        },
-        gt: (column: string, value: string) => {
-          expect(column).toBe("id");
-          after = value;
-          return chain;
-        },
-        order: () => chain, limit: (limit: number) => tenantPages(after, limit),
-      };
-      return chain;
+      throw new Error(`unexpected table read: ${table}`);
     }
   },
 }));
@@ -66,6 +59,7 @@ beforeEach(() => {
   rpcMock.mockReset();
   tenantPages.mockReset();
   tenantPages.mockResolvedValue({ data: [], error: null });
+  candidateArgs.mockClear();
   clientOptions.mockClear();
   resetCronLocks();
   resetRewrapCursors();
@@ -299,7 +293,7 @@ describe("hourly credential rewrap (T-057, SEC-7)", () => {
   it("reads this environment's credential for every listed tenant and logs counts only", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const tenants = ["00000000-0000-4000-a000-0000000000c1", "00000000-0000-4000-a000-0000000000c2"];
-    tenantPages.mockResolvedValueOnce({ data: tenants.map((id) => ({ id })), error: null });
+    tenantPages.mockResolvedValueOnce({ data: tenants, error: null });
     rpcMock.mockResolvedValue({ data: null, error: null });
     await expect(runCredentialRewrap({ ...RING, MENGANTAR_ENV: "production" })).resolves.toBe("done");
     expect(rpcMock.mock.calls).toEqual(tenants.map((t) => ["machine_seller_key", { p_tenant: t, p_env: "production" }]));
@@ -308,6 +302,18 @@ describe("hourly credential rewrap (T-057, SEC-7)", () => {
       alreadyCurrent: 0, noCredential: 2, conflicts: 0, failed: 0, pending: false });
     for (const t of tenants) expect(line).not.toContain(t);
     expect(tenantPages).toHaveBeenCalledExactlyOnceWith(null, REWRAP_BATCH);
+    // T-109: the database selects only this environment's tenants below the ring's current key version.
+    expect(candidateArgs).toHaveBeenCalledExactlyOnceWith({ p_env: "production", p_current_version: "v2", p_after: null, p_limit: REWRAP_BATCH });
+  });
+
+  it("treats a malformed candidate list as a failed run, not as an empty one (T-109)", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    for (const data of [null, {}, [1], [{ id: "00000000-0000-4000-a000-0000000000c1" }]]) {
+      tenantPages.mockResolvedValueOnce({ data: data as string[] | null, error: null });
+      await expect(runCredentialRewrap(RING), JSON.stringify(data)).resolves.toBe("failed");
+    }
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(JSON.parse(String(log.mock.calls.at(-1)![0]))).toEqual({ event: "credential_rewrap", outcome: "failed", failed: true });
   });
 
   it("handles one bounded batch per run and resumes after it on the next run instead of restarting (T-105)", async () => {
@@ -316,7 +322,7 @@ describe("hourly credential rewrap (T-057, SEC-7)", () => {
     const all = Array.from({ length: REWRAP_BATCH + 3 }, (_, n) => id(n + 1));
     tenantPages.mockImplementation(async (after, limit) => {
       const start = after ? all.indexOf(after) + 1 : 0;
-      return { data: all.slice(start, start + limit).map((t) => ({ id: t })), error: null };
+      return { data: all.slice(start, start + limit), error: null };
     });
     rpcMock.mockResolvedValue({ data: null, error: null });
     await expect(runCredentialRewrap(RING)).resolves.toBe("partial");
@@ -340,7 +346,7 @@ describe("hourly credential rewrap (T-057, SEC-7)", () => {
     expect(rpcMock).not.toHaveBeenCalled();
     expect(JSON.parse(String(log.mock.calls.at(-1)![0]))).toEqual({ event: "credential_rewrap", outcome: "failed", failed: true });
 
-    tenantPages.mockResolvedValueOnce({ data: [{ id: "00000000-0000-4000-a000-0000000000c1" }], error: null });
+    tenantPages.mockResolvedValueOnce({ data: ["00000000-0000-4000-a000-0000000000c1"], error: null });
     rpcMock
       .mockResolvedValueOnce({ data: { deleted_tenants: 0, deleted_users: 0, has_more: false }, error: null })
       .mockResolvedValueOnce({ data: { sessions: 0, otp_codes: 0, remaining: false }, error: null })

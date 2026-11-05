@@ -100,9 +100,7 @@ const AUTHENTICATED_EXECUTE = [
   "public.platform_tenant_customers(uuid,text,integer,integer)",
   "public.platform_tenant_directory(text,text,integer,integer,text)",
   "public.platform_tenant_masking(uuid)",
-  "public.platform_tenant_slugs()",
   "public.platform_tenant_summary(uuid)",
-  "public.platform_tenants()",
   // T-085: member-only generation reservation and hash publication, locked to one shipment.
   "public.prepare_tracking_link(uuid)",
   "public.publish_tracking_link(uuid,uuid,text)",
@@ -186,12 +184,16 @@ const MACHINE_ONLY = [
   "public.dispatch_release_batch_payment(uuid)",
   "public.dispatch_stuck_counts()",
   "public.fence_partner_key_rotation(uuid,uuid,text,integer,text)",
+  // T-109: tenant ids whose active credential of an environment is below the current key version.
+  "public.machine_rewrap_candidates(text,text,uuid,integer)",
   "public.machine_seller_key(uuid,text)",
   "public.record_live_quotes(uuid,uuid,integer,jsonb,text,text)",
   "public.record_partner_key_rotation_outcome(uuid,uuid,text,integer,text,text,integer,text)",
   "public.record_partner_preflight_failure(uuid,uuid,text,integer,text,text,integer)",
   "public.record_partner_seller_onboarding_outcome(uuid,text,text,text,integer)",
   "public.rewrap_seller_credential(uuid,integer,text,text,text,text)",
+  // T-109: the newest applied migration version for /healthz; reads the runner ledger only.
+  "public.schema_version()",
   "public.store_partner_seller_key(uuid,uuid,text,integer,text,text,text,text,text,text)",
   "public.sync_partner_consent_versions(text,text,text)",
 ];
@@ -402,16 +404,16 @@ describe("table sweep (DIL-12)", () => {
     expect(granted.filter((v) => v.kind !== "v" || !invoker(v.options)).map((v) => v.name)).toEqual([]);
   });
 
-  it("service_role reads only public.tenants directly and holds no other table or column privilege (T-104)", () => {
-    // The machine identity bypasses RLS and writes only through SECURITY DEFINER RPCs. Its one direct
-    // read is the credential rewrap's tenant list (src/lib/credential-keyring.ts listTenantIds).
+  it("service_role holds no table or column privilege in public (T-104, T-109)", () => {
+    // The machine identity bypasses RLS and reads and writes only through SECURITY DEFINER RPCs. Its last
+    // direct read (the credential rewrap's tenant list) became machine_rewrap_candidates in T-109.
     const held = rows<{ name: string; privilege: string }>(`select c.relname as name, p.privilege from pg_class c
       cross join unnest(array['select', 'insert', 'update', 'delete', 'truncate', 'references', 'trigger', 'maintain']) p(privilege)
       where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p', 'v', 'm', 'f')
         and (has_table_privilege('service_role', c.oid, p.privilege)
           or (p.privilege in ('select', 'insert', 'update', 'references') and has_any_column_privilege('service_role', c.oid, p.privilege)))
       order by 1, 2`);
-    expect(held).toEqual([{ name: "tenants", privilege: "select" }]);
+    expect(held).toEqual([]);
   });
 
   it("authenticated has no table-level write privilege anywhere", () => {
@@ -562,10 +564,14 @@ describe("foundation roles and auth objects (T-064)", () => {
 
   it("auth tables carry the columns the SQL and the T-065 core need, and no API role can touch them", () => {
     const columns = (table: string) => sql(`select string_agg(column_name, ',' order by column_name) from information_schema.columns where table_schema = 'auth' and table_name = '${table}'`).split(",");
-    expect(columns("users")).toEqual(expect.arrayContaining([
+    // T-109: exactly the columns the SQL and the auth core use; the unused GoTrue-shaped columns are gone.
+    expect(columns("users").sort()).toEqual([
       "aud", "banned_until", "created_at", "deleted_at", "email", "email_change", "email_confirmed_at", "encrypted_password",
-      "id", "instance_id", "is_anonymous", "last_sign_in_at", "phone", "phone_change", "raw_app_meta_data", "raw_user_meta_data", "role", "updated_at",
-    ]));
+      "id", "is_anonymous", "last_sign_in_at", "phone", "phone_change", "raw_app_meta_data", "role", "updated_at",
+    ]);
+    for (const dropped of ["instance_id", "confirmation_token", "recovery_token", "email_change_token_new", "raw_user_meta_data"]) {
+      expect(columns("users")).not.toContain(dropped);
+    }
     expect(columns("mfa_factors")).toEqual(expect.arrayContaining(["factor_type", "friendly_name", "id", "last_used_step", "secret_sealed", "status", "user_id", "verified_at"]));
     expect(sql(`select count(*) from pg_class c where c.relnamespace = 'auth'::regnamespace and c.relkind in ('r', 'p', 'v', 'm')
       and (has_table_privilege('anon', c.oid, 'select,insert,update,delete,truncate,references,trigger')
