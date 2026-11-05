@@ -163,6 +163,10 @@ Merge log (2026-11-06, `feat/counter-ops-2026-11`; pushed through `8e3a643`):
   typecheck/unit/db/upgrade PASS; full e2e r2 FAIL 16/480 at load 14-18; isolate-16 at load 6-10 17/17 PASS
   (`e2e-isolate`), no 57014/55P03 in tapped DB logs -> environmental (load), not T-109; the full e2e is re-proved
   on the M1 head. Reviews GPT-6.1 Sol 64271555 APPROVE (+2 P2 fixed), 2a291531 APPROVE.
+- T-110: commit `517b45a`, merge `ee7aebf` (unpushed; M1; INTERIM under the M1 contract). Run
+  `RUN-20261105T220407Z-df4814db` PASS on its own declared checks: typecheck, unit, db 609/609, upgrade 609/609
+  (after the test-only lock-boundary fix), review-boundary APPROVED c4340bd0. Docs handoff `a51b9f4` precedes it.
+  Next: INT-M1 (`.gx-wt/gx-integration.sh INT-M1`) on the M1 head, then the single M1 push if all green.
 
 Current task: integrating the post-wave-3 hardening set (T-104..T-111, T-055) onto
 `feat/counter-ops-2026-11`. Remote is at `e87e10a` (T-103). Nothing after that is pushed.

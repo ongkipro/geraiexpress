@@ -1380,3 +1380,14 @@ answers arriving after 5 s assertions). The 16 alone, in their failing viewports
 statement/lock timeout (57014/55P03) in the captured DB logs, so the failures are attributed to load, not to the new
 role timeouts. A partial run is not recorded as `e2e`; the run closed BLOCKED and the full e2e is re-proved on the
 M1 integrated head before any push. Merge `075cc85`.
+
+## 2026-11-06 — T-110 merged (Partner quota + restore fence); M1 assembled
+
+T-110 carried from base `b3a6129` onto the head with T-109 (`075cc85`); `EXPECTED_SCHEMA_VERSION` raised to
+`20261105200000`. GPT-6.1 Sol review: REQUEST_CHANGES (gate runner masked failures; quota clock read before the lock;
+HTTP 429 back-off depended on the body) -> fixed with regression tests -> APPROVE. On the carried head the DB suite
+failed one test: the lock-boundary regression held the partner advisory lock ~15 s, and T-109's `service_role`
+`lock_timeout` (10 s) cancelled the waiting reservation (55P03). The product already treats that RPC error as a
+denial (fail closed); the test now waits under 10 s. Then typecheck, unit, DB 609/609 and upgrade 609/609 PASS.
+Merge `ee7aebf`. M1 = T-109 + T-110 is integrated under the M1 contract: the single full e2e on this head decides
+the push.
