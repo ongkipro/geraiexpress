@@ -1,9 +1,11 @@
 import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { config } from "@/lib/config";
+import { randomUUID } from "node:crypto";
 import { scopeForHost } from "@/lib/hosts";
+import { logEvent, withCorrelation } from "./log";
 import type { MachineBindings } from "@/lib/mengantar/machine-deps";
-import { CRON_TASKS, machineBindings, type CronTask, type TaskResult } from "@/lib/mengantar/scheduled";
+import { CRON_TASKS, machineBindings, type CronTask, type TaskReport, type TaskResult } from "@/lib/mengantar/scheduled";
 
 // T-062 / DEC-020: the secret-protected internal route the scheduler container calls (POST
 // /api/internal/cron/dispatch every 5 minutes, /api/internal/cron/cleanup every hour for demo and auth
@@ -24,6 +26,11 @@ import { CRON_TASKS, machineBindings, type CronTask, type TaskResult } from "@/l
 //   6. Bounded execution: at DEADLINE_MS the response is 504, all scheduled database/provider requests
 //      are aborted and the lock expires. Every subsequent fetch refuses the aborted signal. A late
 //      completion cannot delete a newer run's lock; the DB's one-in-flight rule remains authoritative.
+//
+// T-105 response envelope (bounded, no secrets): `{ task, result, correlationId, steps? }`. `result` is
+// done | partial | disabled | failed | timeout | in_flight; `steps` names each step's outcome for a task
+// made of several (cleanup). Status: 200 for done/partial/disabled, 500 failed, 504 timeout, 409 in flight.
+// Every event of the run carries the same server-generated `correlationId` (src/lib/log.ts).
 export const DEADLINE_MS = 270_000;
 
 const LOCKS = Symbol.for("geraiexpress.cron-locks");
@@ -43,7 +50,7 @@ const json = (body: Record<string, unknown>, status: number, headers: Record<str
 const notFound = () => new Response("Not Found", { status: 404, headers: { "Cache-Control": "no-store" } });
 
 export type CronOptions = {
-  run?: Readonly<Record<string, (env: MachineBindings, signal?: AbortSignal) => Promise<TaskResult>>>;
+  run?: Readonly<Record<string, (env: MachineBindings, signal?: AbortSignal) => Promise<TaskResult | TaskReport>>>;
   deadlineMs?: number;
 };
 
@@ -57,11 +64,15 @@ export async function handleCron(request: Request, task: string, options: CronOp
   const table = options.run ?? CRON_TASKS;
   if (!Object.hasOwn(table, task)) return notFound();
   const name = task as CronTask;
+  const correlationId = randomUUID();
+  return withCorrelation(() => runTask(name, table, options.deadlineMs ?? DEADLINE_MS, correlationId), correlationId);
+}
 
+async function runTask(name: CronTask, table: NonNullable<CronOptions["run"]>, deadlineMs: number, correlationId: string): Promise<Response> {
   const locks = (holder[LOCKS] ??= new Map());
   if (locks.has(name)) {
-    console.log(JSON.stringify({ event: "cron_skipped", task: name, reason: "in_flight" }));
-    return json({ task: name, result: "in_flight" }, 409);
+    logEvent("cron_skipped", { task: name, reason: "in_flight" });
+    return json({ task: name, result: "in_flight", correlationId }, 409);
   }
   const token = Symbol(name);
   locks.set(name, token);
@@ -74,14 +85,16 @@ export async function handleCron(request: Request, task: string, options: CronOp
     controller.abort(new DOMException("Scheduled task deadline exceeded", "TimeoutError"));
     release();
     expire("timeout");
-  }, options.deadlineMs ?? DEADLINE_MS);
-  const result = await Promise.race([work.catch((): TaskResult => "failed"), deadline]);
+  }, deadlineMs);
+  const settled = await Promise.race([work.catch((): TaskResult => "failed"), deadline]);
   clearTimeout(timer);
-  if (result === "timeout") {
-    console.log(JSON.stringify({ event: "cron_timeout", task: name }));
-    return json({ task: name, result }, 504);
+  if (settled === "timeout") {
+    logEvent("cron_timeout", { task: name });
+    return json({ task: name, result: settled, correlationId }, 504);
   }
-  return json({ task: name, result }, result === "failed" ? 500 : 200);
+  const report = typeof settled === "string" ? { result: settled } : settled;
+  logEvent("cron_run", { task: name, ...report });
+  return json({ task: name, ...report, correlationId }, report.result === "failed" ? 500 : 200);
 }
 
 // Test hook: forget held locks.

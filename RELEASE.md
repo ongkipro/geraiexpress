@@ -37,8 +37,14 @@ Enable **Preserve repository during deployment**: the gateway bind-mounts
    contain the verified edge address. Local checks: `node scripts/test-coolify-proxy.mjs`
    and `node scripts/test-backend-isolated.mjs`.
 5. `/healthz` must return 200 with the database available, 503 during an isolated data-path
-   outage, and recover afterward. Its two-second probe checks SQL/schema readiness, not
-   provider entitlements or production mail. Record real public HTTPS, client-IP/forged-header,
+   outage, and recover afterward. Its two-second probe checks SQL/schema readiness and (T-105)
+   that the server configuration loads (PostgREST URL, auth secrets and CAPTCHA setting,
+   tracking secret), not provider entitlements, production mail or the schema version.
+   A production container with a missing or invalid required variable now refuses to start
+   (`startup_config_invalid` names the variables, never a value) and never becomes healthy:
+   check `docker compose logs app` before suspecting the database. `compose.yaml` stops the
+   app and the scheduler with a 300 s grace period (270 s cron deadline plus drain); a
+   deployment restart can take up to five minutes while a scheduled run finishes. Record real public HTTPS, client-IP/forged-header,
    host-routing and login smoke evidence on the deployed host before calling it verified.
 6. One app replica only. Coolify Compose does not provide a zero-downtime rollout guarantee;
    allow a maintenance window. Roll back by selecting the previous compatible image, without

@@ -23,6 +23,9 @@ services:
     image: *image
     logging: *logging
     restart: unless-stopped
+    # T-105: SIGTERM lets Next finish in-flight requests; a scheduled run may take up to its 270 s deadline
+    # (src/lib/cron.ts). 300 s covers that deadline plus persisting its outcome before Docker sends SIGKILL.
+    stop_grace_period: 300s
     environment:
       # Explicit allowlist: migration credentials and the PostgreSQL owner password
       # must never enter the application container through a shared env_file.
@@ -70,6 +73,9 @@ services:
     logging: *logging
     restart: unless-stopped
     command: ["node", "scheduler.mjs"]
+    # T-105: on SIGTERM the scheduler starts no new tick and waits for in-flight calls (each bounded by its
+    # 285 s call timeout, longer than the app's 270 s cron deadline) before exiting.
+    stop_grace_period: 300s
     environment:
       # The scheduler holds the cron secret only, never the app's other secrets.
       CRON_SECRET: ${CRON_SECRET:?CRON_SECRET must be set in the env file passed with --env-file}

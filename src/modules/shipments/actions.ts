@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { dbServer, machineClient } from "@/lib/db/server";
-import { friendlyError } from "@/lib/errors";
+import { friendlyError, isKnownErrorCode } from "@/lib/errors";
+import { CLOSE_ERROR, DISPATCH_INFO } from "@/lib/format";
+import { logEvent, withCorrelation } from "@/lib/log";
 import { InvalidOrderRequest } from "@/lib/mengantar/public-api";
 import { couriersForHandover, quoteServices } from "./handover";
 import type { BillableWeightRule } from "@/lib/billable-weight";
@@ -17,6 +19,20 @@ import { liveRecipientErrors, missingForQuote, parseDraft, pickupFieldErrors, ty
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// T-105: only a stable code the pages map (?galat= / ?info=) travels in a URL or a log line. Raw
+// PostgREST/PostgreSQL text (which can echo submitted input) and transport errors become "unknown".
+function stableCode(code: string | null | undefined): string {
+  return isKnownErrorCode(code) || (code && (Object.hasOwn(CLOSE_ERROR, code) || Object.hasOwn(DISPATCH_INFO, code))) ? code! : "unknown";
+}
+const galat = (error: { message?: string } | null | undefined) => `galat=${stableCode(error?.message)}`;
+
+// The shipment a detail-page form names. Anything but a UUID never reaches the database or a URL.
+function shipmentIdOf(form: FormData): string {
+  const id = String(form.get("shipment_id") ?? "");
+  if (!UUID.test(id)) redirect("/pengiriman?galat=not_found");
+  return id;
+}
+
 export type DraftState = {
   ok?: string;
   warning?: string;
@@ -29,7 +45,7 @@ export async function createDraftAction() {
   const ws = await requireWorkspace();
   const db = await dbServer();
   const { data, error } = await db.rpc("create_shipment_draft", { p_outlet: ws.outlet.id });
-  if (error) redirect(`/pengiriman?galat=${encodeURIComponent(error.message)}`);
+  if (error || typeof data !== "string" || !UUID.test(data)) redirect(`/pengiriman?${galat(error)}`);
   redirect(`/pengiriman/${data}`);
 }
 
@@ -38,6 +54,7 @@ export async function createDraftAction() {
 export async function saveDraftAction(_: DraftState, form: FormData): Promise<DraftState> {
   const ws = await requireWorkspace();
   const id = String(form.get("shipment_id"));
+  if (!UUID.test(id)) return { error: friendlyError({ message: "not_found" }) };
   const expected = Number(form.get("revision"));
   const intent = form.get("intent") === "quote" ? "quote" : "save";
   const db = await dbServer();
@@ -251,20 +268,26 @@ async function shipmentOperation(shipmentId: string, tenantId: string) {
   return data as { id: string; state: string; result_code: string | null; is_simulated: boolean } | null;
 }
 
-// Counts-only log of an interactive dispatch step (the cron logs its own), then the page flag.
-const outcomeFlag = (step: string, summary: DispatchSummary) => {
-  console.log(JSON.stringify({ event: "dispatch_action", step, status: summary.status,
-    outcome: "outcome" in summary ? summary.outcome : undefined, reason: "reason" in summary ? summary.reason : undefined,
-    priceMismatch: "priceMismatch" in summary ? summary.priceMismatch : undefined,
-    priceUnknown: "priceUnknown" in summary ? summary.priceUnknown : undefined }));
-  return summary.status === "recorded" ? `hasil=${summary.outcome}`
-    : summary.status === "record_failed" ? "hasil=unknown"
-    : `info=${encodeURIComponent(summary.reason)}`;
-};
+// Counts-only log of an interactive dispatch step (the cron logs its own), then the page flag. Each step
+// runs under its own correlation id (T-105); the reason is a stable code, never raw database text.
+async function dispatchStep(step: string, run: () => Promise<DispatchSummary>): Promise<string> {
+  return withCorrelation(async () => {
+    const summary = await run();
+    const reason = "reason" in summary ? stableCode(summary.reason) : undefined;
+    logEvent("dispatch_action", { step, status: summary.status,
+      outcome: "outcome" in summary ? summary.outcome : undefined, reason,
+      priceMismatch: "priceMismatch" in summary ? summary.priceMismatch : undefined,
+      priceUnknown: "priceUnknown" in summary ? summary.priceUnknown : undefined });
+    return summary.status === "recorded" ? `hasil=${summary.outcome}`
+      : summary.status === "record_failed" ? "hasil=unknown"
+      : `info=${reason}`;
+  });
+}
 
 export async function confirmShipmentAction(_: ConfirmState, form: FormData): Promise<ConfirmState> {
   const ws = await requireWorkspace();
   const id = String(form.get("shipment_id"));
+  if (!UUID.test(id)) return { error: friendlyError({ message: "not_found" }) };
   const db = await dbServer();
   const { data: recipient } = await db.from("shipments")
     .select("recipient_name,recipient_address,recipient_phone,is_simulated,handover,pickup_date,pickup_slot_hour")
@@ -296,50 +319,50 @@ export async function confirmShipmentAction(_: ConfirmState, form: FormData): Pr
   if (result.replayed || result.state !== "queued") redirect(`/pengiriman/${id}`);
   const deps = machineDeps();
   if (!deps) redirect(`/pengiriman/${id}?info=mengantar_not_configured`);
-  redirect(`/pengiriman/${id}?${outcomeFlag("confirm", await dispatchOperation(result.operation_id, deps))}`);
+  redirect(`/pengiriman/${id}?${await dispatchStep("confirm", () => dispatchOperation(result.operation_id, deps))}`);
 }
 
 // A queued real operation that was not sent (busy seller, missing configuration): send it now.
 export async function dispatchQueuedAction(form: FormData) {
   const ws = await requireWorkspace();
-  const id = String(form.get("shipment_id"));
+  const id = shipmentIdOf(form);
   const op = await shipmentOperation(id, ws.tenant.id);
   if (!op || op.is_simulated || op.state !== "queued") redirect(`/pengiriman/${id}?galat=nothing_to_dispatch`);
   const deps = machineDeps();
   if (!deps) redirect(`/pengiriman/${id}?info=mengantar_not_configured`);
-  redirect(`/pengiriman/${id}?${outcomeFlag("dispatch", await dispatchOperation(op.id, deps))}`);
+  redirect(`/pengiriman/${id}?${await dispatchStep("dispatch", () => dispatchOperation(op.id, deps))}`);
 }
 
 // DEC-008: resolving an unknown outcome is a tenant-admin action. Demo shipments keep the SQL
 // simulation; real ones look the original order up at Mengantar by reference (never resend).
 export async function reconcileAction(form: FormData) {
   const ws = await requireWorkspace();
-  const id = String(form.get("shipment_id"));
+  const id = shipmentIdOf(form);
   const op = await shipmentOperation(id, ws.tenant.id);
   if (op && !op.is_simulated) {
     if (ws.role !== "tenant_admin") redirect(`/pengiriman/${id}?galat=admin_required`);
     const deps = machineDeps();
     if (!deps) redirect(`/pengiriman/${id}?info=mengantar_not_configured`);
     const summary = await reconcileOperation(op.id, deps);
-    if (summary.status === "not_reconcilable") redirect(`/pengiriman/${id}?galat=${encodeURIComponent(summary.reason)}`);
-    redirect(`/pengiriman/${id}?${outcomeFlag("reconcile", summary)}`);
+    if (summary.status === "not_reconcilable") redirect(`/pengiriman/${id}?galat=${stableCode(summary.reason)}`);
+    redirect(`/pengiriman/${id}?${await dispatchStep("reconcile", async () => summary)}`);
   }
   const db = await dbServer();
   const { error } = await db.rpc("reconcile_shipment", { p_shipment: id });
-  redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : "?rekonsiliasi=1"}`);
+  redirect(`/pengiriman/${id}${error ? `?${galat(error)}` : "?rekonsiliasi=1"}`);
 }
 
 // An unpaid Mengantar order: has the seller paid it in the Mengantar app yet?
 export async function checkPaymentAction(form: FormData) {
   const ws = await requireWorkspace();
-  const id = String(form.get("shipment_id"));
+  const id = shipmentIdOf(form);
   const op = await shipmentOperation(id, ws.tenant.id);
   if (!op || op.is_simulated) redirect(`/pengiriman/${id}?galat=nothing_to_check`);
   const deps = machineDeps();
   if (!deps) redirect(`/pengiriman/${id}?info=mengantar_not_configured`);
   const summary = await checkPayment(op.id, deps);
-  if (summary.status === "not_reconcilable") redirect(`/pengiriman/${id}?galat=${encodeURIComponent(summary.reason)}`);
-  redirect(`/pengiriman/${id}?${outcomeFlag("payment", summary)}`);
+  if (summary.status === "not_reconcilable") redirect(`/pengiriman/${id}?galat=${stableCode(summary.reason)}`);
+  redirect(`/pengiriman/${id}?${await dispatchStep("payment", async () => summary)}`);
 }
 
 // T-033: a tenant admin pays an unpaid Mengantar batch after reviewing its full membership and
@@ -349,12 +372,12 @@ export async function checkPaymentAction(form: FormData) {
 // withheld and the dispatch only reconciles that attempt: it never sends a second payment.
 export async function payUnpaidBatchAction(form: FormData) {
   const ws = await requireWorkspace();
-  const id = String(form.get("shipment_id"));
+  const id = shipmentIdOf(form);
   const batchDigest = String(form.get("batch_digest") ?? "").trim();
   if (ws.role !== "tenant_admin") redirect(`/pengiriman/${id}?galat=admin_required`);
   const db = await dbServer();
   const { error: authorizeError } = await db.rpc("authorize_batch_payment", { p_shipment: id, p_batch_digest: batchDigest });
-  if (authorizeError) redirect(`/pengiriman/${id}?galat=${encodeURIComponent(authorizeError.message)}`);
+  if (authorizeError) redirect(`/pengiriman/${id}?${galat(authorizeError)}`);
   const deps = machineDeps();
   if (!deps) redirect(`/pengiriman/${id}?info=mengantar_not_configured`);
   const summary = await payUnpaidShipmentBatch(id, batchDigest, deps);
@@ -362,28 +385,28 @@ export async function payUnpaidBatchAction(form: FormData) {
   revalidatePath(`/pengiriman/${id}`);
   if (summary.status === "not_reconcilable") {
     // Only the mapped reason code travels in the URL: provider text is never reflected into a page.
-    redirect(`/pengiriman/${id}?galat=${encodeURIComponent(summary.reason)}`);
+    redirect(`/pengiriman/${id}?galat=${stableCode(summary.reason)}`);
   }
-  redirect(`/pengiriman/${id}?${outcomeFlag("pay_batch", summary)}`);
+  redirect(`/pengiriman/${id}?${await dispatchStep("pay_batch", async () => summary)}`);
 }
 
 // After a definite refusal (nothing created at Mengantar) the counter fixes the draft and retries.
 export async function reopenAction(form: FormData) {
   await requireWorkspace();
-  const id = String(form.get("shipment_id"));
+  const id = shipmentIdOf(form);
   const { error } = await (await dbServer()).rpc("reopen_shipment", { p_shipment: id });
-  redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : ""}`);
+  redirect(`/pengiriman/${id}${error ? `?${galat(error)}` : ""}`);
 }
 
 // A tenant admin closes an unresolved failure after checking the Mengantar app (audited; the
 // database re-checks the role, age and that a re-check ran). The shipment can then be reopened.
 export async function closeFailedAction(form: FormData) {
   await requireWorkspace();
-  const id = String(form.get("shipment_id"));
+  const id = shipmentIdOf(form);
   const { error } = await (await dbServer()).rpc("close_failed_operation", {
     p_shipment: id, p_reason: String(form.get("reason") ?? ""),
   });
-  redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : "?info=closed"}`);
+  redirect(`/pengiriman/${id}${error ? `?${galat(error)}` : "?info=closed"}`);
 }
 
 // T-056: a tenant admin closes a batch payment attempt that stays unknown after checking the Mengantar
@@ -391,7 +414,7 @@ export async function closeFailedAction(form: FormData) {
 // the reason and the per-order reads, and frees the batch for a new authorization. A replay is a no-op.
 export async function closeUnknownBatchPaymentAction(form: FormData) {
   await requireWorkspace();
-  const id = String(form.get("shipment_id"));
+  const id = shipmentIdOf(form);
   // The attempt the admin reviewed (review_unpaid_batch.payment_attempt_id); a newer one is refused.
   const attempt = String(form.get("attempt_id") ?? "");
   const { error } = UUID.test(attempt)
@@ -400,27 +423,27 @@ export async function closeUnknownBatchPaymentAction(form: FormData) {
       })
     : { error: { message: "stale_attempt" } };
   revalidatePath(`/pengiriman/${id}`);
-  redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : "?info=payment_closed"}`);
+  redirect(`/pengiriman/${id}${error ? `?${galat(error)}` : "?info=payment_closed"}`);
 }
 
 // T-056: a tenant admin closes a pickup reservation whose answer was lost and could not be tied to
 // one record, after checking the Mengantar app. Nothing is resent; the shipment can then be reopened.
 export async function closeAmbiguousReservationAction(form: FormData) {
   await requireWorkspace();
-  const id = String(form.get("shipment_id"));
+  const id = shipmentIdOf(form);
   const { error } = await (await dbServer()).rpc("close_ambiguous_pickup_reservation", {
     p_shipment: id, p_reason: String(form.get("reason") ?? ""),
   });
   revalidatePath(`/pengiriman/${id}`);
   revalidatePath("/pengiriman");
-  redirect(`/pengiriman/${id}${error ? `?galat=${encodeURIComponent(error.message)}` : "?info=closed"}`);
+  redirect(`/pengiriman/${id}${error ? `?${galat(error)}` : "?info=closed"}`);
 }
 
 export async function requestLabelAction(form: FormData) {
   await requireWorkspace();
-  const id = String(form.get("shipment_id"));
+  const id = shipmentIdOf(form);
   const db = await dbServer();
   const { error } = await db.rpc("request_label", { p_shipment: id });
-  if (error) redirect(`/pengiriman/${id}?galat=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/pengiriman/${id}?${galat(error)}`);
   redirect(`/pengiriman/${id}/label`);
 }

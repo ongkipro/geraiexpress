@@ -42,3 +42,12 @@ export function exportFilename(slug: string, now: Date, kind: ExportKind = "peng
   const day = new Date(now.getTime() + WIB_OFFSET_MS).toISOString().slice(0, 10).replaceAll("-", "");
   return `${kind}-${safe}-${day}.csv`;
 }
+
+// T-105: the CSV routes audit an export on GET, so a cross-site navigation by a signed-in admin (SameSite=Lax
+// sends the cookie) must not trigger one. Only a same-origin request or a direct one (typed URL, bookmark:
+// "none") passes. A missing header passes too: every supported browser sends Sec-Fetch-Site on navigations,
+// so a request without it is not a browser carried across sites. Checked before any database call.
+export function exportFetchAllowed(headers: Headers): boolean {
+  const site = headers.get("sec-fetch-site");
+  return site === null || site === "same-origin" || site === "none";
+}

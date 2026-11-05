@@ -265,4 +265,10 @@ describe("resetDemoAction", () => {
     await expect(resetDemoAction()).rejects.toThrow("redirect:/pengiriman?reset=1");
     expect(rpc).toHaveBeenCalledWith("reset_demo");
   });
+
+  it("spends the demo visitor budget and re-seeds nothing once it is empty (T-105)", async () => {
+    limits.demo = false;
+    await expect(resetDemoAction()).rejects.toThrow("redirect:/pengiriman?galat=rate_limited");
+    expect(rpc).not.toHaveBeenCalled();
+  });
 });

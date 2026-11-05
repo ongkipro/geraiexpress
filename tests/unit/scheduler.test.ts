@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it, vi } from "vitest";
 // @ts-expect-error plain ESM script shipped in the image, no type declarations
-import { CALL_TIMEOUT_MS, INTERNAL_HOST, callTask, createScheduler, dueTasks, msUntilNextMinute } from "../../infra/scheduler/scheduler.mjs";
+import { CALL_TIMEOUT_MS, INTERNAL_HOST, MAX_BODY_BYTES, callOk, callTask, createScheduler, dueTasks, envelopeFields, msUntilNextMinute } from "../../infra/scheduler/scheduler.mjs";
 
 // T-062: the scheduler sidecar fires dispatch every 5 minutes and cleanup hourly (the cadence of the former
 // Worker cron plus its aligned-hour cleanup tick).
@@ -63,13 +63,62 @@ describe("scheduler loop", () => {
   });
 });
 
+describe("run outcome (T-105)", () => {
+  const ID = "0b6f3c1e-2d4a-4f5b-8c7d-9e0f1a2b3c4d";
+
+  it("keeps only known envelope fields, so nothing else from the answer reaches the log", () => {
+    expect(envelopeFields(JSON.stringify({ task: "cleanup", result: "partial", correlationId: ID,
+      steps: { demo_cleanup: "done", auth_purge: "partial", credential_rewrap: "disabled", "x y": "done", bad: "secret" }, token: "secret" })))
+      .toEqual({ result: "partial", correlationId: ID, steps: { demo_cleanup: "done", auth_purge: "partial", credential_rewrap: "disabled" } });
+    for (const text of ["", "Not Found", "[]", "null", JSON.stringify({ result: "ok", correlationId: "not-a-uuid", steps: [] })]) {
+      expect(envelopeFields(text), text).toEqual({});
+    }
+  });
+
+  it("counts only a 200 with done, partial or disabled as a successful run", () => {
+    expect([{ status: 200, result: "done" }, { status: 200, result: "partial" }, { status: 200, result: "disabled" }].map(callOk)).toEqual([true, true, true]);
+    expect([{ status: 500, result: "failed" }, { status: 200, result: "failed" }, { status: 200 }, { status: 504, result: "timeout" },
+      { status: 409, result: "in_flight" }, { error: "timeout" }].map(callOk)).toEqual([false, false, false, false, false, false]);
+  });
+
+  it("logs the per-task outcome with ok:false for a failed run", async () => {
+    const logs: Record<string, unknown>[] = [];
+    const call = vi.fn(async ({ task }: { task: string }) => task === "dispatch"
+      ? { status: 200, result: "done", correlationId: ID }
+      : { status: 500, result: "failed", steps: { demo_cleanup: "failed" } });
+    const scheduler = createScheduler({ target: "http://app:3000", secret: "s3cret", log: (l: Record<string, unknown>) => logs.push(l), call, now: () => 0 });
+    scheduler.tick(new Date(ALIGNED));
+    await scheduler.drain();
+    expect(logs).toEqual([
+      { event: "scheduler_call", task: "dispatch", status: 200, result: "done", correlationId: ID, ok: true, ms: 0 },
+      { event: "scheduler_call", task: "cleanup", status: 500, result: "failed", steps: { demo_cleanup: "failed" }, ok: false, ms: 0 },
+    ]);
+  });
+
+  it("on drain starts no new tick and waits for the in-flight call", async () => {
+    let release: () => void = () => {};
+    const call = vi.fn(() => new Promise<{ status: number }>((resolve) => { release = () => resolve({ status: 200 }); }));
+    const scheduler = createScheduler({ target: "http://app:3000", secret: "s", log: () => {}, call });
+    scheduler.tick(new Date(ALIGNED + 5 * 60_000));
+    let drained = false;
+    const drain = scheduler.drain().then(() => { drained = true; });
+    expect(scheduler.tick(new Date(ALIGNED + 10 * 60_000))).toEqual([]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(drained).toBe(false);
+    release();
+    await drain;
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(scheduler.running()).toEqual([]);
+  });
+});
+
 describe("callTask", () => {
-  async function withServer(handler: (req: IncomingMessage) => number | "hang") {
+  async function withServer(handler: (req: IncomingMessage) => number | "hang", body = "{}") {
     const seen: { method?: string; url?: string; host?: string; authorization?: string }[] = [];
     const server = createServer((req, res) => {
       seen.push({ method: req.method, url: req.url, host: req.headers.host, authorization: req.headers.authorization });
       const result = handler(req);
-      if (result !== "hang") res.writeHead(result).end("{}");
+      if (result !== "hang") res.writeHead(result).end(body);
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const target = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -90,6 +139,18 @@ describe("callTask", () => {
     expect(await callTask({ task: "cleanup", target: "http://127.0.0.1:1", secret: "x" })).toEqual({ error: "connect" });
     const hung = await withServer(() => "hang");
     try { expect(await callTask({ task: "dispatch", target: hung.target, secret: "x", timeoutMs: 50 })).toEqual({ error: "timeout" }); } finally { hung.close(); }
+  });
+
+  it("returns the bounded envelope of the answer and reads no more than MAX_BODY_BYTES", async () => {
+    const id = "0b6f3c1e-2d4a-4f5b-8c7d-9e0f1a2b3c4d";
+    const s = await withServer(() => 200, JSON.stringify({ task: "cleanup", result: "done", correlationId: id, steps: { auth_purge: "done" } }));
+    try {
+      expect(await callTask({ task: "cleanup", target: s.target, secret: "x" })).toEqual({ status: 200, result: "done", correlationId: id, steps: { auth_purge: "done" } });
+    } finally { s.close(); }
+    const big = await withServer(() => 200, JSON.stringify({ result: "done", pad: "x".repeat(MAX_BODY_BYTES) }));
+    try {
+      expect(await callTask({ task: "cleanup", target: big.target, secret: "x" })).toEqual({ status: 200 });
+    } finally { big.close(); }
   });
 
   it("waits longer than the app's own 270 s deadline", () => {
