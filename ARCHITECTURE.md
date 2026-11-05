@@ -236,7 +236,7 @@ flowchart LR
 
 ## System map
 
-The diagrams below describe implemented, locally executed components only. Dashed edges are
+The diagrams below describe implemented components; T-083 cash close is code-complete but runtime verification is pending. Dashed edges are
 target components from ARCH-1/ARCH-4 that do not exist yet.
 
 ### Runtime and trust boundaries (implemented)
@@ -253,6 +253,7 @@ flowchart LR
         WS["lib/workspace.ts<br/>tenant = active membership<br/>(ge_tenant cookie is only a selector)"]
         AreaRoute["GET /api/mengantar/area<br/>workspace member · local first (T-100)"]
         PaymentActions["modules/payments<br/>detail payment and /struk receipt actions"]
+        CashClose["/kas · cash-period-actions<br/>close: member · reopen: tenant admin<br/>T-083 runtime verification pending"]
         LogoActions["modules/tenants/logo-actions.ts<br/>settings · tenant-admin only"]
         Health["/healthz (no-store)"]
         Hosts["lib/hosts.ts<br/>host table, route-family matrix, per-environment origins"]
@@ -262,6 +263,7 @@ flowchart LR
         PgRest["PostgREST<br/>HS256 JWT (AUTH_JWT_SECRET) · schema public<br/>roles anon / authenticated / service_role"]
         AuthDb["auth schema: users · sessions · otp_codes · mfa_factors<br/>(no API grants) · 14 machine-only auth_* functions<br/>before_user_created gate blocks public signup<br/>anonymous identities locked to demo"]
         DB["public schema: RLS on every table<br/>composite same-tenant FKs<br/>column-level grants"]
+        CashRPC["close_cash_period / reopen_cash_period<br/>period row lock · active cash aggregate<br/>cash_period_events: RLS, append-only, RPC writes"]
         AreaRPC["search_mengantar_areas(query, limit)<br/>authenticated · active membership · max 30"]
         Areas["PostgreSQL: public.mengantar_areas<br/>shared provider reference data · no tenant ownership · RLS · no API table grants"]
         LogoVersions["private.gerai_logo_versions<br/>append-only raster versions"]
@@ -275,6 +277,7 @@ flowchart LR
     AreaLoader["scripts/load-mengantar-areas.mjs<br/>versioned data/mengantar/*.json.gz<br/>owner-only gx_psql · upsert, never delete"]
 
     UI --> MW --> Pages
+    Pages --> CashClose -->|user JWT via PostgREST| CashRPC --> DB
     UI --> AreaRoute
     AreaRoute -->|user JWT via PostgREST| AreaRPC --> Areas
     AreaRoute -->|"empty catalogue + connected non-demo only: address/search"| Mengantar
@@ -512,6 +515,29 @@ observed. Counts and executed checks are under "Verified counts and gates".
   `export.shipments`, and hides invoice snapshots from the default audit list (explicit filter
   still returns them). Invoice COD copy says goods value plus customer shipping charge, including
   the COD fee. Only Chromium print-to-PDF exists; courier acceptance remains unproven.
+- **Cash periods and day close (T-083, implementation present; runtime verification pending).**
+  Tenant-host `/kas` lists every outlet's open period, active payment totals by method and
+  `recorded_by` identity (stored label "Petugas", never an inferred staff name), expected cash and
+  the last 20 closed periods. Rupiah/WIB formatters are shared with shipment payments; all demo
+  amounts carry "contoh". Reads page through payment rows rather than silently accepting the Data
+  API row cap; failed or unsafe-money reads withhold the forms. Confirmation dialogs preview
+  counted cash and signed variance; the server recomputes expected cash at commit. Pending disables
+  submit and unknown outcomes require reload, never automatic replay.
+  `20261105130000_cash_period_close.sql` adds member-readable `cash_period_events`, same-tenant
+  composite FK, immutable-history guard and RPC-only writes (no anon/service-role grants).
+  `close_cash_period(uuid,bigint)` permits operators and tenant admins per IAM-1's counter rows;
+  only `reopen_cash_period(uuid,text)` is admin-only, with `private.require_reason` and an audit.
+  Close stores active-cash expected/count/variance plus actor/time atomically and appends a close
+  event; reopen clears the close fields and appends a reasoned reopen event without erasing history.
+  A competing close gets `period_closed` (55000). Reopening with another open period is refused
+  as `period_open_exists` (55000); the admin must close the current period first, never merge.
+  Both commands lock only the period and read payments without row locks, compatible with
+  record/void's shipment -> payment -> period order. Periods span midnight; the next payment after
+  close opens a new period. A bounded three-attempt lookup handles competing openers or a close
+  while waiting for the period lock; it never retries a payment operation or emits SQLSTATE 40001.
+  DB/unit/e2e coverage is added in source-named cash-period tests, including a deterministic blocked
+  payment/close race and 390/1280 screenshots. Executed and independently reviewed; results are
+  recorded in STATUS.md. PR-45 pilot reporting is not part of this slice.
 - **Counter payments and receipts (T-082, verified locally).**
   `20261104120000_counter_payments.sql` adds member-readable, RPC-only `counter_payments` and
   `cash_periods`. Payment reads are column-scoped: members receive payment/receipt facts, not stored
@@ -533,7 +559,7 @@ observed. Counts and executed checks are under "Verified counts and gates".
   payment, or NULL only through the confirmed-COD RPC branch. Label history filters its kind before
   limiting rows. Print history records a request, not paper output; browser-native print outside the
   application action cannot be proven by that history. `/struk` is covered by the existing tenant
-  `/pengiriman` host prefix. No provider/payment processing is added; closing cash remains T-083.
+  `/pengiriman` host prefix. No provider/payment processing is added; cash closing is described below.
   **Receipt identity/content accepted by the owner on 2026-11-05 (DEC-026).** Non-COD gerai name/WhatsApp stay frozen at *payment time* in the payment record,
   not at confirmation. COD has no payment: its first application print freezes current tenant name and
   nullable WhatsApp in `label_print_events.receipt_gerai_name/receipt_gerai_whatsapp`; later receipt
@@ -793,7 +819,7 @@ API.
 | Audience (host) | Routes served | Access |
 |---|---|---|
 | Public (apex `geraiexpress.com`, `staging.`) | `/` (marketing, without session resolution), `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`, `/robots.txt`, `/sitemap.xml`, `/healthz` | No session; the proxy resolves no session on this host |
-| Gerai application (`app.`, `app-staging.`) | `/` (gerai dashboard after account/workspace checks), `/masuk`, `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/undangan`, `/akses`, `/pilih-gerai`, `/api/mengantar/area`, `/robots.txt`, `/healthz`, and the workspace: `/pengiriman`, `/pengiriman/baru`, `/pengiriman/cetak`, `/pengiriman/[id]`, `/pengiriman/[id]/label`, `/pengiriman/[id]/invoice`, `/pengiriman/[id]/struk`, `/pengiriman/export.csv`, `/kontak`, `/kontak/[id]`, `/pengaturan`, `/anggota` | Workspace group: verified active membership; tenant from the `ge_tenant` selector validated against memberships; `/anggota` and the CSV export are tenant admin only |
+| Gerai application (`app.`, `app-staging.`) | `/` (gerai dashboard after account/workspace checks), `/masuk`, `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/undangan`, `/akses`, `/pilih-gerai`, `/api/mengantar/area`, `/robots.txt`, `/healthz`, and the workspace: `/pengiriman`, `/pengiriman/baru`, `/pengiriman/cetak`, `/pengiriman/[id]`, `/pengiriman/[id]/label`, `/pengiriman/[id]/invoice`, `/pengiriman/[id]/struk`, `/pengiriman/export.csv`, `/kas`, `/kontak`, `/kontak/[id]`, `/pengaturan`, `/anggota` | Workspace group: verified active membership; tenant from the `ge_tenant` selector validated against memberships; `/anggota` and the CSV export are tenant admin only |
 | Super Admin (`owner.`, `owner-staging.`) | `/`, `/masuk` (demo and registration hidden), `/verifikasi-2fa`, `/admin` (tenant directory with slug), `/admin/tenant/[id]` (masking control), `/admin/pengajuan`, `/admin/konfigurasi`, `/admin/pantau-pengajuan`, `/admin/pelanggan`, `/admin/pelanggan/[tenant]`, `/admin/integrasi`, `/admin/akses`, `/admin/audit`, `/admin/diskon`, `/admin/diskon/[tenant]`, `/robots.txt`, `/healthz` | Platform grant plus capability plus `aal2` with recent TOTP (`requirePlatform`) |
 | Hooks (`hooks.`, `hooks-staging.`) | the reserved prefix `/api/webhooks` (no route exists), `/healthz` | None today; cookies are stripped and none is set (the Send Email Hook route `/api/auth/send-email` was removed by T-066) |
 | Shared (loopback in a non-production build, or `HOST_SHARED_MODE=1`, e.g. the local container behind the local proxy profile) | Every route above on one origin (not the internal cron routes) | As the route's own audience |

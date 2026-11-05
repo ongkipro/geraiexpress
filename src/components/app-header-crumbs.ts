@@ -5,6 +5,7 @@ const LABELS: Record<string, string> = {
   "/pengiriman": "Pengiriman",
   "/pengiriman/baru": "Buat pengiriman",
   "/pengiriman/cetak": "Cetak label massal",
+  "/kas": "Kas",
   "/kontak": "Kontak",
   "/anggota": "Anggota",
   "/pengaturan": "Pengaturan",
