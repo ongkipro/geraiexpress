@@ -1,10 +1,12 @@
 "use client";
 
 import { ReceiptText } from "lucide-react";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { courierName, etaLabel, formatIdr } from "@/lib/format";
+import { useStickyScrollPadding } from "@/lib/use-sticky-scroll-padding";
 import type { DraftValues } from "./draft";
 import type { QuoteOption } from "./intake-form";
 import { handoverSummary } from "./pickup-fields";
@@ -104,11 +106,15 @@ export function IntakeSummary({ values, quote, status }: SummaryProps) {
 }
 
 // < 1280: the total stays in reach at the bottom of the screen; "Rincian" opens the same summary.
+// The bar reserves its height as bottom scroll padding so a focused field is never hidden beneath it.
 export function SummaryBar(props: SummaryProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  useStickyScrollPadding(ref);
   const charge = props.quote && props.status === "current" ? quoteCharge(props.quote) : null;
   const isCod = props.values.is_cod === "true";
   return (
     <div
+      ref={ref}
       role="region"
       aria-label="Ringkasan biaya"
       className="sticky bottom-0 z-20 -mx-4 -mb-6 flex items-center justify-between gap-3 border-t border-border bg-card px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:-mx-8 lg:-mb-8 lg:px-8 xl:hidden"
