@@ -551,6 +551,30 @@ observed. Counts and executed checks are under "Verified counts and gates".
   F1's `private.operation_credential` lets original operations reconcile after regeneration using
   the active same-tenant, same-environment Partner key; superseded BYOK keys and mode changes
   never cross versions. Begin and complete onboarding refuse `rotation_unknown` (55000).
+- **Partner-wide quota and post-restore provider fence (T-110).** Migration
+  `20261105200000_partner_quota_restore_fence.sql`. Every Partner API request (`src/lib/mengantar/partner-api.ts`
+  `post`) first calls the machine-only `reserve_partner_quota(env, partner, cost, new_seller_ref, mutating)`
+  through `rpcPartnerQuotaGate`; a denial (or any unreadable answer) throws `partner_quota_exhausted` before
+  signing, so nothing is sent, and callers treat it as wait-and-retry, never as a resend trigger. The quota is
+  keyed by provider environment and the SHA-256 of the Partner ID (not a tenant), counts requests per UTC
+  minute and distinct `externalUserId`s per WIB day (a repeated registration or key recovery of one seller is
+  not a new seller), serializes concurrent callers on an advisory transaction lock, and honours a shared
+  Retry-After stored by `note_partner_retry_after` on a provider 429. Limits live in
+  `private.partner_quota_limits`; the seeded values are unverified placeholders (RELEASE.md). The fence
+  `private.provider_mutation_fence` is engaged explicitly (`private.engage_provider_fence`, restore runbook) or
+  implicitly when `private.provider_cluster_identity()` (system identifier : database oid : fence table oid :
+  WAL timeline) differs from the identity recorded at the last clear. While engaged, the provider-mutating
+  RPCs (`dispatch_claim`, pickup write-aheads, `authorize_batch_payment`, `dispatch_mark_batch_payment_sent`,
+  `fence_partner_key_rotation`, mutating `reserve_partner_quota`) refuse with 55000 `provider_fence_engaged`;
+  reconciliation, payment checks and result recording stay open. `platform_clear_provider_fence`
+  (integration_operations, aal2, reason, reviewed queued count, audit) marks every real queued create
+  `restore_check_required`; the dispatcher then reads Mengantar by reference since the operation's creation
+  before the create (ahead of every local refusal), and only "no order" leads to a create
+  (`dispatch_restore_check_passed`). The flag stays on an operation recorded as found or unknown, and
+  `private.dispatch_payload` carries it with `created_at`, so reconciliation of such an operation scans from
+  its creation. Key regeneration reserves the quota (cost 2) before its key fence. A check that never completes
+  has an audited operator exit, `platform_mark_restore_check_unknown` (integration_operations, aal2, reason). No
+  admin UI yet: RPC and runbook only.
 - **Environment scope and key ring (T-050, F1).** Migration
   `20261028230000_environment_scope_key_ring.sql` adds `provider_env` to credentials and onboarding
   (`sandbox`/`production`, default sandbox; backfill assumes no production rows), one active

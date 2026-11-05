@@ -227,6 +227,61 @@ by the app. Gates before a release is started:
     public.tenant_invitations|2         public.tenants|45
     ```
 
+    **Restoring a database that served live Mengantar traffic (T-110, DR-1).** A restore rolls local rows
+    back, not Mengantar: an order, batch payment, seller registration or key rotation sent after the backup
+    point is missing locally, and its create operation may look `queued` again. Never resend blindly (TD-3):
+
+    1. **Fence.** A restore into a new cluster or database, an in-place `pg_restore --clean`, PITR, a promoted
+       replica or a `pg_upgrade` (new system identifier) changes the recorded cluster identity
+       (`system_identifier:database oid:fence table oid:timeline`, `private.provider_cluster_identity()`), so the
+       provider mutation fence is engaged with no step; after a planned `pg_upgrade` without a restore, review and
+       clear it the same way. A data-only restore into the existing tables keeps that identity: as the postgres
+       owner, immediately after `pg_restore` and before the app starts, run
+       `select private.engage_provider_fence('Pemulihan dari cadangan <tanggal>: <tiket>');`. A backup taken
+       before migration `20261105200000` has no fence: run `scripts/db-migrate.sh` (gate 17 ledger check) on the
+       restored database FIRST, then `engage_provider_fence`, still before the app starts (the migration records
+       the restored cluster's own identity, so the fence would otherwise start open). While engaged,
+       `dispatch_claim`, the pickup write-aheads, `authorize_batch_payment`, `dispatch_mark_batch_payment_sent`,
+       `fence_partner_key_rotation` and every mutating Partner request refuse with SQLSTATE 55000
+       `provider_fence_engaged`; reconciliation, payment checks and reads keep running.
+    2. **Reconcile.** Let the 5-minute sweep (or "Cek hasil" per shipment) resolve `in_flight`/`unknown`
+       operations and unresolved batch payments by reference reads; check Partner onboarding/rotation states
+       (`registered_key_pending`, `rotation_unknown`) through their recovery paths, which read the current key
+       and never register or regenerate again. Re-establish credential versions and authorization (gates 11
+       and 15) before going on.
+    3. **Review.** As a Super Admin with `integration_operations` (aal2), read `platform_provider_fence()`:
+       `queued_real_operations`, `unresolved_real_operations`, `unresolved_batch_payments`. The queued count is
+       what the clear will mark.
+    4. **Clear.** `platform_clear_provider_fence(reason, expected_queued)` (reason at least 5 characters; the
+       reviewed queued count, else `stale_state`) re-records the live identity, marks every real queued create
+       operation `restore_check_required` in the same transaction, writes `provider_fence.cleared` to the audit
+       log and returns the marked count. There is no UI yet (follow-up); call it with the Super Admin session.
+    5. **Dispatcher checks.** Each marked operation is looked up at Mengantar by its reference (orders since the
+       operation was created) before any create: exactly one live order is recorded as issued/unpaid (no
+       create); several, or only provider error items, are recorded `unknown` for reconciliation/manual review;
+       none clears the flag and the order is created once (or failed `QUOTE_STALE`, reopenable, past the six-hour
+       quote window). A failed lookup, the Partner quota or a re-engaged fence leaves it queued with the flag
+       (`restore_check_pending`). `dispatch_sweep.stuck` and the shipment pages show what remains. The flag stays
+       on an operation recorded as found or unknown, so its later reconciliation scans Mengantar from the
+       operation's creation, not only from the post-restore attempt.
+    6. **Operator exit for a check that never completes** (the lookup keeps failing: Mengantar unreachable for the
+       seller, a key that no longer opens, more orders since the operation than the scan bound): a Super Admin
+       with `integration_operations` (aal2) calls `platform_mark_restore_check_unknown(operation, env, reason)`.
+       It moves only a queued, flagged operation to `unknown` (`RESTORE_CHECK_MANUAL`, audited as
+       `provider_fence.restore_check_manual`, returns the shipment reference) and sends nothing. From there the
+       ordinary path applies: the gerai admin checks the Mengantar app by that reference; "Cek hasil"/the sweep
+       records a found order; only a reconciliation that concludes "not created" lets the admin close
+       (`close_failed_operation`) and reopen the shipment for a new order. No UI yet (follow-up).
+
+    Residual gap, stated plainly: a shipment confirmed AND sent after the backup point does not exist in the
+    restored database at all, so neither the fence nor the restore check can see it; its order exists only at
+    Mengantar. Gerai staff must not re-enter such a shipment until its reference has been checked in the
+    Mengantar app (the same customer can otherwise get a second order). Operations sent after the backup point but
+    restored as `queued` are covered by step 5; operations restored as `in_flight`/`unknown` by step 2.
+
+    Not covered locally: a restore drill against the live provider (the DB tests simulate a restore by changing
+    the recorded identity, `tests/db/partner-quota-restore-fence.test.ts`).
+
 14. **PITR (OWNER decision; unprovisioned).** Self-hosted WAL archiving plus base backups permits point-in-time
     recovery but needs durable off-server WAL storage, retention, monitoring and rehearsed recovery operations.
     Managed-provider PITR delegates those operations at recurring cost/vendor dependence; verify its retention,
@@ -351,6 +406,13 @@ environment; preview crons are empty). Local completion is not release readiness
 
 Not provisioned. Before a real gerai issues orders in production:
 
+0. **Partner-wide quota entitlement (T-110).** Every Partner API request reserves the shared quota in
+   `private.partner_quota_limits` before it is signed. The seeded values (30 requests/minute, 100 new sellers per
+   WIB day, `entitlement_verified = false`) are deliberately conservative placeholders, NOT Mengantar's numbers;
+   the reviewed contract states 60/minute and 1,000 new sellers/day, but our account's entitlement is unknown
+   until Mengantar confirms it. Record the confirmed values as the postgres owner, for example
+   `update private.partner_quota_limits set requests_per_minute = <n>, new_sellers_per_day = <n>,
+   entitlement_verified = true, note = '<evidence reference>', updated_at = now() where provider_env = 'production';`.
 1. Container configuration (see the container gates above; names in `.env.example` and
    `infra/env/production.env.example`): `POSTGREST_URL` (the compose `postgrest` service by default),
    `MENGANTAR_ENV=production`; the auth values `AUTH_JWT_SECRET` and `AUTH_SECRET` (the machine identity of

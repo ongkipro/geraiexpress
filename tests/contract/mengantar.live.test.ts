@@ -48,7 +48,9 @@ const partnerSecret = secretVar ? process.env[secretVar] : undefined;
 
 describe.skipIf(!partnerId || !partnerSecret)("Mengantar Partner API live contract (sandbox, read-only)", () => {
   it("lists the partner's sellers with a valid signature", async () => {
-    const result = await createPartnerClient("sandbox", partnerId!, partnerSecret!, fetch).listSellers({ size: 5 });
+    const result = await createPartnerClient("sandbox", partnerId!, partnerSecret!,
+      // Read-only contract probe outside the application's shared quota (no database in this suite).
+      { reserve: async () => ({ allowed: true }), noteRetryAfter: async () => {} }, fetch).listSellers({ size: 5 });
     expect(result.total).toBeGreaterThanOrEqual(0);
     for (const s of result.sellers) expect(Object.keys(s).sort()).toEqual(["active", "externalUserId", "sellerId"]);
   });

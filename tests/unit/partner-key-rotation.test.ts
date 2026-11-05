@@ -76,6 +76,9 @@ function harness(opts: Options = {}) {
   };
 
   const machineRpc: KeyRotationDeps["machineRpc"] = async (fn, args) => {
+    // T-110: the Partner-wide quota gate allows every request here (covered by partner-quota-gate.test.ts).
+    if (fn === "reserve_partner_quota") return { data: { allowed: true, reason: null, next_eligible_at: null }, error: null };
+    if (fn === "note_partner_retry_after") return { data: null, error: null };
     log.push({ kind: "machine", name: fn, args });
     if (fn === "begin_partner_key_rotation") throw new Error("begin must use the caller's session");
     opts.before?.[fn]?.(model);

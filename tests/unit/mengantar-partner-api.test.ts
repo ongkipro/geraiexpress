@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { createPartnerClient, PartnerError, partnerSignature } from "../../src/lib/mengantar/partner-api";
+import { createPartnerClient, PartnerError, partnerSignature, type PartnerQuotaGate } from "../../src/lib/mengantar/partner-api";
 
 const SECRET: string = "offline-fixture-only-secret";
 const NOW = 1758790800_000;
@@ -17,9 +17,12 @@ function fakeFetch(reply: Reply) {
   return { impl, calls };
 }
 
+// T-110: a gate that allows everything (the quota itself is covered below and in tests/db).
+const OPEN: PartnerQuotaGate = { reserve: async () => ({ allowed: true }), noteRetryAfter: async () => {} };
+
 const client = (reply: Reply) => {
   const f = fakeFetch(reply);
-  return { api: createPartnerClient("sandbox", "partner-x", SECRET, f.impl, () => NOW), calls: f.calls };
+  return { api: createPartnerClient("sandbox", "partner-x", SECRET, OPEN, f.impl, () => NOW), calls: f.calls };
 };
 
 async function failure(promise: Promise<unknown>) {
@@ -101,7 +104,7 @@ describe("register seller", () => {
     expect((await failure(client({ status: 200, body: { success: true, pad: "x".repeat(300 * 1024) } }).api.registerSeller(seller))).code).toBe("malformed");
     expect((await failure(client({ status: 200, body: { success: true }, headers: { "content-length": String(10 * 1024 * 1024) } }).api.registerSeller(seller))).code).toBe("malformed");
     const throwing = (async () => { throw new TypeError(`fetch failed ${SECRET}`); }) as typeof fetch;
-    expect((await failure(createPartnerClient("sandbox", "partner-x", SECRET, throwing).registerSeller(seller))).code).toBe("unavailable");
+    expect((await failure(createPartnerClient("sandbox", "partner-x", SECRET, OPEN, throwing).registerSeller(seller))).code).toBe("unavailable");
   });
 });
 
@@ -142,7 +145,7 @@ describe("list sellers and seller keys", () => {
   });
 
   it("only knows the sandbox until a production origin is provided", () => {
-    expect(() => createPartnerClient("production" as "sandbox", "partner-x", SECRET)).toThrow();
+    expect(() => createPartnerClient("production" as "sandbox", "partner-x", SECRET, OPEN)).toThrow();
   });
 });
 
@@ -185,6 +188,39 @@ describe("regenerate seller key (T-039)", () => {
     expect([limited.code, limited.status, limited.retryAfterSeconds]).toEqual(["RATE_LIMITED", 429, 23]);
     expect((await failure(client({ status: 502, body: "<html>", type: "text/html" }).api.regenerateSellerKey(REGEN_SELLER))).code).toBe("unavailable");
     const throwing = (async () => { throw new TypeError("fetch failed"); }) as typeof fetch;
-    expect((await failure(createPartnerClient("sandbox", "partner-x", SECRET, throwing).regenerateSellerKey(REGEN_SELLER))).code).toBe("unavailable");
+    expect((await failure(createPartnerClient("sandbox", "partner-x", SECRET, OPEN, throwing).regenerateSellerKey(REGEN_SELLER))).code).toBe("unavailable");
+  });
+});
+
+// Review of T-110: HTTP 429 is a provider throttle for the whole Partner account whatever its body, so the
+// shared back-off is stored even for a non-JSON body or an unrecognised code. The daily registration limit
+// alone narrows the back-off to new sellers.
+describe("shared back-off on HTTP 429 (T-110 review)", () => {
+  function recording(reply: Reply) {
+    const notes: { until: number | null; scope: string }[] = [];
+    const gate: PartnerQuotaGate = { reserve: async () => ({ allowed: true }), noteRetryAfter: async (until, scope) => { notes.push({ until, scope }); } };
+    return { api: createPartnerClient("sandbox", "partner-x", SECRET, gate, fakeFetch(reply).impl, () => NOW), notes };
+  }
+
+  it("records request back-off for a 429 with a non-JSON body and keeps Retry-After", async () => {
+    const r = recording({ status: 429, body: "Too Many Requests", type: "text/plain", headers: { "retry-after": "30" } });
+    const error = await failure(r.api.registerSeller(seller));
+    expect([error.code, error.status, error.retryAfterSeconds]).toEqual(["RATE_LIMITED", 429, 30]);
+    expect(r.notes).toEqual([{ until: NOW + 30_000, scope: "request" }]);
+  });
+
+  it("records request back-off for a JSON 429 with an unrecognised code", async () => {
+    const r = recording({ status: 429, body: { success: false, code: "SLOW_DOWN" } });
+    expect((await failure(r.api.registerSeller(seller))).code).toBe("unknown");
+    expect(r.notes).toEqual([{ until: null, scope: "request" }]);
+  });
+
+  it("narrows the daily registration limit to new sellers, and stores nothing for a non-throttle error", async () => {
+    const daily = recording({ status: 429, body: { success: false, code: "DAILY_REGISTRATION_LIMIT" }, headers: { "retry-after": "60" } });
+    await failure(daily.api.registerSeller(seller));
+    expect(daily.notes).toEqual([{ until: NOW + 60_000, scope: "new_seller" }]);
+    const other = recording({ status: 404, body: fixture("partner-error-seller-not-found.json") });
+    await failure(other.api.regenerateSellerKey(REGEN_SELLER));
+    expect(other.notes).toEqual([]);
   });
 });

@@ -113,6 +113,9 @@ const MESSAGES: Record<string, string> = {
   pickup_time_invalid: "Jam jemput harus minimal 90 menit dari sekarang (WIB), antara 09.00 dan 18.00. Pilih slot yang lebih lambat lalu cek ongkir lagi.",
   // T-105: a visitor budget (src/lib/rate-limit.ts) refused the action.
   rate_limited: "Terlalu banyak percobaan dari jaringan ini. Tunggu satu menit lalu coba lagi.",
+  // T-110: Partner-wide quota (all gerai share one Partner account) and the post-restore mutation fence.
+  partner_quota_exhausted: "Batas permintaan akun Partner Mengantar sedang penuh. Tidak ada yang dikirim; coba lagi beberapa saat lagi.",
+  provider_fence_engaged: "Perubahan ke Mengantar sedang dijeda setelah pemulihan data. Pengecekan status tetap berjalan; coba lagi setelah admin GeraiExpress membuka jeda.",
 };
 
 // T-105: a code that may travel in a URL or a log line. Raw PostgREST/PostgreSQL text is never one.

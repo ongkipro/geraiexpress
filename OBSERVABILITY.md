@@ -88,6 +88,28 @@ days, `failed_unresolved` "not created"/provider-error over 24 hours, `unpaid` o
 operations that cannot be sent (`queued` over 6 hours: the gerai lost its key or is inactive):
 any non-zero value needs an admin to check the Mengantar app (runbook in RELEASE.md).
 
+Partner-wide quota and the provider mutation fence (T-110). Both are durable database state, not log
+lines; there is no alert rule yet:
+
+- `partner_quota_exhausted` is the stable reason of a Partner request refused locally by
+  `reserve_partner_quota` (minute limit, WIB-day new-seller limit, or a stored Retry-After) before it was
+  signed; nothing was sent. It surfaces as the onboarding/rotation result code (`quota_wait` /
+  `rotation_unknown` / `rejected` with `retryAfterSeconds`); audit events are written only by the existing
+  Partner outcome RPCs. Current usage and back-off: `private.partner_request_windows`,
+  `private.partner_new_sellers`, `private.partner_retry_windows` (superuser SQL). A provider 429
+  (`RATE_LIMITED`, `DAILY_REGISTRATION_LIMIT`) is stored there for every tenant.
+- `provider_fence_engaged` (SQLSTATE 55000) is the reason of any provider mutation refused while the
+  post-restore fence is engaged. The interactive `dispatch_action` event carries it as `reason` (with
+  `status: not_claimed`), and `restore_check_pending` marks a restore-check lookup that could not run (nothing
+  created, flag kept). `dispatch_sweep` logs only its `action:status` tally, so in the sweep both appear as
+  `dispatch:not_claimed` counts without the reason; a `dispatch:not_claimed` count that does not fall after a
+  clear means restore checks keep failing (see `platform_provider_fence().restore_checks_pending` and the
+  RELEASE.md operator exit). Engagement, clearing and the manual exit are audit events `provider_fence.engaged`
+  (SQL), `provider_fence.cleared` (reason, `restore_checks_marked`) and
+  `provider_fence.restore_check_manual` (reason, operation). `platform_provider_fence()` reports engaged state, identity change and counts.
+  A fence engaged by an unexpected identity change (no restore planned) means the database was moved,
+  restored or promoted: follow the RELEASE.md restore runbook before clearing.
+
 `demo_cleanup` (T-030, T-051): expired demo tenants are removed by `cleanup_expired_demos(p_max_age_hours, p_batch)` (batch default 200). The **scheduler container** calls `POST /api/internal/cron/cleanup` once an hour (on the whole UTC hour); the route needs only `POSTGREST_URL` and `AUTH_JWT_SECRET` (the machine identity), not the full machine bindings, and emits `{"event":"demo_cleanup","deletedTenants":...,"deletedUsers":...,"hasMore":...,"failed":...}` (counts and flags only, no tenant or user identifiers). Migration `20261028180000_demo_quotas_and_cleanup.sql` also creates an hourly pg_cron job `demo-cleanup` (`0 * * * *`, `select public.cleanup_expired_demos(24, 200)`), but only where the `pg_cron` extension is available; on the plain PostgreSQL 17 image used here it is not, so the scheduler call is the cleanup. A job that does exist logs no container event, so its runs are visible only in `cron.job_run_details`. `hasMore: true` means more than one batch of expired demos remained and the next run continues; `failed: true` means the machine RPC call failed.
 
 The hourly `/api/internal/cron/cleanup` task performs demo cleanup, auth expiry purge and
