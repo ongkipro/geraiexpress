@@ -26,12 +26,18 @@ const VALID = {
   TRACKING_TOKEN_SECRET: "startup-test-tracking-secret-0123456789",
 };
 const stub = (env: Record<string, string>) => { for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v); };
+// The mail variables must start ABSENT in every case: the DB global setup loads infra/dev/.env when it exists
+// (`pnpm db:up` writes SMTP_HOST/SMTP_PORT for the local Mailpit), so a checkout with a running local stack
+// would otherwise inherit SMTP_PORT and change which variables the validator names (INT-M4, 2026-11-06).
+const MAIL_VARS = ["MAIL_TRANSPORT", "MAILPIT_URL", "MAIL_FROM", "SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USERNAME", "SMTP_PASSWORD"] as const;
+const clearMail = () => { for (const name of MAIL_VARS) vi.stubEnv(name, ""); };
 
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe("runtime configuration validation", () => {
   // T-063: an unset MAIL_TRANSPORT is valid (mail fails closed); a selected but incomplete one is named.
   it("accepts no mail transport, and names an incomplete SMTP transport by variable only", async () => {
+    clearMail();
     stub(VALID);
     expect(await runtimeConfigProblems()).toEqual([]);
     stub({ MAIL_TRANSPORT: "smtp", SMTP_HOST: "smtp.provider.test", SMTP_PASSWORD: "startup-smtp-secret-value" });

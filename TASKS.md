@@ -928,6 +928,13 @@ updated in the same task. Every new tenant route is added to the host matrix in 
   page); a test proves no `shipment_quotes` request is made for such a shipment and the label still renders; the
   gerai-logo label spec leaves no `uuid: "null"` error in the DB log; typecheck, unit and the label specs pass.
 
+### [x] T-113 — startup-config unit test inherited SMTP_PORT from the local dev env (INT-M4, 2026-11-06)
+- **Primary requirement:** NFR-1
+- **Finding:** INT-M4 #2 (`RUN-20261106T061530Z-56436ef3`, head `ea8b22e`) failed `tests/unit/startup-config.test.ts:39`: the validator named `SMTP_SECURITY, SMTP_USERNAME` instead of `SMTP_PORT, SMTP_SECURITY, SMTP_USERNAME`. Everything else passed (typecheck, db, upgrade, full e2e 723/0/27 on three viewports).
+- **Cause (proven, no env values read):** `tests/db/global-setup.ts` loads `infra/dev/.env` into `process.env` when it exists (`pnpm db:up` writes it, incl. `SMTP_HOST`/`SMTP_PORT` for the local Mailpit); the test stubbed only the variables it set and assumed the rest absent. Reproduced with synthetic `vi.stubEnv` cases: clean -> three names; `SMTP_PORT=587` present -> two names. The same test passed in fresh worktrees (no `infra/dev/.env`) and in the main checkout with `GX_TEST_ENV_FILE=/dev/null`.
+- **Fix (test only):** the test clears every mail variable (`MAIL_*`, `SMTP_*`) with `vi.stubEnv(name, "")` before the mail-validation case; validator and assertions unchanged (strict startup validation and the no-secret-in-errors check kept). Original test fails under synthetic contamination, fixed test passes clean and contaminated; full unit suite 1499/1499 under contamination.
+- **Risk Level:** R1. **Allowed Paths:** `tests/unit/**`, `TASKS.md`.
+
 ### [x] T-107 — Button and action audit: every control does what its label says (2026-11-05)
 - **Done (2026-11-06):** merge `23d4b5f`, run RUN-20261106T013933Z-8bb3ed9f PASS; full e2e INT-M2, pushed `4d86c48`.
 - **Primary requirement:** UX-13
