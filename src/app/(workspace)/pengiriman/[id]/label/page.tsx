@@ -27,8 +27,12 @@ export default async function LabelPage({ params }: { params: Promise<{ id: stri
     .eq("tenant_id", ws.tenant.id).eq("id", id).maybeSingle();
   if (!s) notFound();
   const pickup = (s.pickup_snapshot ?? {}) as { outlet?: string; address?: string; area?: string };
-  const { data: quote } = await db.from("shipment_quotes").select("courier, service")
-    .eq("tenant_id", ws.tenant.id).eq("id", s.selected_quote_id).maybeSingle();
+  // T-112: no selected quote (draft-derived or fixture shipment) means no courier/service to show; querying with a
+  // null id would send the string "null" and raise a uuid syntax error in the database (same guard as the struk page).
+  const { data: quote } = s.selected_quote_id
+    ? await db.from("shipment_quotes").select("courier, service")
+      .eq("tenant_id", ws.tenant.id).eq("id", s.selected_quote_id).maybeSingle()
+    : { data: null };
 
   if (!s.is_simulated) {
     if (s.submission_state !== "issued" || !s.awb) redirect(`/pengiriman/${s.id}`);

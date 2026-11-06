@@ -141,6 +141,21 @@ try {
   }
   console.log("Isolated backend verification: PASS");
 } finally {
+  // Opt-in evidence (GX_PG_LOG=<file>): this invocation's own PostgreSQL server log, written before teardown, so a
+  // gate can assert on server-side errors of exactly this run. Capture failure is reported, never silent.
+  if (process.env.GX_PG_LOG && pgCreated) {
+    // Canary: one known statement error just before capture proves the stderr stream is in the file; a gate that
+    // finds no canary must fail instead of passing on a blind log.
+    spawnSync("docker", ["exec", container, "psql", "-U", "postgres", "-d", "gx_audit", "-c", "select 'gx-pg-log-canary'::uuid"], { encoding: "utf8" });
+    // `docker logs` keeps the container's stdout and stderr apart; PostgreSQL logs to stderr, so both are kept.
+    const logs = spawnSync("docker", ["logs", container], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+    if (logs.error || logs.status !== 0 || logs.signal) {
+      console.error(`GX_PG_LOG capture failed: ${logs.error?.message ?? `status ${logs.status} signal ${logs.signal}`}`);
+      process.exitCode = 1;
+    } else {
+      writeFileSync(process.env.GX_PG_LOG, `${logs.stdout}${logs.stderr}`);
+    }
+  }
   // These names are generated and created by this invocation only. No shared volume is used.
   for (const item of extraContainers.reverse()) docker("rm", "-f", "-v", item);
   if (browserDir) rmSync(browserDir, { recursive: true, force: true });
