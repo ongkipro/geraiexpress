@@ -167,6 +167,21 @@ Merge log (2026-11-06, `feat/counter-ops-2026-11`; pushed through `8e3a643`):
   `RUN-20261105T220407Z-df4814db` PASS on its own declared checks: typecheck, unit, db 609/609, upgrade 609/609
   (after the test-only lock-boundary fix), review-boundary APPROVED c4340bd0. Docs handoff `a51b9f4` precedes it.
   Next: INT-M1 (`.gx-wt/gx-integration.sh INT-M1`) on the M1 head, then the single M1 push if all green.
+- M1 PUSHED `8e3a643..f89f3ed` after INT-M1 #2 `RUN-20261106T001739Z-409d991c` PASS on f89f3ed: typecheck, unit,
+  db, upgrade, FULL e2e 469 passed / 0 failed / 11 skipped, diff-hygiene, boundary PASS (M1 contract satisfied).
+  INT-M1 #1 `d4e52e0a` had the same green gates but closed BLOCKED: its boundary baseline held 455 untracked .pi/
+  harness files (now in .git/info/exclude). Run files recorded in `0f5c243`.
+- T-055: commit `85291d8`, merge `12eb37c` (M2). Run `RUN-20261105T234857Z-e19a41ae` PASS: typecheck, unit,
+  docker-build, bundle-scan, related specs 84, repeat x4 168. Negative control is parser-inserted ('strict-dynamic'
+  trusts DOM-inserted scripts by design; the DOM version failed 10/10 and was replaced). Reviews 6dae5ad5 ->
+  ab03c9bb -> 9a28f2e6 APPROVE.
+- T-107: commit `aa2b929`, merge `23d4b5f` (M2). Run `RUN-20261106T013933Z-8bb3ed9f` PASS: typecheck, unit,
+  related specs 140 (incl. the held-request close/reopen regression); R3 by path (receipt-sheet pending label only;
+  auth-demo spec). Reviews 30401488 -> 27416f90 -> 1b49a7cb APPROVE; visual verdict PASS.
+- T-111: commit `1004b21`, merge `b3f6975` (M2). Run `RUN-20261106T014950Z-4e7fa208` PASS on the final head
+  23d4b5f: offline install, typecheck, unit, docker build stage; review 03ba0d69 APPROVE. Main node_modules
+  reinstalled offline from the merged lockfile (lucide-react 1.68.0, postgrest-js 2.119.0).
+  Next: INT-M2 (`gx-integration.sh INT-M2`) on the M2 head; single M2 push only on its PASS finish.
 
 Current task: integrating the post-wave-3 hardening set (T-104..T-111, T-055) onto
 `feat/counter-ops-2026-11`. Remote is at `e87e10a` (T-103). Nothing after that is pushed.

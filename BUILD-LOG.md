@@ -1391,3 +1391,12 @@ failed one test: the lock-boundary regression held the partner advisory lock ~15
 denial (fail closed); the test now waits under 10 s. Then typecheck, unit, DB 609/609 and upgrade 609/609 PASS.
 Merge `ee7aebf`. M1 = T-109 + T-110 is integrated under the M1 contract: the single full e2e on this head decides
 the push.
+
+## 2026-11-06 — M1 pushed; M2 assembled (T-055, T-107, T-111)
+
+M1 (T-109 + T-110) was pushed as `f89f3ed` only after a fresh integration run on that exact head passed typecheck,
+unit, DB, upgrade and the full e2e (469/0/11). M2 tasks were carried onto it one at a time, each with focused specs:
+T-055's browser-enforcement test first failed because 'strict-dynamic' trusts script elements created by trusted
+script, so the probes are now parser-inserted into the real response; T-107 needed three review rounds (pending
+state lost when a confirmation dialog closes and reopens, raw submits, a per-file usage test); T-111 was re-proved
+on the final head with an offline install. The single full e2e on the M2 head decides the M2 push.
