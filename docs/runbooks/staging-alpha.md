@@ -68,7 +68,7 @@ Hosts (from `infra/env/staging.env.example`): `staging.geraiexpress.com` (apex),
 
 ## 8. Level B (real transactions; NOT part of staging acceptance)
 - [ ] I4: one supervised sandbox→production order with the pilot's key (price, resi, billing, `price_mismatch` watched); T-048 items 2/6 captures under `docs/research/**`.
-- Known defect to schedule before multi-admin use: **T-115** (deadlock between `reconcile_shipment` and the admin "close unknown" actions on the same operation; one request fails and is retried, no data corruption; priority before more than one gerai admin works the same unknown operations).
+- Resolved: **T-115** (deadlock between `reconcile_shipment` and the admin "close unknown" actions on the same operation) is fixed by the forward-only migration `20261106110000` (commits `be066ea`, `1da9327`, merged `aa5fad1`) and validated on head `aa5fad1` by INT-M5 `RUN-20261106T155227Z-d6a2a53f` (unit 1500, db 625, upgrade 625, e2e three viewports 723/0/27). The staging stack applies it with the other migrations; nothing to schedule before multi-admin use.
 
 ## Locally verified (T-114 local preparation)
 See the T-114 ledger run: committed templates pass `pnpm check:environments` (staging + production templates, Compose
