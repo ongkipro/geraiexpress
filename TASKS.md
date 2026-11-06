@@ -935,6 +935,13 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Fix (test only):** the test clears every mail variable (`MAIL_*`, `SMTP_*`) with `vi.stubEnv(name, "")` before the mail-validation case; validator and assertions unchanged (strict startup validation and the no-secret-in-errors check kept). Original test fails under synthetic contamination, fixed test passes clean and contaminated; full unit suite 1499/1499 under contamination.
 - **Risk Level:** R1. **Allowed Paths:** `tests/unit/**`, `TASKS.md`.
 
+### [ ] T-115 — Lock order in reconcile_shipment vs admin closes (second-opinion finding, 2026-11-06; parked by the feature freeze)
+- **Primary requirement:** NFR-1
+- **Finding (pre-existing, not introduced by T-104):** `reconcile_shipment` locks shipment → memberships → `provider_operations`, while `close_ambiguous_pickup_reservation` (`20261029170000_admin_closes.sql:106-110`) and `close_unknown_batch_payment` (`20261029200000:31-36`) lock operation → shipment → memberships (the order the T-104 header declares). Two admins acting on the same unknown real create operation can deadlock (40P01): one request fails and is retried; no data corruption. Source: `.delivery/reviews/2026-11-06-fable-t104.md`.
+- **Risk Level:** R3. **Allowed Paths:** `db/migrations/**` (new forward migration only), `tests/db/**`, `TASKS.md`.
+- **Done when:** `reconcile_shipment` takes the `provider_operations` row lock before `lock_member_shipment`; a two-connection reconcile/close race test (like the revoke/void one) passes; DB + upgrade gates; GPT review + reviewer-fable second opinion (DB task).
+- **Other second-opinion P3s (recorded, parked):** default ACL still grants future sequences to service_role (`db/foundation/...:33-34`); 57014/55P03 map to a generic message (`src/lib/errors.ts:125`); `authenticator` timeout applies to new pool connections only; non-fence quota RPC failures read as "batas penuh" (`partner-api.ts:91-100`); a timing-sensitive DB test (`partner-quota-restore-fence.test.ts:65-78`); CSP: `/favicon.ico` not-found HTML without CSP, host-agnostic e2e allowlist, no prerender guard, no default-src/connect-src/img-src, no report-to. Reports: `.delivery/reviews/2026-11-06-fable-{t104,t109,t110,t055}.md`.
+
 ### [x] T-107 — Button and action audit: every control does what its label says (2026-11-05)
 - **Done (2026-11-06):** merge `23d4b5f`, run RUN-20261106T013933Z-8bb3ed9f PASS; full e2e INT-M2, pushed `4d86c48`.
 - **Primary requirement:** UX-13

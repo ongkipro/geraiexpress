@@ -34,6 +34,22 @@ Independent-Review-Head: c9c7164
   `git add -N . ; git diff --check ; git reset` hygiene step, which mutates the shared index, with an index-neutral check.
   No blind Playwright worker increase until fixtures prove isolation.
 
+### Second-opinion reviews (owner rule 2026-11-06: reviewer-fable for DB/migrations, security/CSP, M1 head)
+
+reviewer-fable = Claude Fable 5.1, read-only project agent; recorded as a second opinion (the implementer session also
+runs Fable 5.1; the cross-vendor independent review stays GPT-6.1 Sol). All on merged and pushed code, so findings
+become tasks, never unpushes. Ledger run `RUN-20261106T142658Z-6cdc6c38`; reports in `.delivery/reviews/`.
+
+| Task | Reviewer run | Verdict | Report | Main finding |
+|---|---|---|---|---|
+| T-104 | 9dd6e9de | APPROVE | 2026-11-06-fable-t104.md | P2 pre-existing lock order (reconcile vs admin closes) -> T-115 (parked); P3 default ACL on sequences |
+| T-109 | a6fa538d | APPROVE | 2026-11-06-fable-t109.md | no half-done path under the role timeouts; P3s (error message, pool-connection timeout) |
+| T-110 (re-check of its earlier CHANGES_REQUIRED) | bd6673e3 | APPROVE | 2026-11-06-fable-t110.md | P2 physical/VM-snapshot restore keeps the identity -> RELEASE.md restore runbook corrected; P3s |
+| T-055 | afc22b42 | APPROVE | 2026-11-06-fable-t055.md | 5x P3 CSP hardening (favicon.ico, prerender guard, default-src, report-to, e2e allowlist), parked |
+| M1 head | — | not separately reviewed | — | M1 (T-109+T-110) was pushed before this rule; covered retrospectively by the T-109 and T-110 rows |
+
+A first combined T-104+T-109 review timed out after 30 minutes (read-only, no changes) and was split.
+
 ### Release-blocker handoff (read-only triage from RELEASE/OBSERVABILITY/TASKS and repo evidence; nothing marked green from prose)
 
 Two readiness levels. **Level A: staging/demo deployed** (owner and pilot staff can use it; registration closed).

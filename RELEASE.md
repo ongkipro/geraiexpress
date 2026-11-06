@@ -235,7 +235,12 @@ by the app. Gates before a release is started:
        replica or a `pg_upgrade` (new system identifier) changes the recorded cluster identity
        (`system_identifier:database oid:fence table oid:timeline`, `private.provider_cluster_identity()`), so the
        provider mutation fence is engaged with no step; after a planned `pg_upgrade` without a restore, review and
-       clear it the same way. A data-only restore into the existing tables keeps that identity: as the postgres
+       clear it the same way. **A physical restore keeps the identity too** (a Vultr/VM or volume snapshot, a
+       data-directory copy, or a base backup started without recovery: same system identifier, database and table
+       oids, timeline), so the fence stays OPEN by itself; treat it exactly like a data-only restore and engage the
+       fence explicitly before the app starts (second-opinion review 2026-11-06, `.delivery/reviews/2026-11-06-fable-t110.md`).
+       When in doubt, always engage: an unnecessary engagement only pauses mutations until a reviewed clear.
+       A data-only restore into the existing tables keeps that identity: as the postgres
        owner, immediately after `pg_restore` and before the app starts, run
        `select private.engage_provider_fence('Pemulihan dari cadangan <tanggal>: <tiket>');`. A backup taken
        before migration `20261105200000` has no fence: run `scripts/db-migrate.sh` (gate 17 ledger check) on the
