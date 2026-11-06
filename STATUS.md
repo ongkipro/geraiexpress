@@ -10,6 +10,29 @@ Independent-Review-Detail: M4: T-045 R4 GPT-6.1 Sol 68b3b525 -> c14f0e6d -> 3844
 Independent-Reviewer: reviewer (cx/gpt-6.1-sol, high), separate subagent per task; implementer pi-parent-01a1a300 (cc/claude-opus-5-5)
 Independent-Review-Head: c9c7164
 
+## M5 CLOSED and pushed (2026-11-06) — T-114 local prep + T-115 deadlock fix; feature freeze in force
+
+- INT-M5 `RUN-20261106T155227Z-d6a2a53f` on fixed clean head `aa5fad1` (start head = every check's head). M5 = T-114
+  local staging prep (`932deeb`, merge `2b56ae4`), T-115 forward migration `20261106110000` (`be066ea`, `1da9327`, merge
+  `aa5fad1`) and docs `781d51f`, `b2b3fc2` on pushed M4 `fdc34ad`. Declared before launch: typecheck, unit, db, upgrade,
+  e2e (three viewports). All executed, exit 0: typecheck PASS; unit 1500/1500; db 625/625; upgrade 625/625; e2e
+  723 passed / 0 failed / 27 skipped / 0 flaky (mobile-390 244 + 6 skipped, tablet-768 234 + 16, desktop-1280 245 + 5);
+  diff-hygiene PASS (index-neutral); boundary PASS R2; finished PASS. Evidence:
+  `/data/tmp/geraiexpress/int-m5/run-20261106T155223Z/`.
+- Runner: a one-off fail-fast script (`/data/tmp/geraiexpress/int-m5/run-int-m5.sh`): stops downstream gates after a
+  failure, unique evidence directory, live provenance (`cc/claude-opus-5-5`, 9router-fantastico, medium; the session
+  model as reported by `PI_MODEL`), no index mutation. The shared runners are unchanged. A first launch stopped before
+  ledger start (the background shell lacked `PI_MODEL`); no run was created.
+- Pushed `fdc34ad..aa5fad1` (plain push of the verified head). This STATUS/BUILD-LOG commit and the run's ledger files
+  were written AFTER the gates; they change no runtime code and were not themselves tested.
+- T-115 acceptance: run `e4db72e5` PASS (R3; GPT-6.1 Sol APPROVE, reviewer-fable second opinion APPROVE) + comment-only
+  follow-up `c85c8b19`. Dynamic race proof = reconcile vs pickup close; batch-close order = source review only. Parked
+  pre-existing P3: reconcile operation lookup without `order by`.
+- Alpha staging: local preparation done (`docs/runbooks/staging-alpha.md`, DEC-029). Not deployed. Missing owner inputs:
+  I1 approved Vultr plan/region + DNS access for geraiexpress.com; I2 SMTP account + SPF/DKIM/DMARC; I3 off-server
+  backup target + RPO/RTO. Level B (real transactions) additionally needs I4 (pilot gerai, its Mengantar key, approval
+  of one supervised order, T-048). Legal/PSE/PPN deferred for alpha (DEC-029; not a claim of exemption).
+
 ## CHECKPOINT 2026-11-05 ~23:55 WIB (machine maintenance; session may be force-closed)
 
 ## M4 CLOSED and pushed (2026-11-06) — feature freeze in force

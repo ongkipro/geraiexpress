@@ -1419,3 +1419,14 @@ suite ran 5 times, each from a fresh isolated PostgreSQL + PostgREST created by 
 the other full DB and upgrade runs of the day that is 13 consecutive passes. The two `account_busy` failures of
 2026-10-29 were never reproduced in isolation; every recorded occurrence came from a run sharing the local database
 with a ticking scheduler, so the cause is bounded to that interference, which the isolated runner removes.
+
+## 2026-11-06 — M5: T-115 lock-order fix, T-114 local staging prep, INT-M5
+
+T-115 removed a deadlock between `reconcile_shipment` and the admin closes: the old body locked shipment -> memberships
+-> operation, the closes operation -> shipment -> memberships. The forward-only migration `20261106110000` takes the
+operation row first; the member recheck after the shipment wait and the membership-locked admin check stay. RED on the
+old code: PostgreSQL `deadlock detected` in a two-connection schedule gated on observed lock waits. Reviewer-fable also
+showed the old body cycled with `lock_real_operation` (dispatch on a real operation); the same order removes it.
+INT-M5 (`RUN-20261106T155227Z-d6a2a53f`, head `aa5fad1`) passed typecheck, unit 1500, db 625, upgrade 625 and e2e on
+three viewports 723/0/27; pushed `fdc34ad..aa5fad1`. T-114 prepared the staging runbook locally; deployment waits on the
+server/DNS, SMTP and backup-target inputs.
