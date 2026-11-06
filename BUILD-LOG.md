@@ -1410,3 +1410,12 @@ last clause. The owner asked to make sure the repository is public: it already i
 revision was scanned for committed sensitive filenames and high-signal secret patterns, with a planted-fake control
 repository proving the patterns fire; nothing was found. The owner chose geraiexpress.com as the domain, which the
 host defaults already use; the production mail provider remains the owner's choice (T-063).
+
+## 2026-11-06 — T-059: repeated DB suite, account_busy disposition
+
+The repository has no CI, so with the owner's agreement T-059 became a repeated local proof: the entire serialized DB
+suite ran 5 times, each from a fresh isolated PostgreSQL + PostgREST created by `scripts/test-backend-isolated.mjs`
+(no shared database, no scheduler, no retries). All 5 passed 609/609 with no cod-and-payment or issuance failure; with
+the other full DB and upgrade runs of the day that is 13 consecutive passes. The two `account_busy` failures of
+2026-10-29 were never reproduced in isolation; every recorded occurrence came from a run sharing the local database
+with a ticking scheduler, so the cause is bounded to that interference, which the isolated runner removes.
