@@ -212,6 +212,21 @@ describe("env files", () => {
     ]);
   });
 
+  // T-114: the alpha staging checklist (docs/runbooks/staging-alpha.md) relies on these template facts.
+  it("the staging template names the staging hosts, a sandbox provider, and the complete SMTP set with no secret value", () => {
+    const st = parseEnv(readFileSync(new URL("../../infra/env/staging.env.example", import.meta.url), "utf8"));
+    expect([st.SITE_HOST, st.APP_HOST, st.OWNER_HOST, st.HOOKS_HOST]).toEqual([
+      "staging.geraiexpress.com", "app-staging.geraiexpress.com", "owner-staging.geraiexpress.com", "hooks-staging.geraiexpress.com"]);
+    expect(st.APP_ORIGIN).toBe("https://app-staging.geraiexpress.com");
+    expect(st.MENGANTAR_ENV).toBe("sandbox");
+    for (const name of ["MAIL_TRANSPORT", "MAIL_FROM", "SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USERNAME", "SMTP_PASSWORD"]) {
+      expect(Object.keys(st), name).toContain(name);
+    }
+    expect(st.MAIL_TRANSPORT ?? "").toBe("");
+    expect(st.SMTP_PASSWORD ?? "").toBe("");
+    expect(st.MAIL_FROM).toBe("no-reply@geraiexpress.com");
+  });
+
   it("the committed staging and production templates pass together and name the data and auth settings", () => {
     const read = (name: string) => ({ vars: parseEnv(readFileSync(new URL(`../../infra/env/${name}.env.example`, import.meta.url), "utf8")), template: true });
     expect(checkEnvFiles({ staging: read("staging"), production: read("production") })).toEqual([]);
