@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CalendarClock, Mail, Store, UserRound } from "lucide-react";
 import { AuthCard, AuthFooter, AuthHeading, AuthShell, authLinkClass } from "@/components/auth/auth-shell";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Separator } from "@/components/ui/separator";
 import { signOutAction } from "@/lib/auth-actions";
 import { formatWib } from "@/lib/format";
@@ -69,7 +69,7 @@ export default async function InvitationsPage() {
             Undangan hanya bisa diterima oleh email yang dituju. Keluar, lalu masuk dengan email yang tertulis di undangan.
           </p>
           <form action={signOutAction}>
-            <Button type="submit" variant={invites.length === 0 ? "default" : "outline"} className="w-full">Keluar dan ganti akun</Button>
+            <SubmitButton variant={invites.length === 0 ? "default" : "outline"} className="w-full" pendingLabel="Keluar…">Keluar dan ganti akun</SubmitButton>
           </form>
         </section>
       </AuthCard>

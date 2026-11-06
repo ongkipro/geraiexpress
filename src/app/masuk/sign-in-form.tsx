@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { StatusAlert } from "@/components/auth/auth-shell";
 import { Turnstile, useCaptchaGate } from "@/components/turnstile";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { signInAction, startDemoAction, type DemoState, type SignInState } from "@/lib/auth-actions";
@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 // `codeEntry`: the host also serves /daftar, so a forgotten password has a way in (an emailed code).
 export function SignInForm({ siteKey, codeEntry }: { siteKey: string | undefined; codeEntry: boolean }) {
-  const [state, action, pending] = useActionState<SignInState, FormData>(signInAction, {});
+  const [state, action] = useActionState<SignInState, FormData>(signInAction, {});
   const { onToken, guard, hint } = useCaptchaGate();
   const describedBy = state.error ? "signin-error" : undefined;
   return (
@@ -39,9 +39,7 @@ export function SignInForm({ siteKey, codeEntry }: { siteKey: string | undefined
           ) : null}
         </StatusAlert>
       ) : null}
-      <Button type="submit" disabled={pending} aria-busy={pending} {...guard} className={cn("w-full", guard.className)}>
-        {pending ? "Memeriksa…" : "Masuk"}
-      </Button>
+      <SubmitButton pendingLabel="Memeriksa…" {...guard} className={cn("w-full", guard.className)}>Masuk</SubmitButton>
       {hint}
       {/* Below the button: while verifying, the widget's frame can overflow its box and would
           otherwise cover the button and swallow the click. */}
@@ -51,13 +49,11 @@ export function SignInForm({ siteKey, codeEntry }: { siteKey: string | undefined
 }
 
 export function DemoEntry({ siteKey }: { siteKey: string | undefined }) {
-  const [state, action, pending] = useActionState<DemoState, FormData>(startDemoAction, {});
+  const [state, action] = useActionState<DemoState, FormData>(startDemoAction, {});
   const { onToken, guard, hint } = useCaptchaGate();
   return (
     <form action={action} className="flex flex-col gap-3">
-      <Button type="submit" variant="outline" disabled={pending} aria-busy={pending} {...guard} className={cn("w-full bg-card", guard.className)}>
-        {pending ? "Menyiapkan gerai contoh…" : "Coba demo"}
-      </Button>
+      <SubmitButton variant="outline" pendingLabel="Menyiapkan gerai contoh…" {...guard} className={cn("w-full bg-card", guard.className)}>Coba demo</SubmitButton>
       {hint}
       <Turnstile siteKey={siteKey} resetSignal={state} onToken={onToken} />
       {state.error ? <StatusAlert variant="destructive">{state.error}</StatusAlert> : null}

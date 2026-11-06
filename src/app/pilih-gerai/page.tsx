@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthCard, AuthFooter, AuthHeading, AuthShell, StatusAlert, authLinkClass } from "@/components/auth/auth-shell";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { signOutAction } from "@/lib/auth-actions";
 import { dbServer } from "@/lib/db/server";
 import { loadWorkspace } from "@/lib/workspace";
@@ -44,7 +44,7 @@ export default async function ChooseTenantPage({ searchParams }: { searchParams:
       <AuthFooter>
         {currentId ? <Link href="/" className={authLinkClass}>Kembali ke gerai yang sedang dipakai</Link> : null}
         <form action={signOutAction}>
-          <Button type="submit" variant="ghost">Keluar</Button>
+          <SubmitButton variant="ghost" pendingLabel="Keluar…">Keluar</SubmitButton>
         </form>
       </AuthFooter>
     </AuthShell>

@@ -573,7 +573,8 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
           <ContentDeclaration declaration={props.declaration ?? null} itemDescription={v.item_description} />
           <DialogFooter className="gap-3">
             <DialogClose asChild><Button type="button" variant="outline">Kembali</Button></DialogClose>
-            <SubmitButton pendingLabel="Menerbitkan…" disabled={!props.declaration}>Konfirmasi & terbitkan resi</SubmitButton>
+            <SubmitButton pendingLabel="Menerbitkan…" disabled={!props.declaration}
+              aria-describedby={props.declaration ? undefined : "content-declaration-missing"}>Konfirmasi & terbitkan resi</SubmitButton>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -585,7 +586,7 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
 // in an expandable list. The database re-checks the version (content_declaration_required).
 function ContentDeclaration({ declaration, itemDescription }: { declaration: Declaration | null; itemDescription: string }) {
   if (!declaration) {
-    return <p role="alert" className="mb-4 text-sm text-destructive">Teks pernyataan isi paket belum tersedia. Hubungi admin GeraiExpress.</p>;
+    return <p id="content-declaration-missing" role="alert" className="mb-4 text-sm text-destructive">Teks pernyataan isi paket belum tersedia. Hubungi admin GeraiExpress.</p>;
   }
   return (
     <fieldset className="mb-4 flex flex-col gap-2 rounded-md p-4 ring-1 ring-border">

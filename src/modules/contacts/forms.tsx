@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/submit-button";
-import { addAddressAction, archiveContactAction, createContactAction, updateContactAction, type ContactState } from "./actions";
+import { addAddressAction, archiveAddressAction, archiveContactAction, createContactAction, updateContactAction, type ContactState } from "./actions";
 
 function Field({ name, label, state, defaultValue, type = "text", inputMode, textarea, className }: {
   name: string; label: string; state: ContactState; defaultValue?: string; type?: string;
@@ -52,7 +52,7 @@ function Roles({ state, sender, recipient }: { state: ContactState; sender?: boo
 }
 
 function NewContactForm() {
-  const [state, action, pending] = useActionState<ContactState, FormData>(createContactAction, {});
+  const [state, action] = useActionState<ContactState, FormData>(createContactAction, {});
   return (
     <form action={action} className="flex flex-col gap-5" noValidate>
       <Status state={state} />
@@ -71,7 +71,7 @@ function NewContactForm() {
           <Field name="postal_code" label="Kode pos" inputMode="numeric" state={state} />
         </div>
       </details>
-      <Button type="submit" className="w-full sm:w-auto sm:self-start" disabled={pending} aria-busy={pending}>{pending ? "Menyimpan…" : "Simpan kontak"}</Button>
+      <SubmitButton className="w-full sm:w-auto sm:self-start" pendingLabel="Menyimpan…">Simpan kontak</SubmitButton>
     </form>
   );
 }
@@ -97,7 +97,7 @@ export function NewContactSheet({ label = "Tambah kontak", className }: { label?
 }
 
 export function EditContactForm({ contact }: { contact: { id: string; revision: number; name: string; phone: string; is_sender: boolean; is_recipient: boolean } }) {
-  const [state, action, pending] = useActionState<ContactState, FormData>(updateContactAction, {});
+  const [state, action] = useActionState<ContactState, FormData>(updateContactAction, {});
   return (
     <form action={action} className="flex flex-col gap-5" noValidate>
       <input type="hidden" name="contact_id" value={contact.id} />
@@ -108,13 +108,13 @@ export function EditContactForm({ contact }: { contact: { id: string; revision: 
         <Field name="phone" label="No. HP" type="tel" inputMode="tel" state={state} defaultValue={contact.phone} />
       </div>
       <Roles state={state} sender={contact.is_sender} recipient={contact.is_recipient} />
-      <Button type="submit" variant="outline" className="w-full sm:w-auto sm:self-start" disabled={pending} aria-busy={pending}>{pending ? "Menyimpan…" : "Simpan perubahan"}</Button>
+      <SubmitButton variant="outline" className="w-full sm:w-auto sm:self-start" pendingLabel="Menyimpan…">Simpan perubahan</SubmitButton>
     </form>
   );
 }
 
 export function AddAddressForm({ contactId }: { contactId: string }) {
-  const [state, action, pending] = useActionState<ContactState, FormData>(addAddressAction, {});
+  const [state, action] = useActionState<ContactState, FormData>(addAddressAction, {});
   return (
     <form action={action} className="flex flex-col gap-5" noValidate key={state.ok ? Date.now() : "form"}>
       <input type="hidden" name="contact_id" value={contactId} />
@@ -125,20 +125,56 @@ export function AddAddressForm({ contactId }: { contactId: string }) {
         <Field name="area" label="Kecamatan / kota" state={state} />
         <Field name="postal_code" label="Kode pos" inputMode="numeric" state={state} />
       </div>
-      <Button type="submit" variant="outline" className="w-full sm:w-auto sm:self-start" disabled={pending}>Tambah alamat</Button>
+      <SubmitButton variant="outline" className="w-full sm:w-auto sm:self-start" pendingLabel="Menambahkan…">Tambah alamat</SubmitButton>
     </form>
+  );
+}
+
+// T-107 / UX-15: archiving an address removes it from the intake picker (and may move the primary
+// mark), so it confirms in a dialog that names the address, like archiving a contact.
+export function ArchiveAddressForm({ contactId, address }: {
+  contactId: string; address: { id: string; label: string | null; line: string };
+}) {
+  const name = address.label ?? "Alamat";
+  // Pending is held outside the dialog (a transition around the action), so closing and reopening the dialog
+  // while the archive runs cannot submit it twice (T-107 review): the trigger stays disabled until it settles.
+  const [pending, startTransition] = useTransition();
+  const archive = (data: FormData) => startTransition(() => archiveAddressAction(data));
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="shrink-0" disabled={pending} aria-busy={pending || undefined}>Arsipkan<span className="sr-only"> alamat {name}</span></Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader className="pr-12">
+          <DialogTitle>Arsipkan alamat {name}?</DialogTitle>
+          <DialogDescription>
+            <span className="break-words text-foreground">{address.line}</span> hilang dari pilihan alamat saat membuat pengiriman.
+            Pengiriman yang sudah dikonfirmasi tidak berubah.
+          </DialogDescription>
+        </DialogHeader>
+        <form action={archive} className="flex flex-col gap-5">
+          <input type="hidden" name="contact_id" value={contactId} />
+          <input type="hidden" name="address_id" value={address.id} />
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="ghost">Batal</Button></DialogClose>
+            <SubmitButton variant="destructive" pendingLabel="Mengarsipkan…">Arsipkan alamat</SubmitButton>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 // Archiving hides the contact from the active list and the intake picker, so it confirms in a
 // dialog first; confirmed shipments keep their own copy of the data.
 export function ArchiveContactForm({ contact }: { contact: { id: string; revision: number; name: string } }) {
-  const [state, action] = useActionState<ContactState, FormData>(archiveContactAction, {});
+  const [state, action, pending] = useActionState<ContactState, FormData>(archiveContactAction, {});
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="w-full border-danger text-danger sm:w-auto sm:self-start">Arsipkan kontak</Button>
+        <Button variant="outline" className="w-full border-danger text-danger sm:w-auto sm:self-start" disabled={pending} aria-busy={pending || undefined}>Arsipkan kontak</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader className="pr-12">

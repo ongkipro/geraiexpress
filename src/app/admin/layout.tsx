@@ -2,7 +2,7 @@ import { ShieldCheck } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { AccountMenu } from "@/components/app-header-account";
 import { AppShell } from "@/components/app-shell";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import type { NavItem } from "@/components/workspace-nav";
 import { signOutAction } from "@/lib/auth-actions";
 import { requirePlatform, type Capability } from "@/lib/platform";
@@ -37,7 +37,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   );
   const sessionActions = (
     <form action={signOutAction}>
-      <Button type="submit" variant="ghost" size="sm" className="w-full justify-start">Keluar</Button>
+      <SubmitButton variant="ghost" size="sm" className="w-full justify-start" pendingLabel="Keluar…">Keluar</SubmitButton>
     </form>
   );
 

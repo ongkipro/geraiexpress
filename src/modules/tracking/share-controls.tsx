@@ -2,6 +2,9 @@
 
 import { useId, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
 import { revokeTrackingAction, shareTrackingAction } from "./actions";
 
 type Props = { shipmentId: string; hasPhone: boolean; linkId: string | null; isAdmin: boolean; shared: boolean; revoked: boolean };
@@ -10,6 +13,7 @@ export function ShareControls({ shipmentId, hasPhone, linkId, isAdmin, shared, r
   const [pending, startTransition] = useTransition();
   const [notice, setNotice] = useState("");
   const [manual, setManual] = useState("");
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
   const manualRef = useRef<HTMLTextAreaElement>(null);
   const id = useId();
 
@@ -42,14 +46,30 @@ export function ShareControls({ shipmentId, hasPhone, linkId, isAdmin, shared, r
       <div className="flex flex-wrap gap-2">
         <Button type="button" disabled={pending} onClick={() => share(hasPhone ? "whatsapp" : "message")}>{hasPhone ? "Kirim resi ke pelanggan" : "Salin pesan"}</Button>
         <Button type="button" variant="outline" disabled={pending} onClick={() => share("link")}>Salin tautan</Button>
-        {isAdmin && shared && !revoked && linkId ? <Button type="button" variant="outline" disabled={pending} onClick={() => {
-          if (!window.confirm("Cabut tautan pelacakan? Tautan lama tidak akan dapat dibuka lagi.")) return;
-          startTransition(async () => {
-            const result = await revokeTrackingAction(shipmentId, linkId);
-            setManual("");
-            setNotice(result.error ?? "Tautan dicabut.");
-          });
-        }}>Cabut tautan</Button> : null}
+        {isAdmin && shared && !revoked && linkId ? (
+          // T-107 / UX-15: the shared confirmation dialog (not window.confirm) names the effect; the
+          // confirm button closes it and starts one revoke, and the trigger stays disabled while it runs.
+          <Dialog open={confirmRevoke} onOpenChange={setConfirmRevoke}>
+            <DialogTrigger asChild><Button type="button" variant="outline" disabled={pending}>Cabut tautan</Button></DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader className="pr-12">
+                <DialogTitle>Cabut tautan pelacakan?</DialogTitle>
+                <DialogDescription>Tautan yang sudah dibagikan ke pelanggan tidak bisa dibuka lagi. Bagikan lagi untuk membuat tautan baru.</DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-3">
+                <DialogClose asChild><Button type="button" variant="outline">Kembali</Button></DialogClose>
+                <Button type="button" variant="destructive" onClick={() => {
+                  setConfirmRevoke(false);
+                  startTransition(async () => {
+                    const result = await revokeTrackingAction(shipmentId, linkId);
+                    setManual("");
+                    setNotice(result.error ?? "Tautan dicabut.");
+                  });
+                }}>Ya, cabut tautan</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : null}
       </div>
       <p className="text-xs text-muted-foreground">WhatsApp hanya membuka pesan siap kirim di perangkat Anda. Tidak ada pesan yang dikirim otomatis.</p>
       <p role="status" className="text-sm empty:hidden" aria-live="polite">{pending ? "Menyiapkan…" : notice}</p>

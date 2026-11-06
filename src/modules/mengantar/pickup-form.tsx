@@ -1,14 +1,14 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import type { PickupAddress } from "@/lib/mengantar/public-api";
 import { setOutletPickupAction, type PickupState } from "./actions";
 
 // T-023: choose which of the seller's saved Mengantar pickup addresses this outlet ships from.
 // Addresses are created and edited in the Mengantar app; contact names/phones stay there.
 export function PickupForm({ addresses, current }: { addresses: PickupAddress[]; current: string | null }) {
-  const [state, action, pending] = useActionState<PickupState, FormData>(setOutletPickupAction, {});
+  const [state, action] = useActionState<PickupState, FormData>(setOutletPickupAction, {});
   return (
     <form action={action} className="flex flex-col gap-4">
       {state.error ? <p role="alert" className="rounded-md bg-card p-3 ring-1 ring-foreground"><span aria-hidden="true">⚠ </span>{state.error}</p> : null}
@@ -26,9 +26,7 @@ export function PickupForm({ addresses, current }: { addresses: PickupAddress[];
           </label>
         ))}
       </fieldset>
-      <Button type="submit" disabled={pending} aria-busy={pending} className="self-start">
-        {pending ? "Menyimpan…" : "Pakai alamat ini"}
-      </Button>
+      <SubmitButton pendingLabel="Menyimpan…" className="self-start">Pakai alamat ini</SubmitButton>
     </form>
   );
 }

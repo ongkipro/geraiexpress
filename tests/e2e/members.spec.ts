@@ -1,4 +1,5 @@
 // PR-31 / PR-32 / UX-8 / DEC-007 / DEC-008: staff invitation, acceptance and member management.
+import type { Route } from "@playwright/test";
 import { actAsVisitor, expect, randomVisitorIp, test } from "./fixtures";
 import { atDashboard, expectNoHorizontalOverflow, expectTouchTargets, localSql, mailCode, signIn, startDemo } from "./helpers";
 
@@ -71,7 +72,52 @@ test("an invitation can be revoked before it is used", async ({ page }) => {
   await page.getByRole("button", { name: "Buat undangan" }).click();
   const row = page.getByTestId("invitation").filter({ hasText: email });
   await expect(row).toContainText("Admin gerai");
-  await row.getByRole("button", { name: /Cabut undangan/ }).click();
+  // T-107: revoking confirms in a dialog that names the invited email; Batal and Escape change nothing.
+  const revoke = row.getByRole("button", { name: `Cabut undangan untuk ${email}` });
+  await revoke.click();
+  const dialog = page.getByRole("dialog", { name: "Cabut undangan?" });
+  await expect(dialog).toContainText(email);
+  await page.screenshot({ path: test.info().outputPath(`dialog-revoke-invite-${page.viewportSize()?.width}.png`), animations: "disabled" });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(revoke).toBeFocused();
+  await expect(row).toBeVisible();
+  await revoke.click();
+  await dialog.getByRole("button", { name: "Cabut undangan", exact: true }).click();
+  await expect(page.getByTestId("invitation").filter({ hasText: email })).toHaveCount(0);
+});
+
+// T-107 review: the confirmation dialog unmounts its form when it closes, so the pending guard must live
+// outside it. While a revoke is still running, closing the dialog and confirming again must not send a
+// second request: the trigger stays disabled and busy until the first one settles.
+test("closing and reopening the revoke dialog while the request runs sends one request", async ({ page }) => {
+  const email = `cabut-tahan-${Date.now()}@geraiexpress.test`;
+  await signIn(page, "owner-a@geraiexpress.test");
+  await page.goto("/anggota");
+  await page.getByLabel("Email staf").fill(email);
+  await page.getByRole("button", { name: "Buat undangan" }).click();
+  const row = page.getByTestId("invitation").filter({ hasText: email });
+  await expect(row).toBeVisible();
+  const held: Route[] = [];
+  await page.route(/\/anggota/, async (route) => {
+    if (route.request().method() === "POST" && route.request().headers()["next-action"]) held.push(route);
+    else await route.continue();
+  });
+  const revoke = row.getByRole("button", { name: `Cabut undangan untuk ${email}` });
+  await revoke.click();
+  const dialog = page.getByRole("dialog", { name: "Cabut undangan?" });
+  await dialog.getByRole("button", { name: "Cabut undangan", exact: true }).click();
+  await expect.poll(() => held.length).toBe(1);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  // The trigger is disabled while the first request is held: no way to reopen and confirm again.
+  await expect(revoke).toBeDisabled();
+  await expect(revoke).toHaveAttribute("aria-busy", "true");
+  await revoke.click({ force: true }).catch(() => {});
+  await page.waitForTimeout(600);
+  expect(held).toHaveLength(1);
+  await page.unroute(/\/anggota/);
+  await held[0].continue();
   await expect(page.getByTestId("invitation").filter({ hasText: email })).toHaveCount(0);
 });
 

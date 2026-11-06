@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { AuthCard, AuthFooter, AuthHeading, AuthShell } from "@/components/auth/auth-shell";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { signOutAction } from "@/lib/auth-actions";
 import { loadPlatform } from "@/lib/platform";
 import { currentUser } from "@/lib/db/server";
@@ -31,7 +31,7 @@ export default async function TwoFactorPage() {
       </AuthCard>
       <AuthFooter>
         <form action={signOutAction}>
-          <Button type="submit" variant="ghost">Keluar</Button>
+          <SubmitButton variant="ghost" pendingLabel="Keluar…">Keluar</SubmitButton>
         </form>
       </AuthFooter>
     </AuthShell>

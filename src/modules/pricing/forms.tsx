@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -9,6 +10,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Notice } from "@/components/notice";
+import { PendingLabel } from "@/modules/labels/print-ui";
 import { setGeraiDiscountAction, type DiscountState } from "./actions";
 import { bpsToInput, formatPercentBps, formatPointsBps, parsePercentToBps, STATUS_LABEL, STATUS_NOTE } from "./percent";
 
@@ -83,7 +85,7 @@ export function DiscountForm(p: Props) {
           </Field>
 
           {aboveObserved ? (
-            <Notice tone="danger" className="text-sm" data-testid="discount-blocked">
+            <Notice id={`${formId}-blocked`} tone="danger" className="text-sm" data-testid="discount-blocked">
               Diskon gerai {formatPercentBps(basisPoints)} melebihi diskon Mengantar tertinggi yang teramati ({formatPercentBps(p.observedBps)}). GeraiExpress tidak menanggung selisihnya, sehingga nilai ini tidak dapat disimpan. Turunkan diskon gerai menjadi {formatPercentBps(p.observedBps)} atau lebih rendah.
             </Notice>
           ) : null}
@@ -93,7 +95,7 @@ export function DiscountForm(p: Props) {
             </Notice>
           ) : null}
           {observedMismatch ? (
-            <Notice tone="danger" className="text-sm" data-testid="discount-observed-mismatch">
+            <Notice id={`${formId}-mismatch`} tone="danger" className="text-sm" data-testid="discount-observed-mismatch">
               Status Teramati dari Mengantar hanya untuk nilai yang sama persis dengan diskon Mengantar tertinggi yang teramati ({formatPercentBps(p.observedBps)}). Samakan nilainya atau pilih status Pernyataan pemilik.
             </Notice>
           ) : null}
@@ -151,11 +153,14 @@ export function DiscountForm(p: Props) {
           type="button"
           className="self-start max-sm:w-full"
           disabled={pending || aboveObserved || observedMismatch}
+          // A blocked value says why next to the field; the button points at that reason (T-107).
+          aria-describedby={aboveObserved ? `${formId}-blocked` : observedMismatch ? `${formId}-mismatch` : undefined}
           aria-busy={pending}
           onClick={() => { if (formRef.current?.reportValidity() && basisPoints !== null) setConfirming(true); }}
         >
-          Tinjau &amp; simpan
+          <PendingLabel pending={pending} label="Tinjau & simpan" pendingLabel="Menyimpan versi…" />
         </Button>
+        {pending ? <p role="status" className="-mt-3 text-sm text-muted-foreground">Menyimpan versi diskon…</p> : null}
       </form>
 
       <Dialog open={confirming} onOpenChange={setConfirming}>
@@ -177,7 +182,7 @@ export function DiscountForm(p: Props) {
           </dl>
           <DialogFooter className="gap-3">
             <DialogClose asChild><Button type="button" variant="ghost">Kembali</Button></DialogClose>
-            <Button type="submit" form={formId} disabled={pending} aria-busy={pending}>Simpan versi</Button>
+            <SubmitButton form={formId} pending={pending} pendingLabel="Menyimpan…">Simpan versi</SubmitButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

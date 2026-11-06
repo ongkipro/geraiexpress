@@ -4,12 +4,13 @@ import { useActionState, useState, useTransition } from "react";
 import { StatusAlert } from "@/components/auth/auth-shell";
 import { CodeInput, useResetKey } from "@/components/auth/code-input";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { startTotpEnrollAction, verifyTotpAction, type EnrollState } from "@/lib/platform-actions";
 
 export function TotpForm({ enrolled }: { enrolled: boolean }) {
   const [enrolment, setEnrolment] = useState<EnrollState>({});
   const [starting, startTransition] = useTransition();
-  const [state, verify, pending] = useActionState<EnrollState, FormData>(
+  const [state, verify] = useActionState<EnrollState, FormData>(
     (prev, form) => verifyTotpAction({ ...enrolment, ...prev, factorId: enrolment.factorId }, form),
     {},
   );
@@ -22,7 +23,11 @@ export function TotpForm({ enrolled }: { enrolled: boolean }) {
         {error ? <StatusAlert variant="destructive">{error}</StatusAlert> : null}
         <Button type="button" className="w-full" disabled={starting} aria-busy={starting || undefined}
           onClick={() => startTransition(async () => setEnrolment(await startTotpEnrollAction()))}>
-          Mulai pasang autentikator
+          {/* Both labels share one grid cell so the width stays put while the QR code is prepared. */}
+          <span className="inline-grid">
+            <span className={starting ? "invisible col-start-1 row-start-1" : "col-start-1 row-start-1"}>Mulai pasang autentikator</span>
+            <span aria-hidden={!starting} className={starting ? "col-start-1 row-start-1" : "invisible col-start-1 row-start-1"}>Menyiapkan kode QR…</span>
+          </span>
         </Button>
       </div>
     );
@@ -53,7 +58,7 @@ export function TotpForm({ enrolled }: { enrolled: boolean }) {
         // Not on the enrolment screen: focusing the code would scroll the QR code out of view.
         autoFocus={enrolled || attempt > 0}
       />
-      <Button type="submit" className="w-full" disabled={pending} aria-busy={pending || undefined}>Verifikasi</Button>
+      <SubmitButton className="w-full" pendingLabel="Memeriksa…">Verifikasi</SubmitButton>
     </form>
   );
 }

@@ -915,6 +915,13 @@ updated in the same task. Every new tenant route is added to the host matrix in 
   page); a test proves no `shipment_quotes` request is made for such a shipment and the label still renders; the
   gerai-logo label spec leaves no `uuid: "null"` error in the DB log; typecheck, unit and the label specs pass.
 
+### [ ] T-107 — Button and action audit: every control does what its label says (2026-11-05)
+- **Primary requirement:** UX-13
+- **Constraints:** UX-12, UX-15, UX-16, UI-1 to UI-7 (44px targets, single blue, visible states); existing shadcn `Button`, `SubmitButton`, `PendingLabel` and `Dialog` only (no new dependency); no server action, RPC or migration changes; files owned by parallel work (T-055: `src/proxy.ts`, `src/lib/csp.ts`, `src/app/layout.tsx`, marketing pages; T-105: `src/modules/shipments/actions.ts`, `src/modules/members/actions.ts`, `src/lib/auth-actions.ts`, export.csv routes, `src/lib/errors.ts`, `src/lib/format.ts`) are not edited; defects found there are recorded for that task.
+- **Risk Level:** R2
+- **Allowed Paths:** `src/app/**` (excluding the T-055/T-105 files above), `src/modules/**/*.tsx`, `src/components/**` (excluding `ui/**`), `tests/e2e/**`, `tests/unit/**`, `docs/spec/17-UX-FLOWS-SCREEN-CONTRACTS.md`, `TASKS.md`, `STATUS.md`
+- **Done when:** every Server Action submit uses `SubmitButton` (pending label, `aria-busy`, duplicate-click guard) except documented GET/filter exceptions, pinned by `tests/unit/submit-button-usage.test.ts`; destructive actions (archive address, revoke invitation, withdraw application, revoke tracking link) confirm in the shared dialog naming the object, with Escape returning focus to the trigger; disabled actions reference their reason via `aria-describedby`; role-change success is announced after its dialog closes; e2e for the changed flows (contacts, members, registration, tracking, sign-in pending) pass at 390 and 1280; typecheck and unit pass; screenshots of the changed pages at 390 and 1280 reviewed.
+
 ### Deferred — Multi-cabang owner (Super Admin → owner → cabang admins), DEC-024 (3)
 Not scheduled. Today one gerai = one cabang with its own admin; another cabang registers separately.
 

@@ -1,6 +1,7 @@
 // PR-2 / UX-1: save, search, edit and reuse contacts within the current tenant only.
 import { actAsVisitor, expect, randomVisitorIp, test } from "./fixtures";
 import { atDashboard, expectNoHorizontalOverflow, localSql, sessionUserId, signIn, startDemo } from "./helpers";
+import type { Route } from "@playwright/test";
 
 test("create a contact with an address, find it, edit it", async ({ page }) => {
   await startDemo(page);
@@ -84,7 +85,17 @@ test("add a second address, archive the primary, and a new primary remains", asy
 
   const primary = page.getByRole("listitem").filter({ hasText: "· utama" });
   await expect(primary).toContainText("Rumah");
-  await primary.getByRole("button", { name: "Arsipkan" }).click();
+  // T-107: archiving an address confirms in a dialog naming it; Escape keeps it and returns focus.
+  const archiveRumah = primary.getByRole("button", { name: "Arsipkan alamat Rumah" });
+  await archiveRumah.click();
+  const dialog = page.getByRole("dialog", { name: "Arsipkan alamat Rumah?" });
+  await expect(dialog).toContainText("Jl. Contoh Melati No. 1");
+  await page.screenshot({ path: test.info().outputPath(`dialog-archive-address-${page.viewportSize()?.width}.png`), animations: "disabled" });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(archiveRumah).toBeFocused();
+  await archiveRumah.click();
+  await dialog.getByRole("button", { name: "Arsipkan alamat", exact: true }).click();
   await expect(page.getByText("Alamat diarsipkan.")).toBeVisible();
   await expect(page.getByText("Jl. Contoh Melati No. 1")).toHaveCount(0);
   await expect(page.getByRole("listitem").filter({ hasText: "· utama" })).toContainText("Kantor");
@@ -137,4 +148,29 @@ test("tenant admin can archive a contact while operator cannot see the archive c
   await expect(page).toHaveURL(/\/kontak\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("button", { name: "Arsipkan kontak" })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
+});
+
+// T-107 / UX-13: contact saves use the shared SubmitButton: a double click sends one request, the
+// button stays focusable (aria-disabled + aria-busy) and shows its pending label meanwhile.
+test("a double click on Simpan kontak sends one request and shows the pending state", async ({ page }) => {
+  await startDemo(page);
+  await page.goto("/kontak");
+  await page.getByRole("button", { name: "Tambah kontak" }).click();
+  const sheet = page.getByRole("dialog", { name: "Tambah kontak" });
+  await sheet.getByLabel("Nama", { exact: true }).fill("Dobel Klik Uji");
+  await sheet.getByLabel("No. HP").fill("0812 3456 0000");
+  const held: Route[] = [];
+  await page.route(/\/kontak/, async (route) => {
+    if (route.request().method() === "POST" && route.request().headers()["next-action"]) held.push(route);
+    else await route.continue();
+  });
+  const save = sheet.locator("button[type=submit]", { hasText: "Simpan kontak" });
+  await save.dblclick();
+  await expect(save).toHaveAttribute("aria-busy", "true");
+  await expect(save).toHaveAttribute("aria-disabled", "true");
+  await expect(save.getByText("Menyimpan…")).toBeVisible();
+  await expect.poll(() => held.length).toBe(1);
+  await page.waitForTimeout(600);
+  expect(held).toHaveLength(1);
+  for (const route of held) await route.abort();
 });

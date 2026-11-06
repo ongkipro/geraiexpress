@@ -198,7 +198,9 @@ test("keyboard focus is visible on the primary action", async ({ page }) => {
   await page.getByLabel("Kata sandi").focus();
   await page.keyboard.press("Tab");
   const outline = await page.evaluate(() => getComputedStyle(document.activeElement!).outlineStyle);
-  expect(await page.evaluate(() => document.activeElement?.textContent)).toBe("Masuk");
+  // The focused element is the "Masuk" button by accessible name. SubmitButton keeps an aria-hidden
+  // pending label in the DOM (same width while pending), so raw textContent is not the name.
+  await expect(page.getByRole("button", { name: "Masuk", exact: true })).toBeFocused();
   expect(outline).not.toBe("none");
 });
 
@@ -305,7 +307,8 @@ test("one account is limited across different visitors before password guessing 
       page.getByRole("button", { name: "Masuk", exact: true }).click(),
     ]);
     await expect(page.locator("#signin-error")).toHaveText(i < 10 ? /Email atau kata sandi tidak cocok/ : TOO_MANY);
-    // Each submission must have completed before the next visitor is installed.
-    await expect(page.getByRole("button", { name: "Masuk", exact: true })).toBeEnabled();
+    // Each submission must have completed before the next visitor is installed (T-107: the
+    // SubmitButton stays focusable and reports its pending state through aria-busy).
+    await expect(page.getByRole("button", { name: "Masuk", exact: true })).not.toHaveAttribute("aria-busy", "true");
   }
 });
