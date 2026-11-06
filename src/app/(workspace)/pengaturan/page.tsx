@@ -10,8 +10,11 @@ import {
   PartnerSellerOnboardingForm,
   RemoveSellerKeyForm,
   SellerKeyForm,
+  WebhookSecretForm,
   type PartnerOnboardingStatus,
 } from "@/modules/credentials/forms";
+import { originFor } from "@/lib/hosts";
+import { config } from "@/lib/config";
 import { PickupForm } from "@/modules/mengantar/pickup-form";
 import { mengantarFailure, tenantMengantar } from "@/lib/mengantar/tenant";
 import type { PickupAddress } from "@/lib/mengantar/public-api";
@@ -103,6 +106,18 @@ export default async function SettingsPage() {
     }
   }
   const keyWorks = pickupOptions !== null;
+  // T-045 / ADR-0003: the per-gerai webhook URL (created on first read) and whether the secret is stored.
+  type WebhookStatus = { endpoint_id: string; secret_configured: boolean; hint: string | null; secret_version: number;
+    secret_set_at: string | null; last_delivery_at: string | null; last_mismatch_at: string | null };
+  let webhook: WebhookStatus | null = null;
+  let webhookUrl: string | null = null;
+  if (!ws.isDemo && isAdmin && credential.configured) {
+    const providerEnv = config("MENGANTAR_ENV") === "production" ? "production" : "sandbox";
+    const { data } = await db.rpc("webhook_endpoint_status", { p_tenant: ws.tenant.id, p_env: providerEnv });
+    webhook = ((data ?? []) as WebhookStatus[])[0] ?? null;
+    try { webhookUrl = webhook ? `${originFor("hooks")}/api/webhooks/mengantar/${webhook.endpoint_id}` : null; }
+    catch { webhookUrl = null; }
+  }
   // Orders still being checked with the current key (T-024 audit): replacing the key would leave
   // them to be checked by hand in the Mengantar app.
   let openOrders = 0;
@@ -255,6 +270,45 @@ export default async function SettingsPage() {
                       </Alert>
                     ) : null}
                     <SellerKeyForm latestVersion={credential.latest_version} replacing={credential.configured} />
+                  </section>
+                ) : null}
+
+                {webhook ? (
+                  <section aria-labelledby="webhook-heading" className={CARD} data-testid="webhook-card">
+                    <div className="flex flex-col gap-1">
+                      <h3 id="webhook-heading" className="text-[17px]">Status pengiriman otomatis (webhook)</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Di Mengantar, buka Pengaturan → Akun → Integrasi Public API, tempel URL di bawah sebagai Webhook URL, lalu salin
+                        Webhook Secret yang muncul ke formulir ini. Tanpa webhook, status tetap diperbarui berkala dari Mengantar.
+                      </p>
+                    </div>
+                    {webhookUrl ? (
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <p className="text-sm font-semibold">Webhook URL</p>
+                        <code data-testid="webhook-url" className="break-all rounded-md bg-muted px-3 py-2 text-sm">{webhookUrl}</code>
+                      </div>
+                    ) : (
+                      <Alert role="note" className="border-0 bg-warning-soft">
+                        <AlertTriangle className="text-warning" aria-hidden="true" />
+                        <AlertDescription className="text-foreground">URL webhook belum dapat dibuat: alamat host webhook belum dikonfigurasi di server.</AlertDescription>
+                      </Alert>
+                    )}
+                    <p data-testid="webhook-status" className="text-sm">
+                      {webhook.secret_configured
+                        ? <>Rahasia tersimpan (berakhiran <span className="tabular">…{webhook.hint}</span>, versi {webhook.secret_version}).
+                            {webhook.last_delivery_at ? ` Pembaruan terakhir ${formatWib(webhook.last_delivery_at)}.` : " Belum ada pembaruan diterima."}</>
+                        : "Rahasia webhook belum disimpan."}
+                    </p>
+                    {webhook.last_mismatch_at ? (
+                      <Alert role="note" className="border-0 bg-warning-soft" data-testid="webhook-mismatch">
+                        <AlertTriangle className="text-warning" aria-hidden="true" />
+                        <AlertDescription className="text-foreground">
+                          Ada pembaruan dari Mengantar yang ditolak karena rahasia tidak cocok ({formatWib(webhook.last_mismatch_at)}). Ini terjadi jika
+                          kunci API atau rahasia webhook dibuat ulang di Mengantar: salin Webhook Secret yang baru ke sini.
+                        </AlertDescription>
+                      </Alert>
+                    ) : null}
+                    <WebhookSecretForm secretVersion={webhook.secret_version} replacing={webhook.secret_configured} />
                   </section>
                 ) : null}
               </Group>

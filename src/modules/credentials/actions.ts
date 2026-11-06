@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { credentialAad, credentialHint, keyMaterialFromReader, sealCredential, validApiKey } from "@/lib/credential-crypto";
+import { credentialAad, credentialHint, keyMaterialFromReader, sealCredential, validApiKey, webhookSecretAad } from "@/lib/credential-crypto";
 import { friendlyError } from "@/lib/errors";
 import { onboardPartnerSeller, recoverPartnerSellerKey } from "@/lib/mengantar/partner-onboarding";
 import { dbServer } from "@/lib/db/server";
@@ -110,4 +110,27 @@ export async function setPartnerIdAction(_: CredentialState, form: FormData): Pr
   if (error) return { error: friendlyError(error) };
   revalidatePath("/admin/integrasi");
   return { ok: "Partner ID disimpan." };
+}
+
+// T-045 / ADR-0003: the tenant admin pastes the Mengantar Webhook Secret (shown in Mengantar's Public API
+// integration settings when the Webhook URL is saved). It is sealed here, bound to tenant + environment +
+// version, and never shown again. The URL itself is created by webhook_endpoint_status.
+export async function storeWebhookSecretAction(_: CredentialState, form: FormData): Promise<CredentialState> {
+  const ws = await requireWorkspace();
+  if (ws.role !== "tenant_admin" || ws.isDemo) return { error: "Hanya admin gerai yang dapat menyimpan rahasia webhook." };
+  const secret = String(form.get("webhook_secret") ?? "").trim();
+  if (!/^[!-~]{16,256}$/.test(secret)) return { error: "Rahasia webhook tidak valid. Salin ulang dari pengaturan Integrasi Public API di Mengantar." };
+  const sealingKey = keyMaterialFromReader(config);
+  if (!sealingKey) return { error: "Penyimpanan kunci belum dikonfigurasi di server. Hubungi tim GeraiExpress." };
+  const providerEnv = config("MENGANTAR_ENV") === "production" ? "production" : "sandbox";
+  const expected = Number(form.get("secret_version") ?? 0);
+  const sealed = await sealCredential(secret, webhookSecretAad(ws.tenant.id, providerEnv, expected + 1), sealingKey);
+  const db = await dbServer();
+  const { error } = await db.rpc("store_webhook_secret", {
+    p_tenant: ws.tenant.id, p_env: providerEnv, p_expected_version: expected, p_ciphertext: sealed.ciphertext,
+    p_iv: sealed.iv, p_key_version: sealed.keyVersion, p_hint: credentialHint(secret),
+  });
+  if (error) return { error: friendlyError(error) };
+  revalidatePath("/pengaturan");
+  return { ok: "Rahasia webhook tersimpan terenkripsi. Status pengiriman akan diperbarui otomatis." };
 }

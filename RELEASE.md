@@ -406,6 +406,12 @@ environment; preview crons are empty). Local completion is not release readiness
 
 Not provisioned. Before a real gerai issues orders in production:
 
+0a. **Status webhook (T-045).** Publish DNS + TLS for `hooks.geraiexpress.com` and set `HOOKS_ORIGIN`.
+   Per gerai, the admin copies the Webhook URL from /pengaturan into Mengantar (Settings → Account →
+   Integrasi Public API; production webhooks are enabled per account by Mengantar) and pastes the Webhook
+   Secret back. Before relying on it, capture one sandbox `POST /order/simulation` delivery against the
+   hooks host and compare it with the fixtures (T-048). Without a webhook the hourly status pull keeps
+   statuses current within about 2 hours.
 0. **Partner-wide quota entitlement (T-110).** Every Partner API request reserves the shared quota in
    `private.partner_quota_limits` before it is signed. The seeded values (30 requests/minute, 100 new sellers per
    WIB day, `entitlement_verified = false`) are deliberately conservative placeholders, NOT Mengantar's numbers;

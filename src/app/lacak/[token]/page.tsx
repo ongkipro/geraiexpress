@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { courierName } from "@/lib/format";
-import { courierTrackingUrl, publicTracking } from "@/modules/tracking/projection";
+import { courierTrackingUrl, KIND_LABEL, publicTracking } from "@/modules/tracking/projection";
 import { TRACKING_PROJECTION_HEADER } from "@/modules/tracking/public-read";
 
 export const dynamic = "force-dynamic";
@@ -41,8 +41,18 @@ export default async function TrackingPage() {
         </dl>
       </section>
       <section aria-label="Riwayat status" className="space-y-3 rounded-xl border bg-card p-5">
-        <h2 className="font-semibold">{projection.status_label}</h2>
-        <p className="text-sm text-muted-foreground">Riwayat perjalanan dari kurir belum tersedia di halaman ini. Tidak ada perkiraan status yang ditampilkan.</p>
+        <h2 className="font-semibold" data-testid="tracking-status">{projection.status_label}</h2>
+        {projection.timeline.length ? (
+          <ol className="space-y-2 text-sm" data-testid="tracking-timeline">
+            {[...projection.timeline].reverse().map((e) => (
+              <li key={`${e.kind}-${e.at}`} className="flex flex-wrap justify-between gap-x-4">
+                <span>{KIND_LABEL[e.kind]}</span><span className="tabular text-muted-foreground">{date(e.at)}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-sm text-muted-foreground">Riwayat perjalanan dari kurir belum tersedia di halaman ini. Tidak ada perkiraan status yang ditampilkan.</p>
+        )}
         {courierUrl ? <a className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-4" href={courierUrl} target="_blank" rel="noopener noreferrer">Lacak di situs kurir</a> : null}
       </section>
       <p className="text-sm text-muted-foreground">Halaman ini tidak meminta pembayaran atau kode OTP. Simpan tautan ini hanya untuk pihak yang berkepentingan.</p>

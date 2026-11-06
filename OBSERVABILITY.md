@@ -163,6 +163,18 @@ HTTP deadline can expire first (interactive machine requests keep the 15 s clien
 `service_role` SQL limit is 60 s, and readiness aborts before its roles' limits), in which case the
 statement may still run to its role's limit after the caller has given up.
 
+## Provider status events (T-045, ADR-0003)
+
+- `webhook_ingested` (`tenantId`, `result`: applied | duplicate | stale | final | unmatched) per accepted delivery.
+  A steady `unmatched` for one tenant means its Webhook URL points at the wrong environment or account.
+- `webhook_secret_mismatch` (`tenantId` only): a delivery failed the signature. Expected right after the seller
+  regenerates the API key or the Webhook Secret in Mengantar; persistent mismatches mean the admin must paste
+  the new secret (the settings page shows the notice). Never logs the body, headers or secret.
+- `webhook_refused` (`tenantId`, `reason`: timestamp | environment | malformed) and `webhook_ingest_failed`.
+- `status_pull` (`checked`, `applied`, `unchanged`, `skipped`, `failed`) as a `cleanup` step. Alert when
+  `failed` repeats across runs, or when issued shipments keep a non-final status for days (pull and webhook
+  both silent).
+
 ## Configuration and release gates (local waves E/F, not deployed preview state)
 
 | Name / gate | Observed behavior and operational boundary |

@@ -140,6 +140,7 @@ const AUTHENTICATED_EXECUTE = [
   "public.set_tenant_logo(uuid,text,text,integer)", // T-096: admin-only, revision-checked logo mutation.
   "public.start_demo()",
   "public.store_seller_credential(uuid,integer,text,text,text,text,text)",
+  "public.store_webhook_secret(uuid,text,integer,text,text,text,text)",
   "public.submit_application(uuid,integer)",
   "public.tenant_gerai_discount(uuid)",
   "public.tenant_invitations_list(uuid)",
@@ -149,6 +150,7 @@ const AUTHENTICATED_EXECUTE = [
   "public.update_shipment_case(uuid,integer,text,text,text,text[],text,text,timestamp with time zone)",
   // Counter payment void (T-082); tenant administrator only, reason required, row kept.
   "public.void_counter_payment(uuid,text)",
+  "public.webhook_endpoint_status(uuid,text)",
   "public.withdraw_application(uuid,integer)",
 ];
 
@@ -192,9 +194,15 @@ const MACHINE_ONLY = [
   "public.dispatch_restore_check_passed(uuid,integer)",
   "public.dispatch_stuck_counts()",
   "public.fence_partner_key_rotation(uuid,uuid,text,integer,text)",
+  "public.ingest_provider_status(uuid,text,text,timestamp with time zone,text,text,text,boolean)",
   // T-109: tenant ids whose active credential of an environment is below the current key version.
   "public.machine_rewrap_candidates(text,text,uuid,integer)",
   "public.machine_seller_key(uuid,text)",
+  "public.machine_status_pull_candidates(text,interval,integer)",
+  "public.machine_webhook_mismatch(text)",
+  "public.machine_webhook_rewrap_candidates(text,text,uuid,integer)",
+  "public.machine_webhook_secret(text)",
+  "public.mark_status_pulled(text,uuid[])",
   // T-110: Partner-wide back-off shared by every tenant (Retry-After, daily registration stop).
   "public.note_partner_retry_after(text,text,timestamp with time zone,text)",
   "public.record_live_quotes(uuid,uuid,integer,jsonb,text,text)",
@@ -204,6 +212,7 @@ const MACHINE_ONLY = [
   // T-110: Partner-wide minute/WIB-day quota reserved before every Partner request is signed.
   "public.reserve_partner_quota(text,text,integer,text,boolean)",
   "public.rewrap_seller_credential(uuid,integer,text,text,text,text)",
+  "public.rewrap_webhook_secret(uuid,text,integer,text,text,text,text)",
   // T-109: the newest applied migration version for /healthz; reads the runner ledger only.
   "public.schema_version()",
   "public.store_partner_seller_key(uuid,uuid,text,integer,text,text,text,text,text,text)",

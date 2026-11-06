@@ -26,7 +26,21 @@ describe("public projection allowlist", () => {
     expect(JSON.stringify(result)).not.toMatch(/Rahasia|081234567890|9999|sender_name|phone|address|amount|item/);
   });
   it("fails closed on missing fields, a provider event payload, or an invented status", () => {
-    for (const value of [null, {}, { ...safeTracking, timeline: [{ detail: "raw secret" }] }, { ...safeTracking, status_label: "Dalam perjalanan" }, { ...safeTracking, awb: "<script>" }]) expect(publicTracking(value)).toBeNull();
+    const at = "2026-11-06T04:00:00Z";
+    for (const value of [null, {}, { ...safeTracking, timeline: [{ detail: "raw secret" }] },
+      // T-045: only whitelisted labels and kinds, and nothing but {kind, at} per entry.
+      { ...safeTracking, status_label: "Sedang diproses di hub Jakarta" },
+      { ...safeTracking, timeline: [{ kind: "ON DELIVERY", at }] },
+      { ...safeTracking, timeline: [{ kind: "in_transit", at, hub_city: "Jakarta" }] },
+      { ...safeTracking, timeline: [{ kind: "in_transit", at: "yesterday" }] },
+      { ...safeTracking, timeline: Array.from({ length: 51 }, () => ({ kind: "in_transit", at })) },
+      { ...safeTracking, awb: "<script>" }]) expect(publicTracking(value)).toBeNull();
+  });
+  it("carries a real status and a kind-and-time timeline (T-045)", () => {
+    const at = "2026-11-06T04:00:00Z";
+    const result = publicTracking({ ...safeTracking, status_label: "Dalam perjalanan", timeline: [{ kind: "awaiting_pickup", at }, { kind: "in_transit", at }] });
+    expect(result?.status_label).toBe("Dalam perjalanan");
+    expect(result?.timeline).toEqual([{ kind: "awaiting_pickup", at }, { kind: "in_transit", at }]);
   });
   it("returns full AWB as required by UX-18, but puts no AWB in a courier URL", () => {
     expect(publicTracking(safeTracking)?.awb).toBe("JP1234567890");

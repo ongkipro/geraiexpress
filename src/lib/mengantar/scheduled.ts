@@ -1,7 +1,8 @@
 import "server-only";
 import { config } from "@/lib/config";
 import { sweep } from "./dispatcher";
-import { rewrapNextBatch } from "../credential-keyring";
+import { pullStatuses } from "./status-pull";
+import { rewrapNextBatch, rewrapWebhookSecrets } from "../credential-keyring";
 import { logEvent } from "../log";
 import { cleanupRpc, dispatcherDeps, rewrapDeps, type MachineBindings } from "./machine-deps";
 
@@ -185,12 +186,51 @@ export async function runCredentialRewrap(env: MachineBindings, signal?: AbortSi
   }
 }
 
+// T-045: Webhook Secrets follow the same key-ring rotation (ADR-0003 §2.2). Counts only in logs.
+export async function runWebhookSecretRewrap(env: MachineBindings, signal?: AbortSignal): Promise<TaskResult> {
+  const deps = rewrapDeps(env, scheduledFetch(signal));
+  if (!deps) {
+    logEvent("webhook_secret_rewrap", { outcome: "disabled", disabled: true });
+    return "disabled";
+  }
+  try {
+    const s = await rewrapWebhookSecrets({ rpc: deps.rpc, key: deps.key, environment: deps.environment });
+    const outcome: TaskResult = s.failed ? "failed" : s.pending ? "partial" : "done";
+    logEvent("webhook_secret_rewrap", { outcome, environment: deps.environment, ...s });
+    return outcome;
+  } catch {
+    logEvent("webhook_secret_rewrap", { outcome: "failed", failed: true });
+    return "failed";
+  }
+}
+
 // The hourly cleanup runs every step (a step without its bindings reports itself disabled) and reports each.
+// T-045 / ADR-0003 §2.6: hourly status pull for issued shipments the webhook has not updated (missed, paused or
+// not configured). Read-only GET /order with each seller's own key; bounded per run (STATUS_PULL_MAX).
+export async function runStatusPull(env: MachineBindings, signal?: AbortSignal): Promise<TaskResult> {
+  const deps = dispatcherDeps(env, scheduledFetch(signal));
+  if (!deps) {
+    logEvent("status_pull", { outcome: "disabled", disabled: true });
+    return "disabled";
+  }
+  try {
+    const s = await pullStatuses(deps);
+    const outcome: TaskResult = s.failed ? (s.applied || s.unchanged ? "partial" : "failed") : "done";
+    logEvent("status_pull", { outcome, ...s });
+    return outcome;
+  } catch {
+    logEvent("status_pull", { outcome: "failed", failed: true });
+    return "failed";
+  }
+}
+
 export async function runCleanup(env: MachineBindings, signal?: AbortSignal): Promise<TaskReport> {
   const steps = {
     demo_cleanup: await runDemoCleanup(env, signal),
     auth_purge: await runAuthPurge(env, signal),
     credential_rewrap: await runCredentialRewrap(env, signal),
+    webhook_secret_rewrap: await runWebhookSecretRewrap(env, signal),
+    status_pull: await runStatusPull(env, signal),
   };
   return { result: worst(Object.values(steps)), steps };
 }
