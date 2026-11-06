@@ -2,9 +2,13 @@
 // Before the fix reconcile_shipment locked shipment -> memberships -> provider_operations, while
 // close_ambiguous_pickup_reservation (and close_unknown_batch_payment) lock provider_operations -> shipment ->
 // memberships, so two admins on the same unknown create operation could deadlock (40P01).
-// Deterministic schedule (no timing races): an advisory-lock gate pauses each command right after its FIRST
-// lock (installed by the test as a trigger-free function wrapper), then both proceed. Separate psql connections
-// are named and terminated after each test.
+// Deterministic schedule (state-driven, not timed): a holder connection locks the shipment row; reconcile and then
+// the pickup close are started and the holder releases only after pg_stat_activity shows BOTH waiting on a lock.
+// The operation is simulated, so the pickup close always refuses (not_closable) after reaching its locks and
+// reconcile is the command that succeeds; the scenario reproduces the old lock cycle, not a contest between two
+// writers. Dynamic coverage is reconcile vs close_ambiguous_pickup_reservation; the close_unknown_batch_payment
+// order (operations -> shipments -> memberships) is checked by source review only. Separate psql connections are
+// named and terminated after each test.
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
@@ -109,7 +113,9 @@ describe("reconcile_shipment vs admin close lock order (T-115)", () => {
     const diagnostics = results.map((r, i) => `${["holder", "reconcile", "close"][i]} (${r.code}):\n${r.output}`).join("\n");
     expect(diagnostics).not.toMatch(/40P01|deadlock detected|55P03|could not obtain lock/);
     expect(results[0].code, diagnostics).toBe(0);
-    // Exactly one of them changes the operation; the other sees the result and is refused with its own 55000 code.
+    // No deadlock, and exactly one command writes. With this simulated fixture that is reconcile; the pickup close
+    // refuses with its own 55000 code (the assertions below also accept the reverse outcome, which this fixture
+    // cannot produce).
     const wins = [results[1].code, results[2].code].filter((c) => c === 0).length;
     expect(wins, diagnostics).toBe(1);
     expect(diagnostics).toMatch(/nothing_to_reconcile|not_closable/);
