@@ -1,23 +1,14 @@
 {
-  "activeRun": "RUN-20261106T041707Z-92280ba3",
-  "activeTask": "T-062",
-  "capability": "unattributed",
-  "job": "Docs-only: close T-062 (every clause MET per read-only audit 683ee8c9; the last clause, full Playwright on three viewports against the container, proven by INT-M3 RUN-20261106T031040Z-96b35408: 721/0/26); record M3 push and the overall review in STATUS/BUILD-LOG",
+  "activeRun": null,
   "lastRun": {
-    "finishedAt": "2026-11-06T04:16:38Z",
+    "finishedAt": "2026-11-06T04:18:11Z",
     "result": "PASS",
-    "runId": "RUN-20261106T031040Z-96b35408"
+    "runId": "RUN-20261106T041752Z-bb7a1edc"
   },
-  "model": "cc/claude-opus-5-5",
-  "observedHead": "ba5e1e4e3e6e71ae1c2a23d9b22e12b2b70b4713",
+  "observedHead": "2d1c5928be8df02019789ecce6ab38d3879328b9",
   "observedState": "INTEGRATING",
   "project": "geraiexpress",
-  "provider": "9router-fantastico",
-  "reasoningEffort": "medium",
-  "requirement": "NFR-5",
-  "risk": "R1",
   "schemaVersion": 1,
   "statusAuthority": "STATUS.md",
-  "updatedAt": "2026-11-06T04:17:24Z",
-  "worker": "pi-parent-01a1a300"
+  "updatedAt": "2026-11-06T04:18:11Z"
 }

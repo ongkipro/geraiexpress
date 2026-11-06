@@ -208,6 +208,10 @@ Merge log (2026-11-06, `feat/counter-ops-2026-11`; pushed through `8e3a643`):
 - Repository visibility (owner request 2026-11-06 "pastikan repo public"): `ongkipro/geraiexpress` is PUBLIC (gh). Secret
   check before relying on it: no sensitive filename ever committed in 236 commits; no high-signal secret pattern in any
   revision (control repo with two planted fakes: 2/2 caught). gitleaks itself could not run (mise failed to load it).
+- Process slip (2026-11-06, lead): docs commit `2d1c592` (T-062 closure text) was chained after a finish that the
+  ledger refused (a docs-only PASS needs a verification event); the run `RUN-20261106T041707Z-92280ba3` was then closed
+  BLOCKED because HEAD had moved. The commit is docs-only and its evidence is INT-M3 + audit 683ee8c9; this note is
+  recorded by a follow-up run with diff-hygiene. Rule restated: finish runs alone and is checked before any commit.
 
 Current task: integrating the post-wave-3 hardening set (T-104..T-111, T-055) onto
 `feat/counter-ops-2026-11`. Remote is at `e87e10a` (T-103). Nothing after that is pushed.
