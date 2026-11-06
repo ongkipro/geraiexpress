@@ -424,8 +424,12 @@ Not provisioned. Before a real gerai issues orders in production:
    Per gerai, the admin copies the Webhook URL from /pengaturan into Mengantar (Settings → Account →
    Integrasi Public API; production webhooks are enabled per account by Mengantar) and pastes the Webhook
    Secret back. Before relying on it, capture one sandbox `POST /order/simulation` delivery against the
-   hooks host and compare it with the fixtures (T-048). Without a webhook the hourly status pull keeps
-   statuses current within about 2 hours.
+   hooks host and compare it with the fixtures (T-048). Without a webhook, statuses come only from the
+   status pull, which gives no freshness guarantee: a shipment becomes eligible only after more than 2 hours
+   without a provider update AND more than 2 hours since its last pull (`STATUS_PULL_STALE`, strict cutoffs in
+   `machine_status_pull_candidates`), and the pull runs only in the hourly `cleanup` task (scheduler minute 0
+   UTC). An update at 10:00:01 is therefore first eligible at 13:00:00 (about 3 hours), and later still when
+   the queue exceeds the per-run cap (200, least recently pulled first) or the provider read fails.
 0. **Partner-wide quota entitlement (T-110).** Every Partner API request reserves the shared quota in
    `private.partner_quota_limits` before it is signed. The seeded values (30 requests/minute, 100 new sellers per
    WIB day, `entitlement_verified = false`) are deliberately conservative placeholders, NOT Mengantar's numbers;

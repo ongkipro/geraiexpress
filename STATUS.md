@@ -12,6 +12,70 @@ Independent-Review-Head: c9c7164
 
 ## CHECKPOINT 2026-11-05 ~23:55 WIB (machine maintenance; session may be force-closed)
 
+## M4 CLOSED and pushed (2026-11-06) — feature freeze in force
+
+- INT-M4 #3 `RUN-20261106T073231Z-a7b16f4a`, fixed head `fdc34ad` (start head = boundary base = every check's head).
+  Required checks db, e2e, typecheck, unit, upgrade; all executed (exit 0) on the same checked surface digest
+  `4f53cda18c2b…`: typecheck PASS, unit 1499/1499, db 622/622, upgrade PASS, e2e three viewports 723 passed / 0 failed /
+  27 skipped (250 per viewport), diff-hygiene PASS; boundary PASS (surface `b27564750a3c…`); finished PASS.
+  Supersedes INT-M4 #1 `2ee3fe2d` (BLOCKED, runner read a half-written script) and #2 `56436ef3` (BLOCKED, unit test
+  inherited `SMTP_PORT` from `infra/dev/.env`; fixed by T-113). Logs: `/data/tmp/geraiexpress/int-m4-a7b16f4a-evidence/`.
+  Pushed `ba5e1e4..fdc34ad` (plain push). No green suite was rerun after this finish.
+- Provenance correction: the runner scripts hard-code `--model cc/claude-opus-5-5`; the session that ran M4 reports
+  `cc/claude-fable-5-1`. Disclosed in the INT-M4 #3 finish detail; JSONL history is not rewritten. Runs from DOC-M4 on
+  record the live `$PI_MODEL`.
+- Supervisor process findings for the next gate-runner change (not implemented; propose concretely before applying):
+  (1) `gx-gates.sh` continues every expensive gate after a failed prerequisite although `gx-integration.sh` implies
+  stop-first: fail fast and mark later checks not run, never PASS. (2) one log directory per task reused by every
+  attempt overwrites evidence: use an immutable per-run directory. (3) full three-viewport runs are serial (~45 min):
+  focused checks per feature, ONE full integrated run per agreed milestone or release boundary; a test-only fix does not
+  trigger a full campaign unless its declared contract requires it; never alter active required checks or relabel
+  previous-head evidence. (4) record the actual worker model, not a hard-coded label. (5) replace the
+  `git add -N . ; git diff --check ; git reset` hygiene step, which mutates the shared index, with an index-neutral check.
+  No blind Playwright worker increase until fixtures prove isolation.
+
+### Release-blocker handoff (read-only triage from RELEASE/OBSERVABILITY/TASKS and repo evidence; nothing marked green from prose)
+
+Two readiness levels. **Level A: staging/demo deployed** (owner and pilot staff can use it; registration closed).
+**Level B: real gerai transactions** (customer money, real resi). Nothing below is marked green from prose.
+
+| # | Blocker | Level | Required evidence | Who resolves | Exact next action |
+|---|---|---|---|---|---|
+| B1 | No host. Vultr instance + Coolify not provisioned; no DNS/TLS for `geraiexpress.com`, `app.`, `owner.`, `hooks.`; no fixed IPv4 (Mengantar allowlist needs it). | A | Coolify resource reachable; the four hosts answer over HTTPS through the proxy; `/healthz` 200; `pnpm check:environments` PASS on the real env files | Owner provisions + pays; agent prepares env files and runs the gates (vps-deploy / vultr skills) | Owner: approve a Vultr plan/region and give DNS access. Agent: `infra/env/staging.env` from the template, deploy, record RELEASE gates 1–8. |
+| B2 | Mail cannot be delivered: `MAIL_TRANSPORT` unset by design; no SMTP account; no SPF/DKIM/DMARC for geraiexpress.com. Without it no one can register or sign in with a code. | A | One controlled delivery to an owner address through `MAIL_TRANSPORT=smtp` (T-063 code ready) | Owner: SMTP provider account + DNS records; agent: env values (secret via the 0600 env file) and the delivery test | Owner: open the SMTP account and publish SPF/DKIM/DMARC. |
+| B3 | No current production backup: Backup-Proof is the historical Supabase snapshot; no off-host storage, schedule, RPO/RTO, or restore drill on the real host. Rollback target does not exist (no released image). | B (A needs at least a scheduled dump) | A backup artifact in an off-host location, a timed restore drill on the staging host, RELEASE Backup-Proof/Rollback-Ref pointing at real objects | Owner decides storage + RPO; agent implements the schedule and runs the drill | Owner: choose storage (object storage bucket or second host) and RPO. Agent: schedule `pnpm db:backup`, restore drill, RELEASE update. |
+| B4 | Mengantar not proven live: no supervised production order (price, resi, billing), no sandbox capture of pay-unpaid / regeneration / pickup / webhook (T-048 items 2, 6). | B | One supervised order with the pilot gerai's own key; captured shapes under `docs/research/**`; `price_mismatch` watched | Owner authorizes and watches; agent runs it on staging with a BYOK key | Owner: pilot gerai + its Mengantar key + approval for one real paid order. |
+| B5 | Partner-wide quota limits are placeholders (`entitlement_verified = false`); Partner terms/privacy URLs and versions unset (registration through the Partner API is refused while unset). **Not needed for a BYOK pilot.** | B (Partner path only) | Mengantar's written limits; the owner's terms/privacy documents | Owner (questions in the ops-contract note §12) | Park for the pilot: BYOK only; keep Partner onboarding closed. |
+| B6 | Counsel/legal items (12 in the research note §4.7, incl. PSE registration) unreviewed. No evidence that a pilot is exempt. | B | Dated CTX entry with counsel's answers | Owner | Not a staging (no real transactions) blocker; for Level B, including a pilot, it stays open until counsel answers — no exemption is assumed. |
+| B7 | Public site visual acceptance (T-076) not given. | neither | Owner acceptance | Owner | Park: pilot uses `app.` only; apex can show the current site. |
+
+Code evidence (stated only as recorded): INT-M4 #3 on `fdc34ad` (run `RUN-20261106T073231Z-a7b16f4a`) has typecheck, unit
+1499/1499, db 622/622 and upgrade recorded PASS; its full three-viewport e2e recorded 723 passed / 0 failed / 27 skipped (250 per viewport); the run finished PASS and M4 was pushed. Manager review of the
+webhook/pull/SQL scope (2026-11-06) found no confirmed runtime blocker there (not whole-M4 acceptance). Two documentation
+defects found by that review were verified against the code and corrected in the DOC-M4 run (no runtime change):
+RELEASE.md's "about 2 hours" pull freshness (real: first eligible poll ~3 hours after an update, before backlog and
+failures) and the `status-pull.ts` providerTs comment (SQL keeps untrusted times history only). T-045 remaining slices (cancel, refund parse, re-weigh)
+are features, parked.
+
+### Shortest pilot scope (supported by the accepted PRD today)
+One pilot gerai, **BYOK** (its own Mengantar seller key), registration closed (`registration_open=false`; staff invited by the
+owner), non-COD and COD regular services, counter payments, local labels, public tracking link, status by the hourly pull
+(eligible after 2 hours without an update; not a freshness guarantee) with the webhook optional until the hooks host and
+Mengantar's per-account enablement exist. Level B still needs B3, B4 and B6. Parked: Partner-API onboarding,
+cargo, pickup reservation, cancel/refund automation, public registration, apex visual redesign.
+
+### Owner-controlled inputs still missing (in order)
+1. Vultr plan/region approval + DNS access for geraiexpress.com (B1).
+2. SMTP provider account + SPF/DKIM/DMARC (B2).
+3. Backup storage choice + RPO (B3).
+4. Pilot gerai identity + its Mengantar key + approval for one supervised paid order (B4).
+
+### One next executable task
+**T-114 — Staging deployment (Level A):** Vultr + Coolify host for `staging.geraiexpress.com` / `app-staging.` / `owner-staging.` /
+`hooks-staging.`, env files from the templates, proxy + `/healthz`, scheduled backup to the owner's storage with one restore
+drill, SMTP delivery test. Blocked on inputs 1–3 above; the agent can prepare env files, Compose checks and runbooks now
+without any remote call.
+
 > **M1 CONTRACT (supervisor, 2026-11-06; do not forget):** T-109 and T-110 are integrated under BLOCKED/pending
 > runs; their e2e evidence is the single full e2e on the M1 head. If that e2e is not green, the M1 head must not be
 > pushed and the failing change is reverted on the branch. No e2e PASS is recorded from the isolate run (it is
@@ -141,7 +205,7 @@ Queue mode (owner, 2026-11-06): run T-109, T-110, T-055, T-107, T-111b, then the
 end without stopping; stop only for push/deploy, production write, deleting non-test data, a secret, or a
 user-visible product decision. Local commits use the noreply identity, no AI trailers.
 
-Open for the owner (batched; reported at a real blocker or end of queue):
+Open for the owner (batched; the current owner-held inputs are listed in "Release-blocker handoff" above):
 - RESOLVED: push of `feat/counter-ops-2026-11` (owner "commit dan push jika perlu"): M1 f89f3ed and M2 4d86c48 pushed
   after verified integration runs; merge to `main` and production deploy stay forbidden until you say so.
 - RESOLVED: T-110 re-review by the standing `reviewer` (GPT-6.1 Sol), APPROVE after 3 rounds.

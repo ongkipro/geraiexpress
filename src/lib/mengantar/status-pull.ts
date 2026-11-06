@@ -15,8 +15,9 @@ type SealedKey = { ciphertext: string; iv: string; key_version: string; version:
 export type StatusPullSummary = { checked: number; applied: number; unchanged: number; skipped: number; failed: number };
 
 // The provider timestamp of a pulled status. Trusted only when the row carries a readable lastStatusChange that
-// is not in the future; otherwise the pull time is used and marked untrusted, which lets ingestion keep the event
-// as history and move a non-final kind, but never set a final status or delivered_at/returned_at (review P1).
+// is not in the future; otherwise the pull time is used and marked untrusted. Ingestion keeps an untrusted event
+// as HISTORY ONLY: it never changes the kind, the ordering watermark (provider_status_at) or delivered_at /
+// returned_at (ingest_provider_status returns 'history_only'; T-045 review round 2).
 function providerTs(order: ProviderOrder, now: Date): { at: Date; trusted: boolean } {
   const t = order.lastStatusChange ? Date.parse(order.lastStatusChange) : Number.NaN;
   return Number.isFinite(t) && t <= now.getTime() ? { at: new Date(t), trusted: true } : { at: now, trusted: false };
