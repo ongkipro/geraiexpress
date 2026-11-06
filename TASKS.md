@@ -296,13 +296,15 @@ Source: [docs/review/2026-10-28-full-review.md](docs/review/2026-10-28-full-revi
   - **Open — other.** The remote `DATABASE_URL` drill is unexecuted (no remote database). Production backup storage, schedule, PITR and RPO/RTO remain owner decisions.
   - **Closed (2026-10-29).** The Done-when is met: the third review's verdict is PASS with 0 Critical/High and both Mediums fixed (each with a check that fails without it), and RELEASE.md carries the backup/restore, auth-secret, PostgREST-exposure and migration-ledger gates. The remote drill and the production backup/PITR choices stay as RELEASE.md release gates owned by the owner, not as task work.
 
-### [ ] T-063 — Production email transport on the self-hosted runtime (DEC-009, DEC-020)
+### [x] T-063 — Production email transport on the self-hosted runtime (DEC-009, DEC-020)
+- **Done (2026-11-06):** code side per DEC-027, run `RUN-20261106T043102Z-1ee01768` PASS (typecheck, unit 1477, reviews 1f30518c -> c1137370 APPROVE). The release-gated owner steps below stay open in RELEASE.md and do not reopen this task.
 - **Primary requirement:** PR-31
 - **Constraints:** DEC-009, DEC-020; Cloudflare Email Sending needs a Worker binding and is not used on the self-hosted runtime; no provider chosen, no send
 - **Risk Level:** R3
-- **Allowed Paths:** `src/lib/mail*`, `src/app/api/auth/send-email/**`, `tests/unit/**`, `README.md`, `RELEASE.md`
+- **Allowed Paths:** `src/lib/mail*`, `src/lib/config.ts`, `src/lib/startup.ts`, `tests/unit/**`, `compose.yaml`, `scripts/check-environments.mjs`, `infra/env/*.env.example`, `.env.example`, `README.md`, `RELEASE.md`, `ARCHITECTURE.md`, `DECISIONS.md`, `docs/spec/04-SYSTEM-ARCHITECTURE.md`, `TASKS.md`
 - **Depends On:** T-062
-- **Done when:** the Send Email Hook transport is chosen by one environment setting with Mailpit locally, an SMTP or HTTPS-API transport for production behind the same interface, and production still fails closed until the owner selects a sending domain and provider (owner decision); the anonymous-identity refusal and signature checks stay unchanged and tested.
+- **Done when:** the mail transport is chosen by one environment setting: Mailpit locally, a provider-neutral SMTP submission transport (TLS mandatory, certificates verified) for production behind the same interface, sender `no-reply@geraiexpress.com` (DEC-027); unset, unknown or incomplete settings fail closed and startup names the missing variables only; the environment checker keeps `SMTP_PASSWORD` out of templates and unshared and requires TLS for `smtp`; tested against a scripted SMTP server (implicit TLS, STARTTLS, refusal without STARTTLS, unexpected reply, certificate verification, header injection). (The former Send Email Hook / signature clause is obsolete: the hook was removed with T-062.)
+- **Release-gated (owner, not part of this task's code):** open the SMTP provider account, publish SPF/DKIM/DMARC for geraiexpress.com, set `SMTP_*` and prove one controlled delivery to an owner address before enabling registration (RELEASE.md).
 
 ### [x] T-041 — Gerai discount assignment (DEC-012, DEC-016, CTX-42)
 - **Primary requirement:** PR-23

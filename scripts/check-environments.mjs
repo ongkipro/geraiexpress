@@ -39,6 +39,8 @@ export const SECRET_NAMES = [
   "AUTH_JWT_SECRET", "AUTH_SECRET", "TRACKING_TOKEN_SECRET", "TURNSTILE_SECRET_KEY", "PGRST_DB_URI", "POSTGRES_PASSWORD",
   "CREDENTIAL_KEY", "CREDENTIAL_KEYS", "MENGANTAR_PARTNER_SECRET", "GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET", "CRON_SECRET",
 ];
+// Provider-issued secrets: never committed, never shared between environments, but their length is the provider's.
+export const PROVIDER_SECRET_NAMES = ["SMTP_PASSWORD"];
 const PRODUCTION_HOSTS = ["geraiexpress.com", "app.geraiexpress.com", "owner.geraiexpress.com", "hooks.geraiexpress.com"];
 const ORIGIN_NAMES = ["SITE_ORIGIN", "APP_ORIGIN", "OWNER_ORIGIN", "HOOKS_ORIGIN"];
 const LOCAL_HOSTS = ["127.0.0.1", "localhost", "[::1]", "host.docker.internal", "0.0.0.0"];
@@ -77,7 +79,7 @@ export function checkEnvFiles(envs) {
   const holders = new Map();
   for (const [name, { vars, template }] of entries) {
     if (template) continue;
-    for (const secret of SECRET_NAMES) {
+    for (const secret of [...SECRET_NAMES, ...PROVIDER_SECRET_NAMES]) {
       const value = vars[secret];
       if (!value) continue;
       const key = `${secret}\0${value}`;
@@ -90,7 +92,7 @@ export function checkEnvFiles(envs) {
 
   for (const [name, { vars, template }] of entries) {
     if (template) {
-      for (const secret of SECRET_NAMES) {
+      for (const secret of [...SECRET_NAMES, ...PROVIDER_SECRET_NAMES]) {
         if (!placeholder(vars[secret])) problems.push(`${name}: the committed template carries a value for ${secret}; secrets belong in the 0600 env file outside the repository`);
       }
     } else {
@@ -109,6 +111,10 @@ export function checkEnvFiles(envs) {
     if (name === "local") continue;
     if (vars.HOST_SHARED_MODE?.trim() === "1") problems.push(`${name}: HOST_SHARED_MODE=1 is for local use only`);
     if (vars.MAIL_TRANSPORT === "mailpit") problems.push(`${name}: MAIL_TRANSPORT=mailpit is for local use only`);
+    // T-063: SMTP needs TLS (implicit or STARTTLS); a release environment never submits in clear text.
+    if (vars.MAIL_TRANSPORT === "smtp" && !["tls", "starttls"].includes(vars.SMTP_SECURITY?.trim() ?? "")) {
+      problems.push(`${name}: MAIL_TRANSPORT=smtp needs SMTP_SECURITY=tls or starttls`);
+    }
     if (vars.AUTH_CAPTCHA_DISABLED?.trim().toLowerCase() === "true") problems.push(`${name}: AUTH_CAPTCHA_DISABLED=true is for local use only`);
     const postgrestHost = hostOf(vars.POSTGREST_URL ?? "");
     if (vars.POSTGREST_URL && !postgrestHost) problems.push(`${name}: POSTGREST_URL is not a valid URL`);
