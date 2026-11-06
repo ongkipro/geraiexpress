@@ -182,6 +182,15 @@ Merge log (2026-11-06, `feat/counter-ops-2026-11`; pushed through `8e3a643`):
   23d4b5f: offline install, typecheck, unit, docker build stage; review 03ba0d69 APPROVE. Main node_modules
   reinstalled offline from the merged lockfile (lucide-react 1.68.0, postgrest-js 2.119.0).
   Next: INT-M2 (`gx-integration.sh INT-M2`) on the M2 head; single M2 push only on its PASS finish.
+- M2 PUSHED `f89f3ed..4d86c48` after INT-M2 `RUN-20261106T015618Z-bbf48404` PASS on 4d86c48: typecheck, unit, db,
+  upgrade, FULL e2e 487 passed / 0 failed / 11 skipped, diff-hygiene, boundary PASS (M2 contract satisfied).
+- T-112: commit `8c4653b`, merge `7cacd19` (unpushed; next milestone). Run `RUN-20261106T024553Z-8ab86b89` PASS:
+  RED check (unfixed page made the gate fail with 70 uuid-null errors), fixed: typecheck, unit, label + gerai-logo 46
+  passed, 0 uuid-null errors with the runner's own canary-proven PostgreSQL log (GX_PG_LOG). Reviews d3f33228 ->
+  293477a2 -> d88aad39 APPROVE.
+- T-058 + T-060 closed: code from 2026-10-28; their open e2e item proven by INT-M2 (390/1280) and
+  `RUN-20261106T030530Z-41231083` tablet-768 (29 passed).
+- TASKS.md checkbox sync: T-055, T-058, T-060, T-104..T-111 marked [x] with their evidence line.
 
 Current task: integrating the post-wave-3 hardening set (T-104..T-111, T-055) onto
 `feat/counter-ops-2026-11`. Remote is at `e87e10a` (T-103). Nothing after that is pushed.

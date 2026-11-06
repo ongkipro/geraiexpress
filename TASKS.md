@@ -426,7 +426,8 @@ Source: [docs/review/2026-10-28-full-review.md](docs/review/2026-10-28-full-revi
   - **L4:** a refresh with an unreadable proof time issues no `totp` claim.
   - **Closed (2026-10-29):** the fixes were re-reviewed in the second (`150000`–`170000`) and third reviews below; no High/Medium remains open (see T-057 for the review record).
 
-### [ ] T-055 — Self-hosted enforced nonce CSP and container smoke/e2e gate
+### [x] T-055 — Self-hosted enforced nonce CSP and container smoke/e2e gate
+- **Done (2026-11-06):** merge `12eb37c`, run RUN-20261105T234857Z-e19a41ae PASS; full e2e in INT-M2 (4d86c48, pushed).
 - **Primary requirement:** SEC-6
 - **Constraints:** SEC-5, TD-14, NFR-3, DEC-005, DEC-009
 - **Risk Level:** R3
@@ -490,7 +491,8 @@ Source: [docs/review/2026-10-28-full-review.md](docs/review/2026-10-28-full-revi
     - **Low (open, UI).** `my_invitations.invited_by_email` is not yet rendered on `/undangan`.
   - **Verified (2026-10-29).** Fresh isolated DB suite 29 files / 432 tests, upgrade path 432, `pnpm test:unit` 53 files / 908, typecheck; local gxdb migrated through `20261029200000` with `pnpm db:up` (no reset).
 
-### [ ] T-058 — Server-bound verify-email state and CAPTCHA for OTP verification
+### [x] T-058 — Server-bound verify-email state and CAPTCHA for OTP verification
+- **Done (2026-11-06):** code 2026-10-28; e2e: registration/auth-demo/auth-mail green at 390 and 1280 in INT-M2 (4d86c48) and at 768 in RUN-20261106T030530Z-41231083 (29 passed).
 - **Primary requirement:** PR-29
 - **Constraints:** SEC-5, SEC-6, RATE-2, IAM-8, TEN-5, UX-7, DEC-007, DEC-009
 - **Risk Level:** R3
@@ -510,7 +512,8 @@ Source: [docs/review/2026-10-28-full-review.md](docs/review/2026-10-28-full-revi
 - **Depends On:** T-033, T-039, T-043, T-050, T-053
 - **Done when:** CI repeats the entire serialized DB suite from a controlled reset without simultaneous shared-database suites or retries masking failures, retaining order and non-secret evidence to identify or bound `account_busy` failures in cod-and-payment/issuance; cause/disposition is recorded, not asserted from an isolated pass. Select any explicit local-container e2e expect timeout from observed container timings and apply it only to that runtime; the former local-workerd 20-second observation is historical, not evidence for the container. Preserve other Node/CI defaults and assertions, with no production source change or blanket sleep. Record repeated-suite results and container desktop/mobile/host evidence against the same final image; typecheck and relevant config/test gates pass. Keep the scheduler stopped while suites use the shared local database. Until reproduced or explained, the flake is Unknown, not a proven product defect or harmless timing issue.
 
-### [ ] T-060 — Auth ingress follow-ups from the final wave F review
+### [x] T-060 — Auth ingress follow-ups from the final wave F review
+- **Done (2026-11-06):** code 2026-10-28; e2e: auth-demo RATE-1/RATE-2 and sign-in limits green at 390 and 1280 in INT-M2 (4d86c48) and at 768 in RUN-20261106T030530Z-41231083.
 - **Primary requirement:** SEC-6
 - **Constraints:** SEC-5, RATE-2, NFR-3, DEC-009
 - **Risk Level:** R3
@@ -846,14 +849,16 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Allowed Paths:** `scripts/db-migrate.sh`, `scripts/db-verify.sh`, `README.md`, `TASKS.md`, `STATUS.md`, `tests/unit/**`; scope expansion `tests/db/helpers.ts`, `tests/db/masked-label.test.ts`, `tests/db/invoice-export.test.ts` (sentinel substring false positive found by the full DB gate)
 - **Done when:** `--reset` (and therefore `db:reset` and `db:verify`) refuses unless `GX_CONFIRM_RESET` equals the target database name, before any database call; README marks both commands destructive and points to `scripts/test-backend-isolated.mjs` for tests that must not touch `gxdb`; a unit test proves refusal without/with a wrong confirmation and pass-through with the right one.
 
-### [ ] T-104 — Database hardening from the independent DB and ops reviews (2026-11-05)
+### [x] T-104 — Database hardening from the independent DB and ops reviews (2026-11-05)
+- **Done (2026-11-06):** merge `cf98a4a`, pushed in `8e3a643`.
 - **Primary requirement:** NFR-1
 - **Constraints:** forward migration `20261105180000_db_hardening.sql` only; no applied migration edited; functions recreated from their latest body with signature, SECURITY DEFINER, empty `search_path` and ACL kept (except `auth_purge_expired`, which gains `p_limit` and stays machine-only); stale/refusal SQLSTATE 55000/22023/P0002, never 40001; retention periods unchanged; documentation corrected to what the code does.
 - **Risk Level:** R3
 - **Allowed Paths:** `db/migrations/**` (new forward migration only), `src/lib/mengantar/scheduled.ts`, `tests/**`, `docs/spec/**`, `ARCHITECTURE.md`, `OBSERVABILITY.md`, `TASKS.md`, `STATUS.md`
 - **Done when:** (1) every RPC that locks a shipment and memberships locks the shipment first (`revoke_tracking_link`: cheap admin check, shipment lock, then `require_tenant_admin_locked`; `reconcile_shipment` likewise), proven by a two-connection revoke/void test without 40P01; (2) `private.lock_member_shipment` rechecks membership after its `FOR UPDATE` and refuses a vanished row, proven by a deactivated-while-waiting payment and case test (P0002, nothing written); (3) `service_role` holds no direct table privilege except SELECT on `public.tenants` (credential rewrap tenant list), machine inserts into `label_print_events`/`label_snapshots` fail 42501, catalog test pins it; (4) `pilot_report` scope CTE is `NOT MATERIALIZED` with `shipments(tenant_id, issued_at)` and active `counter_payments(tenant_id, recorded_at)` indexes, results unchanged; (5) `auth_issue_otp` no longer deletes other addresses' codes, `auth_purge_expired(p_limit)` deletes bounded lock-skipping batches with `remaining`, `runAuthPurge` loops a bounded number of batches and treats a malformed reply as failure; ARCHITECTURE, OBSERVABILITY, 05-DATA-MODEL and the OBS-2/SEC-7/SEC-8/DR-1 contradictions corrected; typecheck, unit, full DB and upgrade replay pass; independent review.
 
-### [ ] T-105 — Backend and ops hardening from the independent backend and ops reviews (2026-11-05)
+### [x] T-105 — Backend and ops hardening from the independent backend and ops reviews (2026-11-05)
+- **Done (2026-11-06):** merge `b3a6129`, pushed in `8e3a643`.
 - **Primary requirement:** NFR-3
 - **Constraints:** no SQL or migration (T-104 owns the database); no new dependency; `src/proxy.ts`, `src/lib/csp.ts` and `src/app/layout.tsx` untouched (T-055); `runAuthPurge` keeps T-104's batched call, only its result validation and outcome reporting change; a timed-out mutation stays an unknown outcome, never retried; logs carry bounded fields only (no token, path with a token, personal data or provider payload); no raw UUID shown to staff.
 - **Risk Level:** R3
@@ -861,14 +866,16 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Done when:** (F-1) shipment actions put only stable codes in `?galat=`/`?info=` and the `dispatch_action` log (raw database text → `unknown`) and refuse a non-UUID `shipment_id` before the database; (F-2) both CSV exports answer `Sec-Fetch-Site` other than `same-origin`/`none` with 403 before any DB call (absent header allowed: a non-browser client carries no ambient cookie); (F-3) `resetDemoAction` spends `DEMO_LIMITER`; (F-4) `acceptInvitationAction` stores `ge_tenant` only for a UUID answer; (Ops 2) every PostgREST request has a deadline composed with the caller signal (15 s, scheduled 60 s); (Ops 3) `src/instrumentation.ts` refuses a production start with invalid required configuration (names only) and `/healthz` is not ready while it does not load (registration closed stays ready); (Ops 6) credential rewrap handles a bounded batch per run after a resumable cursor and reports pending/failed/done; (Ops 7) malformed cron RPC answers are failed, every task reports done/partial/disabled/failed, the cron route returns `{task, result, correlationId, steps?}` and the scheduler logs it with `ok`; (Ops 8) `src/lib/log.ts` stamps dispatch and cron events with a server-generated correlation id; (Ops 9) app and scheduler `stop_grace_period: 300s`, the scheduler drains in-flight calls on SIGTERM; unit tests for each; typecheck, unit, container smoke (startup and healthcheck) and scheduler shutdown checked by the lead; independent review.
 - **Proposed follow-ups (SQL):** per-role `statement_timeout` / `lock_timeout` / `idle_in_transaction_session_timeout` for `authenticator`-switched roles (interactive vs `service_role`); a machine RPC exposing the applied schema version for a readiness compatibility probe; a machine RPC listing only tenants whose active credential `key_version` is below the current one (with a persisted keyset cursor) so rewrap skips current and credential-less tenants and survives restarts.
 
-### [ ] T-108 — Local dummy data for the review gerai (owner, 2026-11-05)
+### [x] T-108 — Local dummy data for the review gerai (owner, 2026-11-05)
+- **Done (2026-11-06):** merge `425f6b3`, pushed in `8e3a643`.
 - **Primary requirement:** PR-21
 - **Constraints:** Owner allowed dummy data for LOCAL use only. A separate `db/local-fixture.sql` on top of `db/review-fixture.sql` ("Gerai Demo Review (contoh)"); same local-only guards (gx-prefixed database, `app.gx_local=on`, local seed user) plus the review gerai; idempotent (skip when present), one transaction, stable `…-c0de-…` ids; append-only history inserted, never rewritten. Supervisor decision (option B): ten issued shipments are locally non-simulated so labels, print history and the pilot report have data; they carry `SIM` resi and "(contoh)" names, terminal `succeeded` operations without provider environment/order id/dispatch time, `paid`, no seller credential and no tracking link, and final assertions roll the fixture back otherwise. Everything else stays simulated. Never applied by tests, CI, `db:reset`/`db:verify` or to a remote database.
 - **Risk Level:** R1 (local development data and a local script; no migration, no application code)
 - **Allowed Paths:** `db/local-fixture.sql`, `scripts/db-fixture.sh`, `package.json`, `README.md`, `TASKS.md`, `STATUS.md`
 - **Done when:** `pnpm db:fixture` refuses `DATABASE_URL` and applies the review fixture and then the local fixture to the local `gxdb`; a second run changes nothing; the review gerai shows ~12 contacts, ~25 shipments across states (COD and non-COD, several couriers), label snapshots (masked/unmasked, 10x15/10x10) with print events, counter payments across Tunai/QRIS/Transfer/Lainnya incl. one difference and one void, one closed and one open cash period, one open and one closed compensated case, and dashboard and `/kas/laporan` trends over the last 14 WIB days; the safety assertions pass; applied to a disposable database and then to the backed-up local `gxdb`; README documents contents, accounts, repetition and the local-only boundary.
 
-### [ ] T-106 — Cleanup: stale code, files, scripts, docs and DB leftovers; system map refresh (2026-11-05)
+### [x] T-106 — Cleanup: stale code, files, scripts, docs and DB leftovers; system map refresh (2026-11-05)
+- **Done (2026-11-06):** merge `8e3a643`, pushed.
 - **Primary requirement:** NFR-1
 - **Constraints:** Evidence first, delete second: nothing is removed without a repository grep (src, tests, scripts, configs, docs, CI/Docker/Compose) proving no reference; no behaviour change; Next.js entrypoint files and string/dynamic imports are never treated as unused. Applied migrations are immutable history: dead SQL objects are listed as proposals for a later forward migration, not dropped here. T-055 (proxy/CSP/layout/marketing `connection()`) and T-105 (DB client, cron, scheduler, keyring, errors/format/export-format, auth/shipment/member actions, healthz, Compose) files are out of scope while in flight.
 - **Risk Level:** R2
@@ -883,7 +890,8 @@ updated in the same task. Every new tenant route is added to the host matrix in 
   - Role `supabase_auth_admin`: kept by the foundation only because applied migrations grant to it (ARCHITECTURE "Data path and auth"); revoke its grants and drop it in a forward migration once no function is owned by it.
   - Not dead (checked): every other `public.*` function is called by `src/` through `rpc()` or by other SQL; every table is written or read by RPCs; `tenant_invitations.accepted_at/accepted_by` are written by `accept_invitation` as audit facts.
 
-### [ ] T-109 — Database follow-ups of T-104, T-105 and T-106 (2026-11-05)
+### [x] T-109 — Database follow-ups of T-104, T-105 and T-106 (2026-11-05)
+- **Done (2026-11-06):** merge `075cc85`; full e2e on the M1 head INT-M1 RUN-20261106T001739Z-409d991c PASS, pushed `f89f3ed`.
 - **Primary requirement:** NFR-1
 - **Constraints:** forward migration `20261105190000_db_followups.sql` only (T-110 uses `20261105200000`); no applied migration edited; new functions SECURITY DEFINER with `set search_path = ''` and an explicit ACL; refusals 22023/55000, never 40001; the `postgres` migration/maintenance role gets no timeout.
 - **Risk Level:** R3
@@ -891,7 +899,8 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Done when:** (1) `anon` 5 s / 3 s / 15 s, `authenticated` 15 s / 5 s / 30 s, `service_role` 60 s / 10 s / 60 s statement / lock / idle-in-transaction timeouts (aligned with the app's 15 s interactive and 60 s scheduled deadlines) and an `authenticator` 65 s statement upper bound, applied by PostgREST as impersonated-role settings after `notify pgrst, 'reload config'`; a DB test pins the role settings and proves a statement over the authenticated limit is cancelled with 57014; (2) machine-only `public.schema_version()` returns the newest applied migration; `/healthz` answers 503 `reason: "schema_behind"` while it is older than `EXPECTED_SCHEMA_VERSION` (`src/lib/schema-version.ts`, pinned to the newest migration file by a unit test), a newer schema is ready; (3) machine-only `machine_rewrap_candidates(p_env, p_current_version, p_after, p_limit)` lists only non-demo tenants whose active credential of the environment is below the current key version (keyset by tenant id); `rewrapNextBatch` uses it (in-process cursor kept; a rewrapped tenant leaves the set), and `service_role`'s last table privilege (SELECT on `public.tenants`) is revoked; (4) the callerless `platform_tenants()` / `platform_tenant_slugs()` and the unused `auth.users` columns `instance_id`, `confirmation_token`, `recovery_token`, `email_change_token_new`, `raw_user_meta_data` are dropped, with their test probes moved to `platform_tenant_directory` / `raw_app_meta_data`; ARCHITECTURE, OBSERVABILITY, RELEASE and specs 05/15/16 updated; typecheck, unit, full DB and upgrade replay pass; independent review.
 - **Kept on purpose:** `auth.users.aud` (pinned identity-row shape), `auth.mfa_factors.friendly_name` (written by `auth_mfa_enroll`), `public.label_snapshots.template_version` (cheap versioning), and the `supabase_auth_admin` role (`registration_open` and `private.before_user_created` are still granted to it; dropping it needs those grants revoked first). The rewrap cursor stays in-process: persisting it is unnecessary once the candidate list shrinks as tenants are rewrapped.
 
-### [ ] T-110 — Partner-wide quota and post-restore provider mutation fence (ops review items 1 and 4, 2026-11-05)
+### [x] T-110 — Partner-wide quota and post-restore provider mutation fence (ops review items 1 and 4, 2026-11-05)
+- **Done (2026-11-06):** merge `ee7aebf`, run RUN-20261105T220407Z-df4814db PASS; full e2e INT-M1, pushed `f89f3ed`.
 - **Primary requirement:** NFR-5, DR-1 (RATE-1, TD-3)
 - **Constraints:** one forward migration `20261105200000_partner_quota_restore_fence.sql`; changed functions recreated from their latest body (`dispatch_claim`) or wrapped unchanged with the fence check in front (pickup write-aheads, `dispatch_mark_batch_payment_sent`, `authorize_batch_payment`, `fence_partner_key_rotation`), signatures and ACLs kept; refusals SQLSTATE 55000/22023, never 40001; the real Mengantar quota entitlement is never invented (seeded limits are placeholders, `entitlement_verified = false`); a quota denial sends nothing and is retry-later, never a resend trigger; recovering a seller is not a new seller; unknown outcomes reconcile, never blind replay. Supervisor decision (option B): clearing the fence marks every real queued create `restore_check_required`; the dispatcher reads Mengantar by reference since the operation's creation before any create (one live order → recorded as found; several or error items → unknown; none → flag cleared and created once; lookup failure, quota or fence → released with the flag kept). Review fixes: the flag is kept on found/unknown operations and reconciliation scans from `created_at`; the check runs before every local refusal; key regeneration reserves quota (cost 2) before its fence; audited operator exit `platform_mark_restore_check_unknown`.
 - **Risk Level:** R3
@@ -915,14 +924,16 @@ updated in the same task. Every new tenant route is added to the host matrix in 
   page); a test proves no `shipment_quotes` request is made for such a shipment and the label still renders; the
   gerai-logo label spec leaves no `uuid: "null"` error in the DB log; typecheck, unit and the label specs pass.
 
-### [ ] T-107 — Button and action audit: every control does what its label says (2026-11-05)
+### [x] T-107 — Button and action audit: every control does what its label says (2026-11-05)
+- **Done (2026-11-06):** merge `23d4b5f`, run RUN-20261106T013933Z-8bb3ed9f PASS; full e2e INT-M2, pushed `4d86c48`.
 - **Primary requirement:** UX-13
 - **Constraints:** UX-12, UX-15, UX-16, UI-1 to UI-7 (44px targets, single blue, visible states); existing shadcn `Button`, `SubmitButton`, `PendingLabel` and `Dialog` only (no new dependency); no server action, RPC or migration changes; files owned by parallel work (T-055: `src/proxy.ts`, `src/lib/csp.ts`, `src/app/layout.tsx`, marketing pages; T-105: `src/modules/shipments/actions.ts`, `src/modules/members/actions.ts`, `src/lib/auth-actions.ts`, export.csv routes, `src/lib/errors.ts`, `src/lib/format.ts`) are not edited; defects found there are recorded for that task.
 - **Risk Level:** R2
 - **Allowed Paths:** `src/app/**` (excluding the T-055/T-105 files above), `src/modules/**/*.tsx`, `src/components/**` (excluding `ui/**`), `tests/e2e/**`, `tests/unit/**`, `docs/spec/17-UX-FLOWS-SCREEN-CONTRACTS.md`, `TASKS.md`, `STATUS.md`
 - **Done when:** every Server Action submit uses `SubmitButton` (pending label, `aria-busy`, duplicate-click guard) except documented GET/filter exceptions, pinned by `tests/unit/submit-button-usage.test.ts`; destructive actions (archive address, revoke invitation, withdraw application, revoke tracking link) confirm in the shared dialog naming the object, with Escape returning focus to the trigger; disabled actions reference their reason via `aria-describedby`; role-change success is announced after its dialog closes; e2e for the changed flows (contacts, members, registration, tracking, sign-in pending) pass at 390 and 1280; typecheck and unit pass; screenshots of the changed pages at 390 and 1280 reviewed.
 
-### [ ] T-111 — Dependency bump after the release-age window (2026-11-05)
+### [x] T-111 — Dependency bump after the release-age window (2026-11-05)
+- **Done (2026-11-06):** merge `b3f6975`, run RUN-20261106T014950Z-4e7fa208 PASS; full e2e INT-M2, pushed `4d86c48`.
 - **Primary requirement:** NFR-1
 - **Constraints:** T-102 held `lucide-react` (1.67.0) and `@supabase/postgrest-js` (2.118.0) under the pnpm `minimumReleaseAge` 24 h policy. Bumped to the newest releases older than 24 h at 2026-11-05 13:34 UTC: `lucide-react` 1.68.0 (1.69.0 was 7 h old) and `@supabase/postgrest-js` 2.119.0. Exact pins; the lockfile passes the supply-chain policy.
 - **Risk Level:** R2
