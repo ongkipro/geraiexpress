@@ -11,6 +11,9 @@ Status: NOT_RELEASED (metadata above records prior Worker + Supabase preview; no
 
 ## Preferred deployment: Vultr + Coolify (DEC-022, T-068)
 
+Alpha staging (T-114): the ordered, placeholder-only execution checklist is `docs/runbooks/staging-alpha.md`; the
+gates below remain the source of each step.
+
 This is the current deployment direction. Nothing has been deployed by this audit. Use
 `compose.coolify.yaml` as the Coolify Compose location; it references the checked-in base
 `compose.yaml`. Select an immutable `GX_IMAGE` built for the target `APP_ORIGIN`. Configure

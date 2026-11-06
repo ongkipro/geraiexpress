@@ -935,6 +935,14 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Fix (test only):** the test clears every mail variable (`MAIL_*`, `SMTP_*`) with `vi.stubEnv(name, "")` before the mail-validation case; validator and assertions unchanged (strict startup validation and the no-secret-in-errors check kept). Original test fails under synthetic contamination, fixed test passes clean and contaminated; full unit suite 1499/1499 under contamination.
 - **Risk Level:** R1. **Allowed Paths:** `tests/unit/**`, `TASKS.md`.
 
+### [ ] T-114 — Alpha staging on Vultr + Coolify (2026-11-06)
+- **Primary requirement:** NFR-5
+- **Constraints:** DEC-022 (Vultr + Coolify), DEC-027 (mail), DEC-028 (status), DEC-029 (alpha gate: legal/compliance and VAT/PPN deferred). No provisioning, DNS change, provider call, deployment or secret read without the owner's explicit approval; placeholders only in git.
+- **Risk Level:** R2 (local preparation); remote steps follow RELEASE.md gates.
+- **Allowed Paths (local preparation):** `docs/runbooks/**`, `infra/env/staging.env.example`, `RELEASE.md`, `TASKS.md`, `STATUS.md`, `DECISIONS.md`, `tests/unit/check-environments.test.ts`, `tests/unit/fixtures/environments/**`.
+- **Local preparation — done when:** an execution checklist (`docs/runbooks/staging-alpha.md`) sequences the existing RELEASE gates for the four staging hosts with placeholders only; the committed templates pass `pnpm check:environments` and the Coolify proxy boundary test; a unit test pins the staging template facts the checklist relies on (hosts, sandbox, complete SMTP set, no secret value); independent review. **Status: see the T-114 ledger run.**
+- **Deployment — done when (open; needs owner inputs I1–I3 of the checklist):** host with fixed IPv4 and Coolify; four staging hosts over HTTPS (no AAAA); `pnpm check:environments` PASS on the real env file; migrations applied, `/healthz` 200 and the outage/recovery check; registration closed; host-routing smoke; one controlled SMTP code mail; scheduled off-server backup and a timed restore drill from the off-server copy; rollback image kept; scheduler events observed. Recorded with evidence in RELEASE.md; never marked PASS from local preparation.
+
 ### [ ] T-115 — Lock order in reconcile_shipment vs admin closes (second-opinion finding, 2026-11-06; parked by the feature freeze)
 - **Primary requirement:** NFR-1
 - **Finding (pre-existing, not introduced by T-104):** `reconcile_shipment` locks shipment → memberships → `provider_operations`, while `close_ambiguous_pickup_reservation` (`20261029170000_admin_closes.sql:106-110`) and `close_unknown_batch_payment` (`20261029200000:31-36`) lock operation → shipment → memberships (the order the T-104 header declares). Two admins acting on the same unknown real create operation can deadlock (40P01): one request fails and is retried; no data corruption. Source: `.delivery/reviews/2026-11-06-fable-t104.md`.
