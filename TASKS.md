@@ -241,7 +241,8 @@ Source: [docs/review/2026-10-28-full-review.md](docs/review/2026-10-28-full-revi
 - **Done when:** an ADR records which workloads run on Vultr under Coolify and which stay on Cloudflare; the Worker-to-Vultr trust boundary (authentication, replay protection, who holds `CREDENTIAL_KEY` and the Partner Secret); the fixed egress address handed to Mengantar; the scheduler for the dispatch sweep and demo cleanup; where Supabase runs for preview, staging and production (separate projects); the Coolify exposure and patching policy; failure behavior when the gateway is down (reconcile, never resend); and rollback.
 - **Result (2026-10-28):** `docs/adr/ADR-0001-hybrid-hosting-egress-gateway.md` records every item above. Decision (DEC-020, owner, 2026-10-29): this design was withdrawn and the gateway task was cancelled before implementation; the self-hosted server supplies the fixed egress address instead.
 
-### [ ] T-062 — Self-hosted Node runtime replacing Cloudflare Workers (DEC-020; former gateway task cancelled)
+### [x] T-062 — Self-hosted Node runtime replacing Cloudflare Workers (DEC-020; former gateway task cancelled)
+- **Done (2026-11-06):** every clause verified present by a read-only audit (standalone image, no OpenNext/wrangler, one config reader, proxy-only client address with TRUSTED_PROXY, in-process limiter keys, secret internal cron route + scheduler container, DEC-015 hosts through the proxy, Docker replacements for the Worker scripts, fixed-IPv4 allow-list documented); the last clause, the full Playwright suite on three viewports against the container, passed in INT-M3 `RUN-20261106T031040Z-96b35408` on `ba5e1e4`: 721 passed / 0 failed / 26 skipped. Provisioning stays owner-side by the task's own scope.
 - **Primary requirement:** ARCH-1
 - **Constraints:** DEC-005 (Next.js pins), DEC-010, DEC-015, DEC-020, NFR-5, SEC-3; no provisioning, no deploy, no live provider call
 - **Risk Level:** R4

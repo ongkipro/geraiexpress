@@ -1400,3 +1400,13 @@ T-055's browser-enforcement test first failed because 'strict-dynamic' trusts sc
 script, so the probes are now parser-inserted into the real response; T-107 needed three review rounds (pending
 state lost when a confirmation dialog closes and reopens, raw submits, a per-file usage test); T-111 was re-proved
 on the final head with an offline install. The single full e2e on the M2 head decides the M2 push.
+
+## 2026-11-06 — M3 pushed; T-062 closed; public-repository secret check
+
+INT-M3 ran the full Playwright suite on all three viewports against the production container for the first time
+since the runtime moved to Node (721 passed, 0 failed, 26 skipped; 249 per viewport) together with typecheck, unit,
+DB and upgrade, on `ba5e1e4`; M3 (T-112 and the T-058/T-060 closure) was pushed on that evidence and it closed T-062's
+last clause. The owner asked to make sure the repository is public: it already is. Before relying on that, every
+revision was scanned for committed sensitive filenames and high-signal secret patterns, with a planted-fake control
+repository proving the patterns fire; nothing was found. The owner chose geraiexpress.com as the domain, which the
+host defaults already use; the production mail provider remains the owner's choice (T-063).

@@ -141,11 +141,22 @@ end without stopping; stop only for push/deploy, production write, deleting non-
 user-visible product decision. Local commits use the noreply identity, no AI trailers.
 
 Open for the owner (batched; reported at a real blocker or end of queue):
-- Push of `feat/counter-ops-2026-11` (everything after `e87e10a`) awaits the owner.
-- T-110 re-review: resolved by the agent as the standing `reviewer` (GPT-6.1 Sol) with Fable's P1 + 4 P2 as
-  explicit packet risks, instead of a second Fable pass. Say if Fable must also re-review.
-- From the checkpoint: dotfiles `delivery-ledger` fix commit (not ours); `git prune`/gc.log warning; stashes
-  `t111`, `t105-wip` (already applied).
+- RESOLVED: push of `feat/counter-ops-2026-11` (owner "commit dan push jika perlu"): M1 f89f3ed and M2 4d86c48 pushed
+  after verified integration runs; merge to `main` and production deploy stay forbidden until you say so.
+- RESOLVED: T-110 re-review by the standing `reviewer` (GPT-6.1 Sol), APPROVE after 3 rounds.
+- T-063 production mail: sending domain decided by the owner (2026-11-06): geraiexpress.com. Still open: the provider
+  (SMTP or a named HTTPS API) and the from address (proposed no-reply@geraiexpress.com); DNS SPF/DKIM/DMARC and provider
+  credentials are owner actions. Code side is ready to add one
+  provider-neutral SMTP transport behind MAIL_TRANSPORT that stays disabled until configured; production fails closed
+  today. The task's "Send Email Hook / signature" clause is obsolete (hook removed with T-062) and should be dropped.
+- T-059 asks for a CI repeat of the DB suite in `.github/workflows`; this repo has no CI. Decide: add GitHub Actions
+  CI (separate setup, runner and secrets policy), or restate T-059 as a repeated local isolated-suite proof.
+- T-043 pickup and T-080 cargo: supervised Mengantar sandbox runs (T-048) needed for the real `POST/GET /time`
+  shapes and cargo route minima; T-045 webhooks need the seller-side Webhook URL. All need your sandbox approval.
+- T-037: its release checks name `smoke:worker` (Worker runtime, replaced by the container in T-062); restate to
+  `smoke:container` and the INT-M runs, then it can close against a release candidate.
+- Housekeeping you may run: `/data/tmp/gx-cleanup-owner.sh` (~1.4 GB of ignored build/test output and a merged
+  worktree's node_modules); `git prune` for the gc.log warning; stashes `t111`, `t105-wip` already applied.
 
 Push (owner "commit dan push jika perlu", via supervisor, 2026-11-06): only `feat/counter-ops-2026-11`. Checked:
 upstream origin/feat/counter-ops-2026-11; remote heads are only that branch and `main`; no `.github/` workflows;
@@ -191,6 +202,12 @@ Merge log (2026-11-06, `feat/counter-ops-2026-11`; pushed through `8e3a643`):
 - T-058 + T-060 closed: code from 2026-10-28; their open e2e item proven by INT-M2 (390/1280) and
   `RUN-20261106T030530Z-41231083` tablet-768 (29 passed).
 - TASKS.md checkbox sync: T-055, T-058, T-060, T-104..T-111 marked [x] with their evidence line.
+- M3 PUSHED `4d86c48..ba5e1e4` after INT-M3 `RUN-20261106T031040Z-96b35408` PASS on ba5e1e4: typecheck, unit, db,
+  upgrade, FULL e2e on three viewports 721 passed / 0 failed / 26 skipped (249 per viewport), diff-hygiene, boundary.
+- T-062 closed on that evidence (every other clause verified by read-only audit 683ee8c9).
+- Repository visibility (owner request 2026-11-06 "pastikan repo public"): `ongkipro/geraiexpress` is PUBLIC (gh). Secret
+  check before relying on it: no sensitive filename ever committed in 236 commits; no high-signal secret pattern in any
+  revision (control repo with two planted fakes: 2/2 caught). gitleaks itself could not run (mise failed to load it).
 
 Current task: integrating the post-wave-3 hardening set (T-104..T-111, T-055) onto
 `feat/counter-ops-2026-11`. Remote is at `e87e10a` (T-103). Nothing after that is pushed.
