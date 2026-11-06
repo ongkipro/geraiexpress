@@ -7,6 +7,7 @@ vi.mock("@/lib/auth-mail", () => vi.importActual("../../src/lib/auth-mail"));
 
 const settings: Record<string, string | undefined> = {};
 vi.mock("@/lib/config", () => ({ config: (name: string) => settings[name] }));
+vi.mock("@/lib/mail-smtp", () => vi.importActual("../../src/lib/mail-smtp"));
 
 describe("one-time-code mail (DEC-009, PR-36)", () => {
   it("renders one Indonesian mail carrying the code, in text and html", () => {
@@ -44,10 +45,13 @@ describe("mail transport (fails closed)", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("is not configured unless MAIL_TRANSPORT is exactly mailpit", async () => {
+  it("is not configured unless MAIL_TRANSPORT names a ready transport", async () => {
     await expect(deliver([mail])).rejects.toBeInstanceOf(MailNotConfigured);
+    // smtp without its settings stays closed even when a Mailpit URL is present (no silent fallback).
     settings.MAIL_TRANSPORT = "smtp";
     settings.MAILPIT_URL = "http://127.0.0.1:58025";
+    await expect(deliver([mail])).rejects.toBeInstanceOf(MailNotConfigured);
+    settings.MAIL_TRANSPORT = "sendgrid";
     await expect(deliver([mail])).rejects.toBeInstanceOf(MailNotConfigured);
     expect(send).not.toHaveBeenCalled();
   });
@@ -75,5 +79,43 @@ describe("mail transport (fails closed)", () => {
     expect(JSON.parse(String(init?.body))).toMatchObject({ To: [{ Email: "a@b.test" }], Subject: mail.subject, Text: mail.text });
     send.mockResolvedValue(new Response("no", { status: 500 }));
     await expect(deliver([mail])).rejects.toThrow("HTTP 500");
+  });
+});
+
+// T-063: the SMTP transport is all-or-nothing and names missing settings (never values).
+describe("SMTP transport configuration (T-063)", () => {
+  const complete = {
+    MAIL_TRANSPORT: "smtp", SMTP_HOST: "smtp.provider.test", SMTP_PORT: "587", SMTP_SECURITY: "starttls",
+    SMTP_USERNAME: "apikey", SMTP_PASSWORD: "s3cret",
+  };
+  beforeEach(() => { for (const key of Object.keys(settings)) delete settings[key]; });
+
+  it("is ready only with every setting valid, and defaults the sender to no-reply@geraiexpress.com", async () => {
+    const { mailTransportReady, smtpSettings, mailConfigProblems, DEFAULT_MAIL_FROM } = await import("../../src/lib/mail-transport");
+    Object.assign(settings, complete);
+    expect(mailTransportReady()).toBe(true);
+    expect(mailConfigProblems()).toEqual([]);
+    expect(DEFAULT_MAIL_FROM).toBe("no-reply@geraiexpress.com");
+    expect(smtpSettings()).toMatchObject({ host: "smtp.provider.test", port: 587, security: "starttls", from: "no-reply@geraiexpress.com", fromName: "GeraiExpress" });
+    // Every invalid value is refused AND named by the diagnostics (the two share one validator, T-063 review).
+    for (const [name, bad] of [["SMTP_PORT", "0"], ["SMTP_PORT", "smtp"], ["SMTP_SECURITY", "none"], ["SMTP_HOST", "localhost"],
+      ["SMTP_HOST", "LOCALHOST"], ["SMTP_HOST", "localhost."], ["SMTP_HOST", "Host.Docker.Internal."], ["SMTP_HOST", "GXDB-MAILPIT-1"],
+      ["SMTP_HOST", "127.0.0.1"], ["SMTP_HOST", "bad host"], ["SMTP_PASSWORD", ""], ["MAIL_FROM", "no reply@geraiexpress.com"]] as const) {
+      Object.assign(settings, complete, { [name]: bad });
+      expect(mailTransportReady(), `${name}=${bad}`).toBe(false);
+      expect(mailConfigProblems(), `${name}=${bad}`).toEqual([name]);
+    }
+  });
+
+  it("reports the missing setting names, never their values", async () => {
+    const { mailConfigProblems } = await import("../../src/lib/mail-transport");
+    Object.assign(settings, { MAIL_TRANSPORT: "smtp", SMTP_HOST: "smtp.provider.test", SMTP_PASSWORD: "s3cret" });
+    const problems = mailConfigProblems();
+    expect(problems).toEqual(["SMTP_PORT", "SMTP_SECURITY", "SMTP_USERNAME"]);
+    expect(problems.join(" ")).not.toContain("s3cret");
+    settings.MAIL_TRANSPORT = "postmark";
+    expect(mailConfigProblems()).toEqual(["MAIL_TRANSPORT"]);
+    delete settings.MAIL_TRANSPORT;
+    expect(mailConfigProblems()).toEqual([]);
   });
 });

@@ -23,6 +23,8 @@ export type ConfigName =
   | "TURNSTILE_SITE_KEY" | "TURNSTILE_SECRET_KEY" | "AUTH_CAPTCHA_DISABLED"
   // Mail transport for the emailed sign-in code, and the reverse proxy trust switch.
   | "MAIL_TRANSPORT" | "MAILPIT_URL" | "MAIL_FROM" | "TRUSTED_PROXY"
+  // SMTP submission for MAIL_TRANSPORT=smtp (T-063). SMTP_PASSWORD is a secret.
+  | "SMTP_HOST" | "SMTP_PORT" | "SMTP_SECURITY" | "SMTP_USERNAME" | "SMTP_PASSWORD"
   // Scheduler secret for /api/internal/cron/*.
   | "CRON_SECRET"
   // Public tracking HMAC root, required (32+ bytes) when sharing in every environment.

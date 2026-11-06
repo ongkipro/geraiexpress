@@ -115,10 +115,11 @@ server logs (SEC-3, SEC-7); a change of hosting does not prove log redaction.
 
 Decision (DEC-020, DEC-021, owner): the application owns authentication and sends
 code mail directly through `src/lib/mail-transport.ts` after SQL has authorized
-code issuance; the Send Email Hook no longer exists. Proposal (unbuilt, T-063):
-the owner chooses the production mail provider and sending domain, and an SMTP
-or HTTPS-API transport is added behind `src/lib/mail-transport.ts`. Until that
-choice and controlled delivery proof, production mail fails closed. Turnstile
+code issuance; the Send Email Hook no longer exists. Built (T-063, owner choice
+2026-11-06): domain geraiexpress.com, sender `no-reply@geraiexpress.com`, and a
+provider-neutral SMTP transport (TLS mandatory) behind `src/lib/mail-transport.ts`.
+Until the provider account, DNS authentication and a controlled delivery proof
+exist, `MAIL_TRANSPORT` stays unset and production mail fails closed. Turnstile
 stays and is verified server-side by the app (`src/lib/auth/turnstile.ts`);
 local Mailpit capture does not prove production sender authentication,
 suppression, quota or inbox delivery.

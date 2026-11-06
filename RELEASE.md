@@ -417,8 +417,10 @@ Not provisioned. Before a real gerai issues orders in production:
    `infra/env/production.env.example`): `POSTGREST_URL` (the compose `postgrest` service by default),
    `MENGANTAR_ENV=production`; the auth values `AUTH_JWT_SECRET` and `AUTH_SECRET` (the machine identity of
    DEC-010 is a service_role JWT signed with `AUTH_JWT_SECRET`), `TURNSTILE_SITE_KEY` and
-   `TURNSTILE_SECRET_KEY`, `MAIL_FROM` (`MAIL_TRANSPORT` stays unset until the owner selects a provider, T-063;
-   code mail fails closed); scheduler secret `CRON_SECRET`; encryption values `CREDENTIAL_KEYS` and
+   `TURNSTILE_SECRET_KEY`, `MAIL_FROM` (`no-reply@geraiexpress.com`); code mail: `MAIL_TRANSPORT` stays unset
+   (fails closed) until the SMTP provider account exists and geraiexpress.com publishes SPF/DKIM/DMARC; then
+   `MAIL_TRANSPORT=smtp` with `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY` (tls|starttls), `SMTP_USERNAME`,
+   `SMTP_PASSWORD` (secret) and one controlled delivery to an owner address before opening registration (T-063); scheduler secret `CRON_SECRET`; encryption values `CREDENTIAL_KEYS` and
    `CREDENTIAL_KEY_CURRENT` (one ring per environment). Single `CREDENTIAL_KEY` still works as v1;
    production must switch to the ring at first rotation, retaining old keys until rewrap is complete.
    Decrypt uses stored `key_version`, encrypt uses current; downgrade is refused. The hourly

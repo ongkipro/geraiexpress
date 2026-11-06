@@ -52,6 +52,12 @@ services:
       CRON_SECRET: ${CRON_SECRET:-}
       MAIL_FROM: ${MAIL_FROM:-}
       MAIL_TRANSPORT: ${MAIL_TRANSPORT:-}
+      # T-063: SMTP submission (used only when MAIL_TRANSPORT=smtp). SMTP_PASSWORD is a secret.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       # The proxy below is the only peer that can reach this container; it overwrites X-Real-IP.
       TRUSTED_PROXY: "1"
       # Compose-internal PostgREST unless the env file names another one.

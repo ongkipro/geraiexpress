@@ -177,6 +177,20 @@ describe("env files", () => {
     ]));
   });
 
+  // T-063: SMTP submission is TLS-only in release environments, and its password is a secret like the others.
+  it("require TLS for MAIL_TRANSPORT=smtp and treat SMTP_PASSWORD as a never-committed, never-shared secret", () => {
+    const s = staging(); const p = production();
+    s.vars.MAIL_TRANSPORT = "smtp"; s.vars.SMTP_SECURITY = "none";
+    expect(checkEnvFiles({ staging: s, production: p })).toContain("staging: MAIL_TRANSPORT=smtp needs SMTP_SECURITY=tls or starttls");
+    s.vars.SMTP_SECURITY = "starttls";
+    expect(checkEnvFiles({ staging: s, production: p })).not.toContain("staging: MAIL_TRANSPORT=smtp needs SMTP_SECURITY=tls or starttls");
+    s.vars.SMTP_PASSWORD = "provider-key-1"; p.vars.SMTP_PASSWORD = "provider-key-1";
+    expect(checkEnvFiles({ staging: s, production: p })).toContain("staging and production share the same SMTP_PASSWORD value: every environment needs its own");
+    const t = { vars: parseEnv(readFileSync(new URL("../../infra/env/production.env.example", import.meta.url), "utf8")), template: true };
+    t.vars.SMTP_PASSWORD = "provider-key-1";
+    expect(checkEnvFiles({ production: t })).toContain("production: the committed template carries a value for SMTP_PASSWORD; secrets belong in the 0600 env file outside the repository");
+  });
+
   it("allow the local environment its shared mode, Mailpit, disabled CAPTCHA and local addresses", () => {
     const local = {
       vars: {

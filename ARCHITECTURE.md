@@ -1323,10 +1323,12 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
   with neither the secret nor `AUTH_CAPTCHA_DISABLED=true`). The enforced
   CSP allows `challenges.cloudflare.com` for the Turnstile script and frame.
 - Code mail (T-017 superseded by T-066): there is no Send Email Hook, hook secret or relay any more.
-  Production needs a transport: only the local Mailpit transport exists; with any other
-  `MAIL_TRANSPORT` delivery fails closed (`auth_mail_failed` with `configured: false`), so no code is
-  delivered until the owner selects a sending domain and provider (T-063; Cloudflare Email Sending needs a Worker binding and is
-  not used on the self-hosted runtime). Locally the app posts to the Mailpit of the `gxdb` stack
+  Transports (T-063): `mailpit` (local hosts only) and `smtp` (`src/lib/mail-smtp.ts`: provider-neutral SMTP
+  submission on Node net/tls, TLS mandatory, certificates verified, AUTH PLAIN/LOGIN, every reply code
+  checked, header values CR/LF-validated; one session per message). Domain geraiexpress.com, default sender
+  `no-reply@geraiexpress.com`. Unset, unknown or incomplete settings fail closed (`auth_mail_failed`), and
+  startup names the missing variables. Not yet proven: a delivery through a real provider (needs the owner's
+  account and the domain's SPF/DKIM/DMARC). Locally the app posts to the Mailpit of the `gxdb` stack
   (`MAILPIT_URL`, UI on `127.0.0.1:58025`).
 - Invitations (T-014): while registration is closed, an address holding a pending invitation can request a
   code and any other new address cannot; the app's generic reply hides which case applied, but anyone

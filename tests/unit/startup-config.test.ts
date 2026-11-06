@@ -12,6 +12,8 @@ function fresh() {
   vi.resetModules();
   vi.doMock("@/lib/auth/instance", () => vi.importActual("../../src/lib/auth/instance"));
   vi.doMock("./lib/startup", () => vi.importActual("../../src/lib/startup"));
+  vi.doMock("@/lib/mail-transport", () => vi.importActual("../../src/lib/mail-transport"));
+  vi.doMock("@/lib/mail-smtp", () => vi.importActual("../../src/lib/mail-smtp"));
 }
 const runtimeConfigProblems = async () => { fresh(); return (await import("../../src/lib/startup")).runtimeConfigProblems(); };
 const register = async () => { fresh(); return (await import("../../src/instrumentation")).register(); };
@@ -28,6 +30,21 @@ const stub = (env: Record<string, string>) => { for (const [k, v] of Object.entr
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe("runtime configuration validation", () => {
+  // T-063: an unset MAIL_TRANSPORT is valid (mail fails closed); a selected but incomplete one is named.
+  it("accepts no mail transport, and names an incomplete SMTP transport by variable only", async () => {
+    stub(VALID);
+    expect(await runtimeConfigProblems()).toEqual([]);
+    stub({ MAIL_TRANSPORT: "smtp", SMTP_HOST: "smtp.provider.test", SMTP_PASSWORD: "startup-smtp-secret-value" });
+    const problems = await runtimeConfigProblems();
+    expect(problems).toEqual(["mail transport incomplete: SMTP_PORT, SMTP_SECURITY, SMTP_USERNAME"]);
+    expect(problems.join(" ")).not.toContain("startup-smtp-secret-value");
+    stub({ SMTP_PORT: "465", SMTP_SECURITY: "tls", SMTP_USERNAME: "apikey" });
+    expect(await runtimeConfigProblems()).toEqual([]);
+    // Complete but invalid values are named too: startup never reports a transport that would refuse to send.
+    stub({ SMTP_SECURITY: "none", SMTP_PORT: "0", SMTP_HOST: "LOCALHOST." });
+    expect(await runtimeConfigProblems()).toEqual(["mail transport incomplete: SMTP_HOST, SMTP_PORT, SMTP_SECURITY"]);
+  });
+
   it("accepts a complete configuration, with or without the explicit CAPTCHA opt-out", async () => {
     stub(VALID);
     expect(await runtimeConfigProblems()).toEqual([]);
