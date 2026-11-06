@@ -1,20 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { buildCsp, createCspNonce } from "../../src/lib/csp";
 
-describe("CSP report-only rollout (SEC-6)", () => {
-  it("enforces document boundaries but never a script policy", () => {
-    const policy = buildCsp("test-nonce");
-    expect(policy.enforced).toBe("frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'");
-    expect(policy.enforced).not.toContain("script-src");
-    expect(policy.reportOnly).toContain("script-src 'self' 'nonce-test-nonce' 'strict-dynamic' https://challenges.cloudflare.com");
-    expect(policy.reportOnly).toContain("frame-src https://challenges.cloudflare.com");
-    expect(policy.reportOnly).not.toMatch(/unsafe-inline|unsafe-eval|\*/);
+describe("enforced nonce CSP (SEC-6, T-055)", () => {
+  it("enforces the document boundaries and the nonce script policy in one policy", () => {
+    expect(buildCsp("test-nonce").policy).toBe(
+      "frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; "
+      + "script-src 'self' 'nonce-test-nonce' 'strict-dynamic' https://challenges.cloudflare.com; "
+      + "frame-src https://challenges.cloudflare.com",
+    );
+    expect(buildCsp("test-nonce").policy).not.toMatch(/unsafe-inline|unsafe-eval|\*|default-src|style-src/);
   });
 
-  it("permits the documented Next dev eval only in the report-only development policy", () => {
-    expect(buildCsp("nonce", true).reportOnly).toContain("'unsafe-eval'");
-    expect(buildCsp("nonce", true).enforced).not.toContain("'unsafe-eval'");
-    expect(buildCsp("nonce", false).reportOnly).not.toContain("'unsafe-eval'");
+  it("permits the documented Next dev eval only in development", () => {
+    expect(buildCsp("nonce", true).policy).toContain("script-src 'self' 'nonce-nonce' 'strict-dynamic' https://challenges.cloudflare.com 'unsafe-eval';");
+    expect(buildCsp("nonce", false).policy).not.toContain("'unsafe-eval'");
+    expect(buildCsp("nonce").policy).not.toContain("'unsafe-eval'");
   });
 
   it("disables the unused browser capabilities", () => {

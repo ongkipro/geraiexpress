@@ -86,6 +86,7 @@ export function LabelWorkbench({
   const [pending, startTransition] = useTransition();
   const [acknowledged, setAcknowledged] = useState(false);
   const [ackError, setAckError] = useState(false);
+  const [preferenceRestored, setPreferenceRestored] = useState(false);
   const fieldRefs = {
     name: useRef<HTMLInputElement>(null), phone: useRef<HTMLInputElement>(null),
     address: useRef<HTMLInputElement>(null), city: useRef<HTMLInputElement>(null),
@@ -105,12 +106,15 @@ export function LabelWorkbench({
   const needsAck = effectiveMask && acceptance.state !== "verified";
 
   // Restore the tab's remembered choice after hydration (the server render always shows the defaults).
+  // `data-preference-restored` on the root is committed in the same render as the restored choice, so a
+  // browser test can tell when the switch shows its final state.
   useEffect(() => {
-    if (hasSnapshot) return;
-    const preference = readPreference(preferenceKey);
-    if (!preference) return;
-    setMask(preference.mask);
-    setSize(preference.size);
+    const preference = hasSnapshot ? null : readPreference(preferenceKey);
+    if (preference) {
+      setMask(preference.mask);
+      setSize(preference.size);
+    }
+    setPreferenceRestored(true);
   }, [preferenceKey, hasSnapshot]);
 
   // window.print() runs after the sheet has been rendered from the stored snapshot (commit, then effect).
@@ -190,7 +194,7 @@ export function LabelWorkbench({
   ];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:items-start print:block">
+    <div data-testid="label-workbench" data-preference-restored={preferenceRestored ? "true" : undefined} className="grid gap-6 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:items-start print:block">
       <section aria-label="Pengaturan label" className="flex flex-col rounded-lg bg-card ring-1 ring-border lg:col-start-1 lg:row-start-1 print:hidden">
         <div className="flex flex-col gap-3 p-5">
           <h2 id="size-heading" className="text-[17px]">Ukuran label</h2>

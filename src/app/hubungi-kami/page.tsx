@@ -11,6 +11,7 @@ import {
 } from "@/components/marketing/marketing-shell";
 import { BRAND, WHATSAPP_DISPLAY, WHATSAPP_URL } from "@/lib/marketing-data";
 import { cn } from "@/lib/utils";
+import { connection } from "next/server";
 
 const TITLE = "Hubungi Tim Onboarding Loket Multi-Kurir";
 const DESCRIPTION =
@@ -40,7 +41,9 @@ const SIGN_UP_STEPS = [
 
 // The page's single contact action (owner rule: one WhatsApp CTA per page, secondary style,
 // monochrome icon) sits in the contact section; the hero carries no CTA.
-export default function HubungiKamiPage() {
+// SEC-6 / T-055: rendered per request so Next can attach this request's CSP nonce to its scripts.
+export default async function HubungiKamiPage() {
+  await connection();
   return (
     <MarketingShell currentPath="/hubungi-kami">
       <MarketingPageHero

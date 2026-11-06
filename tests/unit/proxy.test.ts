@@ -58,6 +58,9 @@ const sessionCookies = { cookie: "gx_at=old-access; gx_rt=old-refresh" };
 const refreshOnly = { cookie: "gx_rt=old-refresh" };
 const setCookies = (res: Response) => res.headers.getSetCookie();
 const cookieOf = (res: Response, name: string) => setCookies(res).find((line) => line.startsWith(`${name}=`)) ?? "";
+// SEC-6 / T-055: the enforced response policy, with this request's nonce in script-src.
+const ENFORCED_CSP = /^frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; script-src 'self' 'nonce-[A-Za-z0-9+/]{22}==' 'strict-dynamic' https:\/\/challenges\.cloudflare\.com; frame-src https:\/\/challenges\.cloudflare\.com$/;
+const nonceOf = (policy: string | null) => policy?.match(/'nonce-([^']+)'/)?.[1];
 
 describe("proxy security headers", () => {
   beforeEach(resetAuth);
@@ -67,7 +70,7 @@ describe("proxy security headers", () => {
       const res = await send(method, "http://localhost/pengiriman");
       expect(res.headers.get("Cache-Control")).toBe("private, no-store");
       expect(res.headers.get("X-Frame-Options")).toBe("DENY");
-      expect(res.headers.get("Content-Security-Policy")).toBe("frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'");
+      expect(res.headers.get("Content-Security-Policy")).toMatch(ENFORCED_CSP);
       expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
       expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
       expect(res.headers.get("Strict-Transport-Security")).toBeNull();
@@ -82,7 +85,7 @@ describe("proxy security headers", () => {
     const res = await send("POST", "https://app.geraiexpress.com/pengiriman");
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
-    expect(res.headers.get("Content-Security-Policy")).toBe("frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'");
+    expect(res.headers.get("Content-Security-Policy")).toMatch(ENFORCED_CSP);
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(res.headers.get("Strict-Transport-Security")).toBe("max-age=31536000; includeSubDomains");
@@ -188,7 +191,7 @@ describe("host routing (DEC-015)", () => {
       expect(res.headers.get("Content-Type")).toBe("text/plain; charset=utf-8");
       expect(res.headers.get("Cache-Control")).toBe("private, no-store");
       expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
-      expect(res.headers.get("Content-Security-Policy")).toBe("frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'");
+      expect(res.headers.get("Content-Security-Policy")).toMatch(ENFORCED_CSP);
       expect(res.headers.get("Strict-Transport-Security")).toBe("max-age=31536000; includeSubDomains");
       const body = await res.text();
       expect(body).toBe("Halaman tidak ditemukan");
@@ -488,11 +491,31 @@ describe("shared all-audiences hosts need the explicit flag (B-T042)", () => {
   });
 });
 
-describe("nonce propagation and report-only script rollout", () => {
+describe("enforced nonce CSP (SEC-6, T-055)", () => {
   beforeEach(resetAuth);
+  afterEach(() => vi.unstubAllEnvs());
 
-  it("uses a fresh nonce on each host and denial, without enforcing scripts", async () => {
+  // Next copies every proxy response header onto the render request (resolve-routes.js:465), so the
+  // enforced response policy must be the very policy the render request carries, nonce included.
+  const expectOnePolicy = (response: Response, label: string) => {
+    const policy = response.headers.get("Content-Security-Policy");
+    expect(policy, label).toMatch(ENFORCED_CSP);
+    expect(response.headers.get("Content-Security-Policy-Report-Only"), label).toBeNull();
+    if (response.headers.get("x-middleware-next")) {
+      expect(response.headers.get("x-middleware-request-content-security-policy"), label).toBe(policy);
+      expect(response.headers.get("x-middleware-request-x-nonce"), label).toBe(nonceOf(policy));
+      expect(response.headers.get("x-middleware-request-content-security-policy-report-only"), label).toBeNull();
+    }
+    return nonceOf(policy)!;
+  };
+
+  it("enforces a fresh nonce policy on every host and denial, ignoring caller-supplied hints", async () => {
     const nonces = new Set<string>();
+    const forged = {
+      "x-nonce": "attacker-nonce",
+      "content-security-policy": "script-src 'nonce-attacker-nonce'",
+      "content-security-policy-report-only": "script-src 'nonce-attacker-nonce'",
+    };
     for (const url of [
       "https://geraiexpress.com/",
       "https://app.geraiexpress.com/masuk",
@@ -500,33 +523,52 @@ describe("nonce propagation and report-only script rollout", () => {
       "https://hooks.geraiexpress.com/api/webhooks/mengantar",
       "https://app.geraiexpress.com/admin",
     ]) {
-      const response = await get(url, { "x-nonce": "attacker-nonce", "content-security-policy": "script-src 'nonce-attacker-nonce'" });
-      const report = response.headers.get("Content-Security-Policy-Report-Only")!;
-      const nonce = report.match(/'nonce-([^']+)'/)?.[1];
-      expect(nonce, url).toMatch(/^[A-Za-z0-9+/]{22}==$/);
-      expect(report, url).toContain("'strict-dynamic' https://challenges.cloudflare.com");
-      expect(report, url).toContain("frame-src https://challenges.cloudflare.com");
-      expect(report, url).not.toContain("attacker-nonce");
-      expect(response.headers.get("Content-Security-Policy"), url).not.toContain("script-src");
+      const response = await get(url, forged);
+      const nonce = expectOnePolicy(response, url);
+      expect(response.headers.get("Content-Security-Policy"), url).not.toContain("attacker-nonce");
       expect(response.headers.get("Permissions-Policy"), url).toBe("camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()");
-      nonces.add(nonce!);
-      if (response.status === 200) {
-        expect(response.headers.get("x-middleware-request-x-nonce"), url).toBe(nonce);
-        expect(response.headers.get("x-middleware-request-content-security-policy"), url).toBe(report);
-      }
+      nonces.add(nonce);
     }
     expect(nonces.size).toBe(5);
   });
 
-  it("retains the rendering nonce when the session refresh rewrites the response", async () => {
-    const response = await get("https://app.geraiexpress.com/pengiriman", refreshOnly);
-    const report = response.headers.get("Content-Security-Policy-Report-Only");
-    const nonce = response.headers.get("x-middleware-request-x-nonce");
-    expect(nonce).toBeTruthy();
-    expect(report).toContain(`'nonce-${nonce}'`);
-    expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(report);
-    expect(cookieOf(response, "gx_at")).toContain("gx_at=rotated-access");
-    expect(response.headers.get("Content-Security-Policy")).not.toContain("script-src");
+  it("keeps the request nonce on every response path: session states, refusal and public tracking", async () => {
+    const { readPublicTracking } = await import("../../src/modules/tracking/public-read");
+    const paths: [string, () => Promise<Response>][] = [
+      ["no session", () => get("https://app.geraiexpress.com/pengiriman")],
+      ["rotated session", () => get("https://app.geraiexpress.com/pengiriman", refreshOnly)],
+      ["cleared session", () => {
+        auth.refresh.mockResolvedValueOnce({ ok: false, reason: "invalid" } as RefreshResult);
+        return get("https://app.geraiexpress.com/pengiriman", refreshOnly);
+      }],
+      ["refused refresh", () => {
+        withinLimit.mockResolvedValueOnce(false);
+        return get("https://app.geraiexpress.com/pengiriman", refreshOnly);
+      }],
+      ["cookie-less asset", () => get("https://app.geraiexpress.com/healthz", sessionCookies)],
+      ["wrong host path", () => get("https://app.geraiexpress.com/admin")],
+      ["tracking 404", () => get(`https://geraiexpress.com/lacak/${"U".repeat(43)}`)],
+      ["tracking 429", () => {
+        vi.mocked(readPublicTracking).mockResolvedValueOnce({ kind: "limited" });
+        return get(`https://geraiexpress.com/lacak/${"A".repeat(43)}`);
+      }],
+    ];
+    const statuses: number[] = [];
+    for (const [label, run] of paths) {
+      const response = await run();
+      statuses.push(response.status);
+      expectOnePolicy(response, label);
+    }
+    expect(statuses).toEqual([200, 200, 200, 503, 200, 404, 404, 429]);
+  });
+
+  it("adds 'unsafe-eval' to the enforced policy only in development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const dev = await get("http://127.0.0.1:3100/masuk");
+    expect(dev.headers.get("Content-Security-Policy")).toContain("'strict-dynamic' https://challenges.cloudflare.com 'unsafe-eval'; frame-src");
+    expect(dev.headers.get("x-middleware-request-content-security-policy")).toBe(dev.headers.get("Content-Security-Policy"));
+    vi.stubEnv("NODE_ENV", "production");
+    expect((await get("https://app.geraiexpress.com/masuk")).headers.get("Content-Security-Policy")).not.toContain("unsafe-eval");
   });
 });
 
@@ -543,7 +585,9 @@ describe("public tracking edge (SEC-8)", () => {
       expect(res.headers.get("x-middleware-request-x-gx-public-tracking")).toBe(encodeURIComponent(JSON.stringify(projection)));
       expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
       expect(res.headers.get("Cache-Control")).toBe("private, no-store");
-      expect(res.headers.get("Content-Security-Policy")).toBeTruthy();
+      expect(res.headers.get("Content-Security-Policy")).toMatch(ENFORCED_CSP);
+      expect(res.headers.get("x-middleware-request-content-security-policy")).toBe(res.headers.get("Content-Security-Policy"));
+      expect(res.headers.get("x-middleware-request-x-nonce")).toBe(nonceOf(res.headers.get("Content-Security-Policy")));
       expect(res.headers.getSetCookie()).toEqual([]);
     }
     expect(getAuth).not.toHaveBeenCalled();

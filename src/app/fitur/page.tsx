@@ -11,6 +11,7 @@ import {
 import { TariffExample } from "@/components/marketing/tariff-example";
 import { BRAND, ORDERABLE_COURIERS } from "@/lib/marketing-data";
 import { cn } from "@/lib/utils";
+import { connection } from "next/server";
 
 const COURIER_LIST = ORDERABLE_COURIERS.map((courier) => courier.name).join(", ");
 
@@ -99,7 +100,9 @@ const FEATURE_GROUPS = [
 
 // Three groups, three compositions (C10.5): heading beside the list, heading above a two-column list,
 // and a single reading column; all open typography separated by hairlines, no cards.
-export default function FiturPage() {
+// SEC-6 / T-055: rendered per request so Next can attach this request's CSP nonce to its scripts.
+export default async function FiturPage() {
+  await connection();
   const [kurir, kasir, tim] = FEATURE_GROUPS;
   return (
     <MarketingShell currentPath="/fitur">
