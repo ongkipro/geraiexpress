@@ -4,10 +4,10 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { ArrowLeftRight, LogOut, RotateCcw, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 
 const ICONS = { switch: ArrowLeftRight, reset: RotateCcw, "sign-out": LogOut } satisfies Record<string, LucideIcon>;
 
@@ -39,18 +39,18 @@ function ActionItem({ item, onDone }: { item: AccountAction; onDone: () => void 
       onSelect={(event) => event.preventDefault()}
       className="min-h-11 w-full text-base"
     >
-      <button
-        type="submit"
-        aria-busy={pending || undefined}
-        onClick={(event) => { if (pending) event.preventDefault(); }}
-        className={cn(pending && "cursor-progress opacity-60")}
+      {/* The shared SubmitButton (synchronous click lock, aria-busy/aria-disabled, pending label); Radix merges
+          the menu item's props and ref onto its <button>. Reset to the menu item's own look. */}
+      <SubmitButton
+        variant="ghost"
+        pendingLabel={item.pendingLabel}
+        className="h-auto justify-start gap-2 rounded-sm px-2 py-1.5 font-normal"
       >
-        <Icon className="size-5 text-muted-foreground" aria-hidden="true" />
-        <span className="inline-grid text-left">
-          <span className={cn("col-start-1 row-start-1", pending && "invisible")}>{item.label}</span>
-          <span aria-hidden={!pending} className={cn("col-start-1 row-start-1", !pending && "invisible")}>{item.pendingLabel}</span>
+        <span className="inline-flex items-center gap-2">
+          <Icon className="size-5 text-muted-foreground" aria-hidden="true" />
+          {item.label}
         </span>
-      </button>
+      </SubmitButton>
     </DropdownMenuItem>
   );
 }

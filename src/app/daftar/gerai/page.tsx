@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AuthCard, AuthFooter, AuthHeading, AuthShell } from "@/components/auth/auth-shell";
 import { RegistrationSteps } from "@/components/auth/registration-steps";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Separator } from "@/components/ui/separator";
 import { signOutAction } from "@/lib/auth-actions";
 import { currentUser, dbServer } from "@/lib/db/server";
@@ -61,7 +61,7 @@ export default async function ApplicationPage() {
             {reviewed.business_name ? <p className="break-words">Gerai <strong>{reviewed.business_name}</strong></p> : null}
             <ReviewTimeline status={reviewed.status} submittedAt={reviewed.submitted_at} reviewedAt={reviewed.reviewed_at} reason={reviewed.review_reason} />
             <NextStep status={reviewed.status} registrationOpen={account.registration_open} />
-            {reviewed.status === "submitted" ? <WithdrawForm id={reviewed.id} revision={reviewed.revision} /> : null}
+            {reviewed.status === "submitted" ? <WithdrawForm id={reviewed.id} revision={reviewed.revision} name={reviewed.business_name} /> : null}
           </section>
         ) : null}
 
@@ -71,7 +71,7 @@ export default async function ApplicationPage() {
           <section aria-labelledby="form-heading" className="flex flex-col gap-6">
             <h2 id="form-heading" className="text-xl font-semibold">{editable ? "Data gerai" : latest ? "Ajukan gerai baru" : "Data gerai"}</h2>
             <ApplicationForm application={editable ? latest : null} />
-            {editable && latest ? <WithdrawForm id={latest.id} revision={latest.revision} /> : null}
+            {editable && latest ? <WithdrawForm id={latest.id} revision={latest.revision} name={latest.business_name} /> : null}
           </section>
         ) : startNew ? (
           <p role="status" className="text-muted-foreground">Pengajuan gerai baru sedang ditutup. Coba lagi nanti, atau minta pemilik gerai yang sudah aktif mengundang email ini.</p>
@@ -80,7 +80,7 @@ export default async function ApplicationPage() {
 
       <AuthFooter>
         <form action={signOutAction}>
-          <Button type="submit" variant="ghost">Keluar</Button>
+          <SubmitButton variant="ghost" pendingLabel="Keluar…">Keluar</SubmitButton>
         </form>
       </AuthFooter>
     </AuthShell>

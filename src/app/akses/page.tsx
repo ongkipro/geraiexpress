@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AuthCard, AuthHeading, AuthShell } from "@/components/auth/auth-shell";
 import { dbServer } from "@/lib/db/server";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { signOutAction } from "@/lib/auth-actions";
 import { requestScope } from "@/lib/hosts";
 import { loadPlatform } from "@/lib/platform";
@@ -56,7 +57,7 @@ export default async function NoAccessPage() {
             <Button asChild variant={hasInvites ? "outline" : "default"} className="w-full"><Link href="/daftar/gerai">Daftarkan gerai</Link></Button>
           ) : null}
           <form action={signOutAction}>
-            <Button type="submit" variant={hasInvites || pending || open ? "ghost" : "outline"} className="w-full">Keluar</Button>
+            <SubmitButton variant={hasInvites || pending || open ? "ghost" : "outline"} className="w-full" pendingLabel="Keluar…">Keluar</SubmitButton>
           </form>
         </div>
       </AuthCard>

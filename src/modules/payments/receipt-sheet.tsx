@@ -9,6 +9,7 @@ import { MessageCircle, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/notice";
 import { cn } from "@/lib/utils";
+import { PendingLabel } from "@/modules/labels/print-ui";
 import { SEGMENT_ITEM, SEGMENT_ITEM_ON, SEGMENT_TRACK } from "@/modules/labels/segment-styles";
 import { whatsappReceiptLink, type ReceiptInput } from "./receipt";
 import { ReceiptDocument } from "./receipt-document";
@@ -68,8 +69,8 @@ export function ReceiptSheet({ input, customerPhone, shipmentId, paymentId }: {
           ))}
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Button type="button" onClick={print} disabled={pending || !!failure} data-testid="receipt-print">
-            <Printer aria-hidden="true" />{pending ? "Menyiapkan…" : "Cetak struk"}
+          <Button type="button" onClick={print} disabled={pending || !!failure} aria-busy={pending || undefined} data-testid="receipt-print">
+            <Printer aria-hidden="true" /><PendingLabel pending={pending} label="Cetak struk" pendingLabel="Menyiapkan…" />
           </Button>
           <Button asChild variant="outline">
             <a href={whatsappReceiptLink(customerPhone, input)} target="_blank" rel="noopener noreferrer" data-testid="receipt-whatsapp">

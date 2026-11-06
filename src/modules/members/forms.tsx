@@ -45,7 +45,7 @@ function RoleChoice({ name, defaultValue }: { name: string; defaultValue: string
 }
 
 export function InviteForm({ signUpUrl }: { signUpUrl: string }) {
-  const [state, action, pending] = useActionState<MemberState, FormData>(inviteAction, {});
+  const [state, action] = useActionState<MemberState, FormData>(inviteAction, {});
   return (
     <form action={action} className="flex flex-col gap-5" noValidate>
       <Status state={state} />
@@ -60,22 +60,41 @@ export function InviteForm({ signUpUrl }: { signUpUrl: string }) {
         <Input id="invite-email" name="email" type="email" autoComplete="off" inputMode="email" required />
       </div>
       <RoleChoice name="role" defaultValue="operator" />
-      <Button type="submit" disabled={pending} className="w-full sm:w-auto sm:self-start">Buat undangan</Button>
+      <SubmitButton pendingLabel="Membuat undangan…" className="w-full sm:w-auto sm:self-start">Buat undangan</SubmitButton>
     </form>
   );
 }
 
+// T-107: revoking makes the sent link unusable, so it confirms in a dialog naming the invited email.
+// An error keeps the dialog open; success removes the row (revalidated list).
 export function RevokeInvitationForm({ id, revision, email }: { id: string; revision: number; email: string }) {
+  // The pending flag lives here, outside the dialog: closing the dialog unmounts its form (and the
+  // SubmitButton lock), so the trigger itself stays disabled until the request settles (T-107 review).
   const [state, action, pending] = useActionState<MemberState, FormData>(revokeInvitationAction, {});
   return (
-    <form action={action} className="flex flex-col items-start gap-2 md:items-end">
-      <Status state={state} />
-      <input type="hidden" name="id" value={id} />
-      <input type="hidden" name="revision" value={revision} />
-      <Button type="submit" variant="ghost" size="sm" disabled={pending}>
-        Cabut undangan<span className="sr-only"> untuk {email}</span>
-      </Button>
-    </form>
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="text-danger" disabled={pending} aria-busy={pending || undefined}>Cabut undangan<span className="sr-only"> untuk {email}</span></Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader className="pr-12">
+          <DialogTitle>Cabut undangan?</DialogTitle>
+          <DialogDescription>
+            Tautan undangan untuk <span className="font-semibold break-all text-foreground">{email}</span> tidak bisa dipakai lagi.
+            Anda bisa membuat undangan baru kapan saja.
+          </DialogDescription>
+        </DialogHeader>
+        <form action={action} className="flex flex-col gap-5">
+          <Status state={state} />
+          <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="revision" value={revision} />
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="ghost">Batal</Button></DialogClose>
+            <SubmitButton variant="destructive" pendingLabel="Mencabut…">Cabut undangan</SubmitButton>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -90,6 +109,8 @@ export function MemberControls({ userId, email, role, revision }: { userId: stri
   const [offState, offAction] = useActionState<MemberState, FormData>(deactivateAction, {});
   return (
     <div className="flex flex-wrap gap-2 md:justify-end">
+      {/* The dialog closes on success, so its result is announced next to the controls. */}
+      {roleState.ok && !roleOpen ? <p role="status" className="basis-full text-sm text-success md:text-right">{roleState.ok}</p> : null}
       <Dialog open={roleOpen} onOpenChange={setRoleOpen}>
         <DialogTrigger asChild>
           <Button variant="outline" size="sm">Ubah peran<span className="sr-only"> {email}</span></Button>
@@ -138,14 +159,14 @@ export function MemberControls({ userId, email, role, revision }: { userId: stri
 }
 
 export function AcceptInvitationForm({ id, tenantName }: { id: string; tenantName: string }) {
-  const [state, action, pending] = useActionState<MemberState, FormData>(acceptInvitationAction, {});
+  const [state, action] = useActionState<MemberState, FormData>(acceptInvitationAction, {});
   return (
     <form action={action} className="flex flex-col gap-2">
       <Status state={state} />
       <input type="hidden" name="id" value={id} />
-      <Button type="submit" disabled={pending} className="self-start">
+      <SubmitButton pendingLabel="Menerima…" className="self-start">
         Terima<span className="sr-only"> undangan {tenantName}</span>
-      </Button>
+      </SubmitButton>
     </form>
   );
 }

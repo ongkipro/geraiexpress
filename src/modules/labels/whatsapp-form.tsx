@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setContactWhatsappAction, type WhatsappState } from "./actions";
@@ -10,7 +10,7 @@ import { setContactWhatsappAction, type WhatsappState } from "./actions";
 // PR-34 / UX-9: the tenant administrator edits the gerai WhatsApp printed on the label while masking is
 // off. The refusal message sits next to the input; a successful save shows the stored (normalized) value.
 export function WhatsappForm({ value, revision }: { value: string | null; revision: number }) {
-  const [state, action, pending] = useActionState<WhatsappState, FormData>(setContactWhatsappAction, {});
+  const [state, action] = useActionState<WhatsappState, FormData>(setContactWhatsappAction, {});
   const shown = state.value ?? value ?? "";
   const currentRevision = state.revision ?? revision;
   return (
@@ -40,9 +40,7 @@ export function WhatsappForm({ value, revision }: { value: string | null; revisi
         ) : null}
       </div>
       {state.ok ? <p role="status" className="flex items-start gap-2 rounded-md bg-success-soft p-3 text-sm"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />{state.ok}</p> : null}
-      <Button type="submit" disabled={pending} aria-busy={pending} className="self-start">
-        {pending ? "Menyimpan…" : "Simpan nomor"}
-      </Button>
+      <SubmitButton pendingLabel="Menyimpan…" className="self-start">Simpan nomor</SubmitButton>
     </form>
   );
 }

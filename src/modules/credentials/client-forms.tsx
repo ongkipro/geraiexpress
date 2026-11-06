@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SubmitButton } from "@/components/submit-button";
 import { formatWib } from "@/lib/format";
 import type { PartnerConsentDocuments } from "@/lib/mengantar/partner-onboarding";
 import {
@@ -122,10 +123,9 @@ function RegenerateKeyControl({ action, pending }: { action: (data: FormData) =>
 
 // T-039 / UX-8: the rotation outcome is unknown or the key is paused after a refusal. Shipments stay paused
 // until the current key is fetched. Fetching never rotates the key again.
-function RotationUnknownPanel({ onboarding, action, pending }: {
+function RotationUnknownPanel({ onboarding, action }: {
   onboarding: PartnerOnboardingStatus;
   action: (data: FormData) => void;
-  pending: boolean;
 }) {
   return (
     <div className={`flex flex-col gap-3 ${PANEL.warning}`} data-testid="partner-rotation-unknown">
@@ -136,7 +136,7 @@ function RotationUnknownPanel({ onboarding, action, pending }: {
         {onboarding.retry_after_at ? ` Mengantar meminta menunggu sampai ${formatWib(onboarding.retry_after_at)}.` : ""}
       </p>
       <form action={action} className="flex flex-col gap-3" noValidate>
-        <Button type="submit" disabled={pending} aria-busy={pending} className="self-start">Ambil kunci terbaru</Button>
+        <SubmitButton pendingLabel="Mengambil kunci…" className="self-start">Ambil kunci terbaru</SubmitButton>
       </form>
     </div>
   );
@@ -146,11 +146,11 @@ export function PartnerSellerOnboardingFields({ onboarding, documents }: {
   onboarding: PartnerOnboardingStatus;
   documents: PartnerConsentDocuments | null;
 }) {
-  const [registerState, registerAction, registerPending] = useActionState<CredentialState, FormData>(
+  const [registerState, registerAction] = useActionState<CredentialState, FormData>(
     registerPartnerSellerAction,
     {},
   );
-  const [recoverState, recoverAction, recoverPending] = useActionState<CredentialState, FormData>(
+  const [recoverState, recoverAction] = useActionState<CredentialState, FormData>(
     recoverPartnerSellerKeyAction,
     {},
   );
@@ -160,7 +160,7 @@ export function PartnerSellerOnboardingFields({ onboarding, documents }: {
     regeneratePartnerKeyAction,
     {},
   );
-  const [rotationRecoverState, rotationRecoverAction, rotationRecoverPending] = useActionState<CredentialState, FormData>(
+  const [rotationRecoverState, rotationRecoverAction] = useActionState<CredentialState, FormData>(
     recoverRotatedPartnerKeyAction,
     {},
   );
@@ -209,15 +209,15 @@ export function PartnerSellerOnboardingFields({ onboarding, documents }: {
           </p>
           <form action={recoverAction} className="flex flex-col gap-3" noValidate>
             <Status state={recoverState} />
-            <Button type="submit" disabled={recoverPending} className="self-start">
+            <SubmitButton pendingLabel="Mengambil kunci…" className="self-start">
               Ambil kunci API
-            </Button>
+            </SubmitButton>
           </form>
         </div>
       ) : null}
 
       {onboarding.onboarding_state === "rotation_unknown" ? (
-        <RotationUnknownPanel onboarding={onboarding} action={rotationRecoverAction} pending={rotationRecoverPending} />
+        <RotationUnknownPanel onboarding={onboarding} action={rotationRecoverAction} />
       ) : null}
 
       {onboarding.onboarding_state === "existing_account_required" ? (
@@ -329,14 +329,15 @@ export function PartnerSellerOnboardingFields({ onboarding, documents }: {
             </span>
           </label>
           {!documents ? (
-            <p role="alert" className="text-sm text-muted-foreground">
+            <p id="partner-documents-missing" role="alert" className="text-sm text-muted-foreground">
               Dokumen Ketentuan Layanan dan Kebijakan Privasi Mengantar belum dikonfigurasi oleh admin GeraiExpress.
               Pendaftaran belum dapat dikirim; gunakan kunci API sendiri (BYOK) atau hubungi admin.
             </p>
           ) : null}
-          <Button type="submit" disabled={registerPending || !documents} className="max-w-full self-start whitespace-normal">
+          <SubmitButton disabled={!documents} aria-describedby={documents ? undefined : "partner-documents-missing"}
+            pendingLabel="Mendaftarkan…" className="max-w-full self-start whitespace-normal">
             Daftarkan akun Mengantar baru
-          </Button>
+          </SubmitButton>
         </form>
       ) : null}
     </div>
@@ -344,7 +345,7 @@ export function PartnerSellerOnboardingFields({ onboarding, documents }: {
 }
 
 export function SellerKeyForm({ latestVersion, replacing }: { latestVersion: number; replacing: boolean }) {
-  const [state, action, pending] = useActionState<CredentialState, FormData>(storeSellerKeyAction, {});
+  const [state, action] = useActionState<CredentialState, FormData>(storeSellerKeyAction, {});
   return (
     <form action={action} className="flex flex-col gap-4" noValidate>
       <Status state={state} />
@@ -358,7 +359,7 @@ export function SellerKeyForm({ latestVersion, replacing }: { latestVersion: num
         <Checkbox name="owner_confirm" className="mt-1" />
         <span>Akun Mengantar ini milik bisnis saya dan saya berwenang menghubungkannya.</span>
       </label>
-      <Button type="submit" disabled={pending} className="self-start">{replacing ? "Ganti kunci" : "Simpan kunci"}</Button>
+      <SubmitButton pendingLabel="Menyimpan kunci…" className="self-start">{replacing ? "Ganti kunci" : "Simpan kunci"}</SubmitButton>
     </form>
   );
 }
@@ -404,7 +405,7 @@ export function RemoveSellerKeyForm({ version }: { version: number }) {
 }
 
 export function PartnerIdForm({ current }: { current: string | null }) {
-  const [state, action, pending] = useActionState<CredentialState, FormData>(setPartnerIdAction, {});
+  const [state, action] = useActionState<CredentialState, FormData>(setPartnerIdAction, {});
   return (
     <form action={action} className="flex flex-col gap-4">
       <Status state={state} />
@@ -416,7 +417,7 @@ export function PartnerIdForm({ current }: { current: string | null }) {
         <Label htmlFor="partner-reason">Alasan (dicatat di audit)</Label>
         <Textarea id="partner-reason" name="reason" rows={2} required minLength={5} maxLength={500} />
       </div>
-      <Button type="submit" disabled={pending} className="self-start">Simpan Partner ID</Button>
+      <SubmitButton pendingLabel="Menyimpan…" className="self-start">Simpan Partner ID</SubmitButton>
     </form>
   );
 }

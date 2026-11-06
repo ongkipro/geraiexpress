@@ -8,6 +8,9 @@ import { RegistrationSteps } from "@/components/auth/registration-steps";
 import { Turnstile, useCaptchaGate } from "@/components/turnstile";
 import { SubmitButton } from "@/components/submit-button";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -267,14 +270,37 @@ export function ApplicationForm({ application }: { application: Application | nu
   );
 }
 
-export function WithdrawForm({ id, revision }: { id: string; revision: number }) {
-  const [state, action] = useActionState<FormState, FormData>(withdrawApplicationAction, {});
+// T-107: withdrawing ends the application (a new one starts from scratch), so it confirms in a dialog
+// that names the gerai. An error keeps the dialog open; success re-renders the page as withdrawn.
+export function WithdrawForm({ id, revision, name }: { id: string; revision: number; name: string | null }) {
+  // Pending is held outside the dialog so close + reopen cannot submit twice (T-107 review).
+  const [state, action, pending] = useActionState<FormState, FormData>(withdrawApplicationAction, {});
+  const title = name ? `Batalkan pengajuan ${name}?` : "Batalkan pengajuan gerai?";
   return (
-    <form action={action} className="flex flex-col gap-3">
-      <FormMessage error={state.error} ok={state.ok} />
-      <input type="hidden" name="id" value={id} />
-      <input type="hidden" name="revision" value={revision} />
-      <SubmitButton variant="ghost" pendingLabel="Membatalkan…" className="self-start text-danger">Batalkan pengajuan</SubmitButton>
-    </form>
+    <div className="flex flex-col gap-3">
+      {state.ok ? <FormMessage ok={state.ok} /> : null}
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button type="button" variant="ghost" className="self-start text-danger" disabled={pending} aria-busy={pending || undefined}>Batalkan pengajuan</Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader className="pr-12">
+            <DialogTitle className="break-words">{title}</DialogTitle>
+            <DialogDescription>
+              Pengajuan ini berhenti dan tidak ditinjau. Untuk membuka gerai nanti, Anda mengisi pengajuan baru.
+            </DialogDescription>
+          </DialogHeader>
+          <form action={action} className="flex flex-col gap-5">
+            <FormMessage error={state.error} />
+            <input type="hidden" name="id" value={id} />
+            <input type="hidden" name="revision" value={revision} />
+            <DialogFooter>
+              <DialogClose asChild><Button type="button" variant="ghost">Kembali</Button></DialogClose>
+              <SubmitButton variant="destructive" pendingLabel="Membatalkan…">Ya, batalkan pengajuan</SubmitButton>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

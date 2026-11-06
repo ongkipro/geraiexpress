@@ -46,6 +46,16 @@ test("a new applicant verifies email, sets a password, applies, and works after 
   await page.getByRole("button", { name: "Ajukan untuk ditinjau" }).click();
   await expect(page.getByRole("heading", { name: "Sedang ditinjau" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+  // T-107: withdrawing confirms first and names the gerai; Kembali/Escape leaves it under review.
+  const withdraw = page.getByRole("button", { name: "Batalkan pengajuan", exact: true });
+  await withdraw.click();
+  const withdrawDialog = page.getByRole("dialog", { name: `Batalkan pengajuan ${business}?` });
+  await expect(withdrawDialog.getByRole("button", { name: "Ya, batalkan pengajuan" })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath(`dialog-withdraw-application-${page.viewportSize()?.width}.png`), animations: "disabled" });
+  await page.keyboard.press("Escape");
+  await expect(withdrawDialog).toHaveCount(0);
+  await expect(withdraw).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Sedang ditinjau" })).toBeVisible();
 
   // A Super Admin approves it in a separate session.
   const baseURL = test.info().project.use.baseURL!;

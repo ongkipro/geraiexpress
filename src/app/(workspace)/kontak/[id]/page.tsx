@@ -5,11 +5,9 @@ import { AlertTriangle, Archive, CheckCircle2, MapPin } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { Button } from "@/components/ui/button";
 import { dbServer } from "@/lib/db/server";
 import { requireWorkspace } from "@/lib/workspace";
-import { archiveAddressAction } from "@/modules/contacts/actions";
-import { AddAddressForm, ArchiveContactForm, EditContactForm } from "@/modules/contacts/forms";
+import { AddAddressForm, ArchiveAddressForm, ArchiveContactForm, EditContactForm } from "@/modules/contacts/forms";
 
 export const metadata: Metadata = { title: "Kontak" };
 
@@ -133,11 +131,8 @@ export default async function ContactPage({ params, searchParams }: {
                     </span>
                     <span className="text-[15px] break-words text-muted-foreground">{[a.address_line, a.area, a.postal_code].filter(Boolean).join(", ")}</span>
                   </span>
-                  <form action={archiveAddressAction} className="shrink-0">
-                    <input type="hidden" name="contact_id" value={c.id} />
-                    <input type="hidden" name="address_id" value={a.id} />
-                    <Button type="submit" variant="ghost" size="sm">Arsipkan<span className="sr-only"> alamat {a.label ?? ""}</span></Button>
-                  </form>
+                  <ArchiveAddressForm contactId={c.id}
+                    address={{ id: a.id, label: a.label, line: [a.address_line, a.area, a.postal_code].filter(Boolean).join(", ") }} />
                 </li>
               ))}
             </ul>

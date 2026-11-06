@@ -9,6 +9,9 @@ type Props = Omit<React.ComponentProps<typeof Button>, "type" | "asChild"> & {
   // Replaces the label while this button's submission is running. Both labels share one grid
   // cell, so the button keeps the width of the longer one and nothing around it moves.
   pendingLabel?: string;
+  // For a button that submits a form it is not inside (`form="<id>"`, e.g. a confirm button in a dialog
+  // portal): useFormStatus only sees an enclosing form, so the owner passes that form's pending state.
+  pending?: boolean;
 };
 
 // Whether a click on this submit button reaches the form's submit: a form that validates (no
@@ -27,8 +30,9 @@ function willSubmit(button: { form: { noValidate: boolean; checkValidity: () => 
 //    tick before React has rendered the pending state;
 //  - sets aria-busy, and shows `pendingLabel` when it is the button that was pressed.
 // A genuinely `disabled` prop from the caller is passed through unchanged.
-export function SubmitButton({ children, pendingLabel, onClick, className, ...props }: Props) {
-  const { pending } = useFormStatus();
+export function SubmitButton({ children, pendingLabel, pending: externalPending, onClick, className, ...props }: Props) {
+  const status = useFormStatus();
+  const pending = externalPending ?? status.pending;
   const [pressed, setPressed] = React.useState(false);
   const locked = React.useRef(false);
   const sawPending = React.useRef(false);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Notice } from "@/components/notice";
@@ -71,10 +71,10 @@ export function GeraiLogoForm({ name, current, canEdit }: { name: string; curren
             onChange={(event) => { void select(event.target.files?.[0]); }} />
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" name="operation" value="upload" disabled={pending || reading || current === null || !preview || failedImage} aria-busy={pending}>
-            {pending ? "Menyimpan…" : current?.logo ? "Ganti logo" : "Simpan logo"}
-          </Button>
-          {current?.logo ? <Button type="submit" name="operation" value="remove" variant="outline" disabled={pending || reading} aria-busy={pending}>Hapus logo</Button> : null}
+          <SubmitButton name="operation" value="upload" disabled={reading || current === null || !preview || failedImage} pendingLabel="Menyimpan…">
+            {current?.logo ? "Ganti logo" : "Simpan logo"}
+          </SubmitButton>
+          {current?.logo ? <SubmitButton name="operation" value="remove" variant="outline" disabled={reading} pendingLabel="Menghapus…">Hapus logo</SubmitButton> : null}
         </div>
       </> : <p className="text-sm text-muted-foreground">Hanya admin gerai yang dapat mengubah logo.</p>}
       {error ? <Notice id="logo-error" tone="danger">{error}</Notice> : null}

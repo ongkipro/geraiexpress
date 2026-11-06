@@ -107,8 +107,11 @@ test("share, repeat share, anonymous privacy at 390 px, latest masking, revocati
     await reader.setViewportSize({ width: 390, height: 844 });
 
     await page.reload();
-    page.once("dialog", (dialog) => dialog.accept());
+    // T-107: revoking confirms in the shared dialog (not window.confirm).
     await page.getByRole("button", { name: "Cabut tautan", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Cabut tautan pelacakan?" })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`dialog-revoke-tracking-${page.viewportSize()?.width}.png`), animations: "disabled" });
+    await page.getByRole("dialog", { name: "Cabut tautan pelacakan?" }).getByRole("button", { name: "Ya, cabut tautan" }).click();
     await expect(page.getByText("Tautan telah dicabut. Bagikan lagi untuk membuat tautan baru.")).toBeVisible();
     expect((await reader.goto(publicUrl))?.status()).toBe(404);
     await expect(reader.getByRole("heading", { name: "Halaman tidak ditemukan" })).toBeVisible();
