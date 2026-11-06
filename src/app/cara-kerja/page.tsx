@@ -12,6 +12,7 @@ import { ContactsPreview } from "@/components/marketing/contacts-preview";
 import { CounterPreview } from "@/components/marketing/counter-preview";
 import { COUNTER_STEPS } from "@/components/marketing/counter-steps";
 import { cn } from "@/lib/utils";
+import { connection } from "next/server";
 
 const TITLE = "Alur 4 Langkah Kasir Loket Pengiriman Multi-Kurir";
 const DESCRIPTION =
@@ -64,7 +65,9 @@ const EQUIPMENT = [
 
 // The four steps are a real sequence, so they keep numerals and read as rows (numeral, step, detail)
 // instead of the home page's three columns; the demo and equipment sections use open typography.
-export default function CaraKerjaPage() {
+// SEC-6 / T-055: rendered per request so Next can attach this request's CSP nonce to its scripts.
+export default async function CaraKerjaPage() {
+  await connection();
   return (
     <MarketingShell currentPath="/cara-kerja">
       <MarketingPageHero

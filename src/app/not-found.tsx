@@ -5,6 +5,14 @@ import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = { title: "Halaman tidak ditemukan" };
 
+// SEC-6 / T-055: this file is also the page of Next's `/_not-found` route, which answers every unknown
+// path. Prerendered, that HTML carries no nonce and the enforced policy blocks its scripts, so the route
+// renders per request. Only the `/_not-found` page reads this export (Next takes `dynamic` from a
+// segment's layout or page module, never from its not-found boundary). The component stays synchronous:
+// a `notFound()` page is painted on the client from this boundary, and awaiting `connection()` here
+// delayed that paint.
+export const dynamic = "force-dynamic";
+
 // UX-12: Bahasa Indonesia on every host. A link back that exists on all of them.
 export default function NotFound() {
   return (

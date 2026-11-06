@@ -37,13 +37,10 @@ const TRACKING_NOT_FOUND_HTML = '<!doctype html><html lang="id"><head><meta char
 export async function proxy(request: NextRequest) {
   request.headers.delete(TRACKING_PROJECTION_HEADER);
   const nonce = createCspNonce();
-  const policy = buildCsp(nonce, process.env.NODE_ENV === "development");
-  // Supply Next's documented nonce hint, never a browser-enforced script restriction. Next 16.4.3
-  // dev copies the enforced response CSP back onto the render request (resolve-routes.js:465),
-  // so nonce extraction currently produces informational Report-Only violations; do not enforce
-  // scripts until that interaction is resolved. Always overwrite caller-supplied CSP/nonce hints.
+  // SEC-6: Next renders its scripts with the nonce it finds in the request CSP; secured() sends the
+  // identical policy on the response (src/lib/csp.ts). Always overwrite caller-supplied CSP/nonce hints.
   request.headers.set("x-nonce", nonce);
-  request.headers.set("Content-Security-Policy", policy.reportOnly);
+  request.headers.set("Content-Security-Policy", buildCsp(nonce, process.env.NODE_ENV === "development").policy);
   request.headers.delete("Content-Security-Policy-Report-Only");
   const host = request.headers.get("host") ?? request.nextUrl.hostname;
   const scope = scopeForHost(host);
@@ -144,8 +141,7 @@ function secured(response: NextResponse, request: NextRequest, host: string): Ne
   response.headers.set("Cache-Control", "private, no-store");
   response.headers.set("X-Frame-Options", "DENY");
   const policy = buildCsp(request.headers.get("x-nonce")!, process.env.NODE_ENV === "development");
-  response.headers.set("Content-Security-Policy", policy.enforced);
-  response.headers.set("Content-Security-Policy-Report-Only", policy.reportOnly);
+  response.headers.set("Content-Security-Policy", policy.policy);
   response.headers.set("Permissions-Policy", policy.permissions);
   response.headers.set("X-Content-Type-Options", "nosniff");
   // Only the production apex may be indexed; app, owner, hooks, preview, staging and local hosts

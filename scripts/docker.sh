@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # T-062: thin wrappers around `docker build` and `docker compose` for the local container.
 #   scripts/docker.sh build   build the image (APP_ORIGIN is REQUIRED: the gerai application's absolute origin,
-#                             baked into the static marketing pages; locally http://127.0.0.1:8080)
+#                             checked by the Dockerfile; links read it at run time since T-055; locally http://127.0.0.1:8080)
 #   scripts/docker.sh up      start app + the local plain-HTTP proxy (compose.local.yaml); GX_SCHEDULER=1 adds the scheduler
 #   scripts/docker.sh down    stop and remove them
 # Environment: GX_IMAGE (default geraiexpress:local), GX_ENV_FILE (default .env.container, written by

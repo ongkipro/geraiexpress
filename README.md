@@ -111,15 +111,16 @@ PostgreSQL lacks (the roles `anon`, `authenticated`, `service_role`, `authentica
 Run the production container locally (app + the plain-HTTP local proxy profile; `GX_SCHEDULER=1 pnpm docker:up` also starts the scheduler, off by default because a sweep every 5 minutes would race the shared local database suites). The container joins the stack's Docker network `gxdb_default` and reaches PostgREST and Mailpit by container name, so `pnpm db:up` must run first:
 
 ```bash
-export APP_ORIGIN=http://127.0.0.1:8080     # baked into the static marketing pages at build time
+export APP_ORIGIN=http://127.0.0.1:8080     # required build argument (Dockerfile check)
 pnpm docker:build                           # docker build --build-arg APP_ORIGIN ... (image geraiexpress:local)
 pnpm docker:up                              # compose.yaml + compose.local.yaml, profile local → http://127.0.0.1:8080
 pnpm smoke:container                        # build, up, probe /healthz, /masuk, wrong host, the cron route; then down
 pnpm docker:down
 ```
 
-`pnpm build` also requires `APP_ORIGIN` exported because marketing links are prerendered; runtime
-configuration is the container environment, not the build shell. `pnpm dev:env` writes
+The image build requires the `APP_ORIGIN` build argument (Dockerfile check). Since T-055 every page,
+marketing included, renders per request (CSP nonce), so links read `APP_ORIGIN` from the runtime
+configuration, which is the container environment, not the build shell. `pnpm dev:env` writes
 `.env.container` with `HOST_SHARED_MODE=1`, the four `*_ORIGIN` values (the local proxy origin,
 `GX_LOCAL_PORT` overrides 8080), the in-network PostgREST and Mailpit URLs
 (`http://gxdb-postgrest-1:3000`, `http://gxdb-mailpit-1:8025`) and a `CRON_SECRET`; it preserves the local

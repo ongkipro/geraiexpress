@@ -184,8 +184,8 @@ flowchart LR
 
 - **Image.** `next.config.ts` sets `output: "standalone"` with the tracing root pinned to the repository.
   The multi-stage `Dockerfile` (Node 24 pinned by tag and digest, pnpm through corepack from
-  `packageManager`, `--frozen-lockfile`) builds with the required `APP_ORIGIN` build argument (static
-  marketing links bake it, so an image belongs to one environment), runs `scripts/check-client-bundle.mjs`
+  `packageManager`, `--frozen-lockfile`) builds with the required `APP_ORIGIN` build argument (a build-time
+  check; since T-055 no page is prerendered and links read the runtime `APP_ORIGIN`), runs `scripts/check-client-bundle.mjs`
   inside the build, and the runtime stage is a non-root `node` user running `node server.js` with a
   `HEALTHCHECK` on `/healthz`. Root owns the executable code and dependencies; only `.next/cache` is
   owned by the app user (the Compose tmpfs is uid 1000). The build context includes no env file or tests.
@@ -509,13 +509,40 @@ observed. Counts and executed checks are under "Verified counts and gates".
   or production; the 7-day gerai and 12-hour owner cookie bounds mirror the server-enforced session lifetime, which is authoritative). The proxy config
   (`infra/proxy/Caddyfile`) routes the four hosts; nothing deploys here. Not proven: the Server Actions
   origin check across two tenant-facing hosts; a production-host (TLS) run of the host spec.
-- **CSP, Auth ingress (T-038, T-066).** Enforced CSP: `frame-ancestors 'none'; object-src 'none';
-  base-uri 'none'; form-action 'self'` plus `Permissions-Policy`. The nonce `script-src` with
-  `strict-dynamic` and the Turnstile host is Report-Only, because Next.js router code (re-checked
-  on 16.4.5: `node_modules/next/dist/server/lib/router-utils/resolve-routes.js:463-466`) copies proxy (the former middleware)
-  response headers onto the request headers, so the enforced base policy replaces the
-  nonce-carrying request policy and Next finds no nonce (effect inside the standalone server not
-  verified, and not re-checked after the rename to `src/proxy.ts`). A server-level enforced nonce CSP is T-055. Rate limits (in-process fixed windows since T-062, see "Self-hosted container runtime"): per-visitor limiters
+- **CSP, Auth ingress (T-038, T-066, T-055).** One enforced CSP, no Report-Only header:
+  `frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; script-src 'self'
+  'nonce-<per request>' 'strict-dynamic' https://challenges.cloudflare.com; frame-src
+  https://challenges.cloudflare.com` (`'unsafe-eval'` added to `script-src` only under `next dev`), plus
+  `Permissions-Policy` (`src/lib/csp.ts`). `src/proxy.ts` sets that policy and `x-nonce` on the render
+  request and the identical policy on every response it returns (pass-through, session rotation, 404,
+  503, the constant tracking 404 and 429). Next reads the nonce from the request CSP
+  (`node_modules/next/dist/server/app-render/get-script-nonce-from-header.js`) and copies proxy response
+  headers onto the request (`node_modules/next/dist/server/lib/router-utils/resolve-routes.js:465`);
+  because both copies are the same string the copy keeps the nonce. Next puts the nonce on its framework
+  scripts, inline bootstrap/flight scripts and `next/script` (the Turnstile loader in
+  `src/components/turnstile.tsx` is external and inserted by `next/script` at run time, so it is admitted
+  by `strict-dynamic`). `src/` has no other inline script, `dangerouslySetInnerHTML` or JSON-LD. The four
+  marketing pages await `connection()` (every other page already reads the request), so every page
+  renders per request (a prerendered page would carry no nonce). Unknown paths are answered by Next's
+  `/_not-found` route (`node_modules/next/dist/server/lib/router-server.js:624-629`), served from the
+  build output when it is in the prerender manifest (`node_modules/next/dist/build/templates/app-page-runtime.js:207-212,366-375`;
+  observed before T-055 as `X-Nextjs-Cache: HIT`); `src/app/not-found.tsx` is that route's page and
+  exports `dynamic = "force-dynamic"`, so it is not prerendered (`node_modules/next/dist/build/utils.js:763`,
+  `node_modules/next/dist/build/index.js:1483`). Next reads `dynamic` only from a segment's layout or page
+  module (`node_modules/next/dist/server/app-render/create-component-tree.js:107,141-163`), so the export
+  does not affect the routes where the file is only the not-found boundary. A page that calls
+  `notFound()` is a different path, before and after T-055: Next streams an empty error shell
+  (`<html id="__next_error__">`, `node_modules/next/dist/server/app-render/app-render.js:1324-1330,2507-2510`)
+  whose nonce'd flight scripts carry the not-found UI, and the client paints it with `createRoot`
+  (`node_modules/next/dist/client/app-index.js:277-287`). `connection()` is kept out of the root layout
+  and out of `not-found.tsx` because an async not-found boundary delays that client paint. `/sitemap.xml`
+  stays a static route handler (no script) and `/robots.txt` reads the host.
+  Next always prerenders its synthetic `/_global-error` page (`node_modules/next/dist/build/utils.js:653`)
+  and copies it to `pages/500.html` (`node_modules/next/dist/build/index.js:2514-2553`); wherever Next
+  serves that static HTML its scripts carry no nonce and are blocked, so the Bahasa text shows but "Coba
+  lagi" does not work (errors rendered within a request use the request nonce, `node_modules/next/dist/server/app-render/app-render.js:2527`). No `style-src` or `default-src` is imposed, so the inline
+  `<style>` of the tracking 404 is unaffected. The proxy configs (`infra/proxy/Caddyfile*`) add no CSP.
+  Not yet verified in the production container (`tests/e2e/csp.spec.ts`). Rate limits (in-process fixed windows since T-062, see "Self-hosted container runtime"): per-visitor limiters
   (`SIGN_IN_LIMITER`, `DEMO_LIMITER`, `MFA_LIMITER`, `OTP_LIMITER`, IPv6 grouped at /56), account
   bindings keyed by the SHA-256 of the lowercased email or the MFA user id
   (`SIGN_IN_ACCOUNT_LIMITER`, `OTP_ACCOUNT_LIMITER`, `MFA_ACCOUNT_LIMITER`, 10 per 60 s) and
@@ -848,8 +875,9 @@ observed. Counts and executed checks are under "Verified counts and gates".
   neutral "Model layanan" page; couriers derive from `OFFERED_COURIERS` minus
   `DROP_OFF_UNSUPPORTED` through the single `COURIER_NAME` table; non-apex hosts send
   `X-Robots-Tag: noindex, nofollow` and a disallow-all `robots.txt`; `/fitur`, `/simulasi`,
-  `/cara-kerja`, `/hubungi-kami` are static (`/` stays dynamic). Because those pages are built
-  statically, `APP_ORIGIN` must be set in the build environment of the apex deployment. The public copy makes no label claim: `/` and `/fitur` say the version serves drop-off, with the resi recorded on the shipment page (courier acceptance of a local label is unproven, DEC-017).
+  `/cara-kerja`, `/hubungi-kami` were static until T-055; they now render per request like every page
+  (each awaits `connection()` for the CSP nonce), so `APP_ORIGIN` is read from the runtime
+  environment; the image build still requires it (Dockerfile). The public copy makes no label claim: `/` and `/fitur` say the version serves drop-off, with the resi recorded on the shipment page (courier acceptance of a local label is unproven, DEC-017).
 - **Error pages (T-051).** `not-found.tsx`, `(workspace)/not-found.tsx`, `error.tsx` and
   `global-error.tsx` render Bahasa text; dialogs and sheets close with "Tutup".
 - **Shipment UX and review polish (T-053, F1/F2).** Shipment-detail money/provider forms use
@@ -1145,7 +1173,7 @@ separate release gate.
 | Residual | What exists today | Task |
 |---|---|---|
 | Pre-existing Partner bindings | Bindings and active Partner credentials written before T-032 are not re-verified; before any shared environment migrates, list every non-null `partner_seller_id` and active Partner credential and check each with `sellers/list` | Operator step (T-032 Result) |
-| Script CSP | Report-Only only (nonce limitation above) | T-055 |
+| Script CSP | Enforced nonce `script-src` with `strict-dynamic` (see CSP above); container e2e `tests/e2e/csp.spec.ts` not yet recorded; the synthetic `/_global-error` page is prerendered without a nonce | T-055 |
 | Runtime/release gate | The pre-DEC-020 Workers smoke and e2e are history; the container gate (image build, `smoke:container`, container e2e) replaced them under T-062 and is recorded in BUILD-LOG and by the lead in STATUS.md | T-037, T-055 |
 | Stuck payment or ambiguous reservation | Sent/unknown payment is reconcile-only and readable zero-count answers use per-order reads; no admin close for persistent unknown payment or `reservation_ambiguous` | T-056 |
 | Unpaid-batch lock note | `compute_unpaid_batch` shipment locking versus authorization key-share locking may deadlock; inference, not reproduced, and not a proven explanation of the DB flake | T-054 |
@@ -1185,7 +1213,7 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
 |---|---|---|
 | Runtime | Next.js 16.4.5 App Router (standalone output in a Node 24 container, DEC-020), React 19.3.1, TypeScript 7.0.2 (Next type-checks through the `tsc` CLI, `experimental.useTypeScriptCli`; no compiler-API consumer), Tailwind CSS 4.3.4 and Vitest 5.1.0 are pinned exactly (T-102; lucide-react held at 1.67.0 by the 24 h `minimumReleaseAge` policy); OpenNext and Wrangler were removed by T-062 | `pnpm typecheck`, `pnpm build`, `pnpm check:bundle`, `docker build`, `pnpm smoke:container` (BUILD-LOG); final counts recorded by the lead in STATUS.md |
 | Adapter decision | Earlier Next 16.4.0/OpenNext 1.20.10 failed in workerd; DEC-005 raised to 16.4.3/1.20.13 (history). DEC-020 removed the adapter: Next.js (now 16.4.5, T-102) runs as `node server.js` from `output: "standalone"` | BUILD-LOG; `Dockerfile`; `scripts/container-smoke.sh` |
-| Session handling, hosts & headers | `src/proxy.ts` (Node runtime; the former `src/middleware.ts`) maps the Host header to an audience (`src/lib/hosts.ts`) and answers 404 for a path outside it, then rotates the `gx_at`/`gx_rt` session cookies (`src/lib/db/refresh.ts`: a valid access token that does not expire within 60 s needs nothing on GET/HEAD, other methods also check the session row, an absent or soon-to-expire token with a refresh token triggers one rotation budgeted by `REFRESH_LIMITER`, a definitive failure clears both cookies, a refused budget or an unreachable database answers 503 + `Retry-After: 60` and keeps the cookies), sets `Cache-Control: private, no-store` on every non-static response and attaches `X-Frame-Options: DENY`, the enforced CSP `frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'`, a nonce `script-src` with `strict-dynamic` and the Turnstile host as Report-Only (nonce limitation under "Merged 2026-10-28"), `Permissions-Policy`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, HTTPS `Strict-Transport-Security`, and `X-Robots-Tag: noindex, nofollow` on every host except the production apex. `src/lib/db/cookies.ts` sets the attributes of both session cookies: no `Domain`, `HttpOnly`, `SameSite=Lax`, `Secure` on HTTPS or production builds, path `/`, a 7-day (gerai) or 12-hour (owner) cap that mirrors the server-enforced session lifetime. The `ge_tenant` selector cookie is `httpOnly`, `sameSite: lax`, `secure` in production | `tests/unit/proxy.test.ts`, `tests/unit/db-refresh.test.ts`, `tests/unit/hosts.test.ts`, `tests/unit/csp.test.ts`, `tests/e2e/hosts.spec.ts` (desktop-1280, next dev) |
+| Session handling, hosts & headers | `src/proxy.ts` (Node runtime; the former `src/middleware.ts`) maps the Host header to an audience (`src/lib/hosts.ts`) and answers 404 for a path outside it, then rotates the `gx_at`/`gx_rt` session cookies (`src/lib/db/refresh.ts`: a valid access token that does not expire within 60 s needs nothing on GET/HEAD, other methods also check the session row, an absent or soon-to-expire token with a refresh token triggers one rotation budgeted by `REFRESH_LIMITER`, a definitive failure clears both cookies, a refused budget or an unreachable database answers 503 + `Retry-After: 60` and keeps the cookies), sets `Cache-Control: private, no-store` on every non-static response and attaches `X-Frame-Options: DENY`, one enforced CSP `frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'` plus a per-request nonce `script-src` with `strict-dynamic` and the Turnstile host and `frame-src` Turnstile, identical on the render request and the response (no Report-Only header), `Permissions-Policy`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, HTTPS `Strict-Transport-Security`, and `X-Robots-Tag: noindex, nofollow` on every host except the production apex. `src/lib/db/cookies.ts` sets the attributes of both session cookies: no `Domain`, `HttpOnly`, `SameSite=Lax`, `Secure` on HTTPS or production builds, path `/`, a 7-day (gerai) or 12-hour (owner) cap that mirrors the server-enforced session lifetime. The `ge_tenant` selector cookie is `httpOnly`, `sameSite: lax`, `secure` in production | `tests/unit/proxy.test.ts`, `tests/unit/db-refresh.test.ts`, `tests/unit/hosts.test.ts`, `tests/unit/csp.test.ts`, `tests/e2e/hosts.spec.ts` (desktop-1280, next dev), `tests/e2e/csp.spec.ts` (mobile-390 and desktop-1280; container run not yet recorded) |
 | Identity | Application-owned auth (`src/lib/auth/**`): scrypt password sign-in (seeded local fixtures only), emailed 6-digit code sign-in/registration, and anonymous demo sessions (`auth_sign_in_anonymous`); public signup refused by `private.before_user_created`, which `auth_issue_otp` and `auth_verify_otp` call before any account or code exists; email confirmation is the verified code; trigger `private.lock_anonymous_identity` on `auth.users` refuses, for anonymous identities, any email/phone/password change request and any clearing of `is_anonymous`; there is no OAuth or identity-linking path, so a demo session cannot become a real account (PR-31) | `tests/db/isolation.test.ts` registration gate, mutation-checked; `tests/db/auth-core.test.ts` |
 | Auth core (T-065, T-066) | `auth.sessions` (hashed rotating refresh tokens, reuse detection with a 10-second `recent_reuse` grace, absolute 7 days or 12 hours for a platform-grant holder, idle bound, revocation on deactivation), `auth.otp_codes` (HMAC-hashed, 10 minutes, 5 guesses per code, 20 per address per hour, one code per 30 seconds), `auth.mfa_factors` (sealed TOTP secret, replay guard); 14 machine-only `public.auth_*` functions in `20261029100000_auth_core.sql`; HS256 access tokens (10 minutes) verified by PostgREST and by `dbServer()`/`currentUser()` | `tests/db/auth-core.test.ts`, `tests/db/captcha.test.ts`, `tests/unit/auth-service.test.ts`, `auth-jwt`, `auth-password`, `auth-otp`, `auth-totp`, `auth-turnstile` unit tests |
 | Tenancy | `memberships` + `private.member_role()`; anonymous identities count only in demo tenants; `ge_tenant` cookie validated against own memberships; multiple memberships require `/pilih-gerai` | DB isolation suite; e2e forged-cookie and two-membership tests |
@@ -1198,7 +1226,7 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
 | Registration | `/daftar` email code (app-issued, HMAC-hashed, Bahasa Indonesia mail from `renderCodeMail`, generic reply), password set only after verification, one open `tenant_applications` row per identity (revisioned, partial drafts), Super Admin approve / request changes / reject with reason; approval creates one active tenant, outlet and `tenant_admin` membership and no seller. Public account creation is closed unless a governor opens it (`private.settings`, audited); local seed opens it. A password set before an email's first confirmation is discarded at confirmation (pre-registration takeover; trigger `private.discard_pre_verification_password`) | `tests/db/registration.test.ts`, `tests/db/isolation.test.ts` (mutation-checked: password discard, review authority); `tests/e2e/registration.spec.ts` |
 | Staff and roles | `tenant_invitations` (one pending per tenant+email, 7 days, revocable, RPC-only reads); accept only by the verified invited email while the issuer is still an active admin, once (concurrent accepts converge); an invited email may create its account while public registration is closed; `set_member_role` / `deactivate_member` lock the tenant's memberships, re-check the caller, keep one active `tenant_admin`; `reconcile_shipment` re-checks the role after a share lock; demo tenants cannot invite | `tests/db/invitations.test.ts` (mutation-checked: issuer check, last-admin guard, role re-check after lock); `tests/e2e/members.spec.ts` |
 | Mengantar credentials & Partner onboarding | Machine-only seller binding/completion, write-once seller id per provider environment, list verification, consent/version fence, recovery and key regeneration; AES-GCM key ring uses stored encryption version and tenant/credential-version AAD. Partner operations can reconcile with the active same-environment Partner key after regeneration. BYOK never crosses versions; T-054/T-057 add durable stops, rotation-outcome fencing, SQL consent versions, caller `p_env` enforcement and hourly environment-scoped rewrap; deployment verification remains a release gate | `20261028230000_environment_scope_key_ring.sql`, `20261028250000_reconcile_across_key_regeneration.sql`; credential/key-ring/environment/regeneration tests (worker-reported) |
-| Public marketing | `/`, `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami` render under the GeraiExpress brand (zero legacy brand references or redirects) and publish only approved, implemented claims (no numeric commission, fee, payout or partnership copy; `/simulasi` is a neutral page); signed-in `/` routing (`PR-32`) is preserved; the four marketing pages other than `/` build statically | `tests/unit/marketing-rebrand.test.ts`, `tests/e2e/marketing.spec.ts` (desktop-1280 and mobile-390) |
+| Public marketing | `/`, `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami` render under the GeraiExpress brand (zero legacy brand references or redirects) and publish only approved, implemented claims (no numeric commission, fee, payout or partnership copy; `/simulasi` is a neutral page); signed-in `/` routing (`PR-32`) is preserved; every marketing page renders per request since T-055 (CSP nonce) | `tests/unit/marketing-rebrand.test.ts`, `tests/e2e/marketing.spec.ts` (desktop-1280 and mobile-390) |
 | Demo cleanup, quotas & staging | Bounded demo cleanup through the scheduler container's hourly `POST /api/internal/cron/cleanup` (and a pg_cron job only where that extension exists); demo caps by triggers; the staging environment is the template `infra/env/staging.env.example`, whose own database and signing secrets must differ from production and local (`check:environments`) | demo-quota/cleanup DB, `tests/unit/cron.test.ts`, `tests/unit/check-environments.test.ts` |
 | CAPTCHA | Turnstile is verified by the app (`src/lib/auth/turnstile.ts`) before password sign-in, demo entry, code request and code verification, failing closed; account-plus-visitor limits precede the auth call, password account-wide limits follow its CAPTCHA step. Code verification still has no server-bound email state | `tests/unit/auth-turnstile.test.ts`, captcha/auth-account-lockout tests; T-058 |
 | Auth email | The code mail is rendered by `renderCodeMail` (`src/lib/auth-mail.ts`) and sent by `src/lib/mail-transport.ts` after SQL decided a code may exist (registration gate, anonymous requester refused, throttles, 30-second spacing); only the local Mailpit transport exists, fail-closed otherwise (`auth_mail_failed`); the Send Email Hook route and its secret were removed by T-066 (DEC-021) | `tests/unit/auth-mail.test.ts`; `tests/e2e/auth-mail.spec.ts` |
@@ -1292,8 +1320,8 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
   sent (DEC-009 intent, now enforced without a hook). Real environment: create a Turnstile
   widget, put its secret in `TURNSTILE_SECRET_KEY` and its site key in the
   `TURNSTILE_SITE_KEY` environment value (the app verifies tokens itself and refuses to start the auth module
-  with neither the secret nor `AUTH_CAPTCHA_DISABLED=true`). The Report-Only
-  CSP already allows `challenges.cloudflare.com` for Turnstile.
+  with neither the secret nor `AUTH_CAPTCHA_DISABLED=true`). The enforced
+  CSP allows `challenges.cloudflare.com` for the Turnstile script and frame.
 - Code mail (T-017 superseded by T-066): there is no Send Email Hook, hook secret or relay any more.
   Production needs a transport: only the local Mailpit transport exists; with any other
   `MAIL_TRANSPORT` delivery fails closed (`auth_mail_failed` with `configured: false`), so no code is

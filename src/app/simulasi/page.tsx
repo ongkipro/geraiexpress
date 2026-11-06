@@ -9,6 +9,7 @@ import {
 } from "@/components/marketing/marketing-shell";
 import { BRAND, WHATSAPP_DISPLAY } from "@/lib/marketing-data";
 import { cn } from "@/lib/utils";
+import { connection } from "next/server";
 
 // T-036 (PR-35): the former commission simulator published unapproved percentages and earnings.
 // This route stays (nav, sitemap, inbound links) as a neutral model explanation with no figures.
@@ -81,7 +82,9 @@ const FAQ_ITEMS = [
   ],
 ] as const;
 
-export default function SimulasiPage() {
+// SEC-6 / T-055: rendered per request so Next can attach this request's CSP nonce to its scripts.
+export default async function SimulasiPage() {
+  await connection();
   return (
     <MarketingShell currentPath="/simulasi">
       <MarketingPageHero

@@ -75,6 +75,14 @@ export async function startDemo(page: Page) {
   await expect(page).toHaveURL(atDashboard); // UX-16: the demo lands on the Dashboard.
 }
 
+// The body text of the not-found page now shown. Next streams a page that calls notFound() as an empty
+// error shell (`<html id="__next_error__">`) and paints the not-found UI on the client, so the heading is
+// awaited before the text is read; an unknown path is server-rendered and passes at once.
+export async function notFoundBodyText(page: Page): Promise<string> {
+  await expect(page.getByRole("heading", { level: 1, name: "Halaman tidak ditemukan" })).toBeVisible();
+  return page.locator("body").innerText();
+}
+
 export async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow, "document must not scroll horizontally").toBeLessThanOrEqual(0);

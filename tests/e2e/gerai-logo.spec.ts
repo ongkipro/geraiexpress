@@ -158,6 +158,8 @@ for (const size of ["10x10", "10x15"] as const) {
     }
     async function openBatch(ids: string[], masked = false) {
       await page.goto(`/pengiriman/cetak?ids=${ids.join(",")}`);
+      // The tab's remembered choice is restored after hydration; a click before that restore is undone by it.
+      await expect(page.getByTestId("batch-settings")).toHaveAttribute("data-preference-restored", "true");
       // Choices are sessionStorage-backed; never inherit the prior masked test's choice.
       await page.getByRole("switch", { name: "Gunakan masking pengirim", exact: true }).setChecked(masked);
       // T-084 / PR-46: these fixtures have no quote (NULL courier = unverified), so a masked batch needs the acknowledgement.
@@ -310,6 +312,9 @@ for (const size of ["10x10", "10x15"] as const) {
     }
     async function open(id: string, bytes: Buffer | null) {
       await page.goto(`/pengiriman/${id}/label`);
+      // A shipment without a stored label restores this tab's remembered switch after hydration (the earlier
+      // open() left it on); a click before that restore is undone by it, so wait for the final state first.
+      await expect(page.getByTestId("label-workbench")).toHaveAttribute("data-preference-restored", "true");
       await page.getByRole("switch", { name: /Gunakan masking pengirim/ }).setChecked(true);
       // T-084 / PR-46: NULL courier (no quote) is unverified, so the masked print needs the acknowledgement.
       await page.getByRole("checkbox", { name: /Saya mengerti penerimaannya belum terverifikasi/ }).check();

@@ -33,6 +33,7 @@ export function BatchWorkbench({ entries, maskingAllowed, whatsapp, preferenceKe
   // PR-46: one acknowledgement for the whole masked batch, listing every courier that is not verified.
   const [acknowledged, setAcknowledged] = useState(false);
   const [ackError, setAckError] = useState(false);
+  const [preferenceRestored, setPreferenceRestored] = useState(false);
   // isPending of the form action: plain setState inside an action only commits when it ends.
   const [, runPrint, pending] = useActionState(async () => { await print(); return null; }, null);
   // The choice on screen right now, read when a print response arrives (after an await).
@@ -44,6 +45,8 @@ export function BatchWorkbench({ entries, maskingAllowed, whatsapp, preferenceKe
       if (saved && isLabelSize(saved.size)) setSize(saved.size);
       if (saved?.mask === true && maskingAllowed) setMask(true);
     } catch { /* preference is optional */ }
+    // Committed with the restored choice, so a browser test can tell the switch shows its final state.
+    setPreferenceRestored(true);
   }, [preferenceKey, maskingAllowed]);
   const exclusion = ({ row, lockedSize }: BatchEntry) => batchExclusion(row, mask, city, size, lockedSize ?? latestById.get(row.id)?.size);
   const included = entries.filter((entry) => !exclusion(entry));
@@ -98,7 +101,7 @@ export function BatchWorkbench({ entries, maskingAllowed, whatsapp, preferenceKe
   }
   return <>
     <header className="flex flex-wrap items-center gap-3 print:hidden"><h1 className="text-3xl tracking-tight">Cetak label massal</h1><Badge variant="neutral">{included.length} label</Badge></header>
-    <section className="flex flex-col gap-4 rounded-lg bg-card p-5 ring-1 ring-border print:hidden" aria-label="Pengaturan label">
+    <section data-testid="batch-settings" data-preference-restored={preferenceRestored ? "true" : undefined} className="flex flex-col gap-4 rounded-lg bg-card p-5 ring-1 ring-border print:hidden" aria-label="Pengaturan label">
       <div><p className="mb-2 text-sm font-semibold">Ukuran label</p><SegmentedControl label="Ukuran label" value={size} onChange={(value) => changeChoice(mask, value)} options={[{ value: "10x15", label: "10 × 15 cm", disabled: pending }, { value: "10x10", label: "10 × 10 cm", disabled: pending }]} /></div>
       <p className="text-sm text-muted-foreground">10 × 15 cm: label paket 10 × 10 cm + slip pelanggan 10 × 5 cm. Kiriman yang terkunci pada ukuran lain tidak disertakan.</p>
       {maskingAllowed ? <label className="flex min-h-11 items-center gap-3"><Switch checked={mask} disabled={pending} onCheckedChange={(value) => changeChoice(value, size)} />Gunakan masking pengirim</label> : null}

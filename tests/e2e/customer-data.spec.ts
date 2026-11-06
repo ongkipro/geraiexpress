@@ -2,7 +2,7 @@
 // cross-gerai phone search and the per-gerai customer list; each read needs a reason and is audited.
 import { randomUUID } from "node:crypto";
 import { expect, test } from "./fixtures";
-import { expectNoHorizontalOverflow, freshAdminCode, localSql, signIn, signInAdmin } from "./helpers";
+import { expectNoHorizontalOverflow, freshAdminCode, localSql, notFoundBodyText, signIn, signInAdmin } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -97,17 +97,17 @@ test("without the capability: no menu, the page is a plain 404 and the gerai pag
   const unknown = await page.goto("/admin/tidak-ada-halaman-ini");
   expect(unknown?.status()).toBe(404);
   const unknownTitle = await page.title();
-  const unknownText = await page.locator("body").innerText();
+  const unknownText = await notFoundBodyText(page);
   const response = await page.goto("/admin/pelanggan");
   expect(response?.status()).toBe(404);
   expect(await page.title()).toBe(unknownTitle);
-  expect(await page.locator("body").innerText()).toBe(unknownText);
+  expect(await notFoundBodyText(page)).toBe(unknownText);
   await expect(page.getByLabel("Nomor HP pelanggan")).toHaveCount(0);
   // The per-gerai customer page is the same plain 404.
   const perGerai = await page.goto(`/admin/pelanggan/${TENANT_A}`);
   expect(perGerai?.status()).toBe(404);
   expect(await page.title()).toBe(unknownTitle);
-  expect(await page.locator("body").innerText()).toBe(unknownText);
+  expect(await notFoundBodyText(page)).toBe(unknownText);
   await page.goto(`/admin/tenant/${TENANT_A}`);
   await expect(page.getByTestId("tenant-activity")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Data pelanggan gerai ini" })).toHaveCount(0);

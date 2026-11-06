@@ -2,7 +2,7 @@
 // unknown /admin path: status, tab title and body text. Before T-098 the page's static `metadata`
 // export still rendered its own title after notFound(), revealing that the page exists.
 import { expect, test } from "./fixtures";
-import { freshAdminCode, localSql, signIn, signInAdmin } from "./helpers";
+import { freshAdminCode, localSql, notFoundBodyText, signIn, signInAdmin } from "./helpers";
 
 const ADMIN2 = "00000000-0000-4000-a000-0000000000f2";
 const TENANT_A = "00000000-0000-4000-b000-00000000000a";
@@ -37,7 +37,7 @@ test("a refused capability answers every gated page with the plain 404 (status, 
     const unknown = await page.goto("/admin/tidak-ada-halaman-ini");
     expect(unknown?.status()).toBe(404);
     const unknownTitle = await page.title();
-    const unknownText = await page.locator("body").innerText();
+    const unknownText = await notFoundBodyText(page);
     for (const target of PAGES) {
       const response = await page.goto(target.path);
       if (target.opens.includes("audit_review")) {
@@ -47,7 +47,7 @@ test("a refused capability answers every gated page with the plain 404 (status, 
       }
       expect(response?.status(), target.path).toBe(404);
       expect(await page.title(), target.path).toBe(unknownTitle);
-      expect(await page.locator("body").innerText(), target.path).toBe(unknownText);
+      expect(await notFoundBodyText(page), target.path).toBe(unknownText);
     }
   } finally {
     localSql(`update public.platform_grants set capabilities = '${before}'::text[] where user_id = '${ADMIN2}' and revoked_at is null`);
@@ -65,11 +65,11 @@ test("a grant without audit_review gets the plain 404 on /admin/audit too", asyn
     const unknown = await page.goto("/admin/tidak-ada-halaman-ini");
     expect(unknown?.status()).toBe(404);
     const unknownTitle = await page.title();
-    const unknownText = await page.locator("body").innerText();
+    const unknownText = await notFoundBodyText(page);
     const audit = await page.goto("/admin/audit");
     expect(audit?.status()).toBe(404);
     expect(await page.title()).toBe(unknownTitle);
-    expect(await page.locator("body").innerText()).toBe(unknownText);
+    expect(await notFoundBodyText(page)).toBe(unknownText);
     // Positive control for this grant: a monitoring page opens with its own title.
     const own = PAGES.find((p) => p.path === "/admin/pantau-pengajuan")!;
     expect((await page.goto(own.path))?.status()).toBe(200);

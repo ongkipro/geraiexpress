@@ -19,7 +19,7 @@ test("login page offers sign-in and a discoverable demo entry", async ({ page })
   await expectNoHorizontalOverflow(page);
 });
 
-test("CSP stays report-only with fresh nonces and working login scripts", async ({ page }) => {
+test("CSP enforces fresh script nonces with working login scripts", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
@@ -28,18 +28,16 @@ test("CSP stays report-only with fresh nonces and working login scripts", async 
     const response = await page.goto(path);
     expect(response?.status()).toBe(200);
     const headers = response!.headers();
-    expect(headers["content-security-policy"]).toBe("frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'");
-    expect(headers["content-security-policy"]).not.toContain("script-src");
-    const report = headers["content-security-policy-report-only"];
-    const nonce = report.match(/'nonce-([^']+)'/)?.[1];
+    // T-055: one enforced policy (tests/e2e/csp.spec.ts checks every script against it).
+    const policy = headers["content-security-policy"];
+    expect(policy).toContain("frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; script-src 'self' 'nonce-");
+    expect(headers["content-security-policy-report-only"]).toBeUndefined();
+    const nonce = policy.match(/'nonce-([^']+)'/)?.[1];
     expect(nonce).toBeTruthy();
     nonces.add(nonce!);
-    expect(report).toContain("https://challenges.cloudflare.com");
-    expect(report).toContain("frame-src https://challenges.cloudflare.com");
-    // Next dev merges the enforced response CSP back onto the render request, taking precedence
-    // over Report-Only nonce extraction. Until that upstream interaction is resolved, observe
-    // its informational reports rather than enforcing scripts or pretending every tag is nonced.
-    await expect(page.locator('script[src*="/_next/"]').first()).toBeAttached();
+    expect(policy).toContain("'strict-dynamic' https://challenges.cloudflare.com");
+    expect(policy).toContain("frame-src https://challenges.cloudflare.com");
+    await expect(page.locator(`script[src*="/_next/"][nonce]`).first()).toBeAttached();
   }
   await expect(page.getByRole("heading", { name: "Masuk ke ruang kerja gerai" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Masuk", exact: true })).toBeEnabled();
