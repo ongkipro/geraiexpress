@@ -20,6 +20,54 @@ Hosts (from `infra/env/staging.env.example`): `staging.geraiexpress.com` (apex),
 | I3 | Off-server backup storage (bucket or second host) and the RPO/RTO numbers | 6 |
 | I4 | (Level B only, not staging) pilot gerai + its Mengantar key + approval for one supervised paid order | 8 |
 
+### Proposal for I1–I3 (assistant recommendation, 2026-11-07; NOT approved — the owner selects)
+
+Based only on what the repository already runs; no plan, price or account is chosen here, and no current
+pricing is quoted (check the provider console at selection time).
+
+**I1 — host and region**
+- Workload on one host: Coolify v4 (its own containers) + `compose.coolify.yaml` = `app` (Next.js), `scheduler`,
+  `postgrest`, `proxy` (Caddy), `postgres` 17. Coolify's documented minimum is 2 CPU cores / 2 GB RAM / 10 GB
+  free disk (coolify.io self-hosted install page), for Coolify alone.
+- Recommended starting size: **2 vCPU, 4 GB RAM, ≥ 80 GB SSD, fixed IPv4.** Reason: the 2 GB Coolify minimum
+  plus four app containers and PostgreSQL leaves no margin at 2 GB; local backups (`BACKUP_DIR`) and previous
+  image tags kept for rollback (step 6; app image ≈ 0.4 GB each) need disk. Build images off-host (step 3,
+  `GX_IMAGE` immutable), so the host does not need build headroom. Resize later if `docker stats` shows memory
+  pressure; this is a staging/pilot size, not a production sizing.
+- Region criteria (owner decides): (1) lowest latency to the pilot gerai and to Mengantar's API for Indonesian
+  users — Vultr's nearest public region is **Singapore** (Vultr lists no Indonesian region at the time of
+  writing; verify in the console); (2) fixed IPv4 that can later be allowlisted by Mengantar (§1); (3) data
+  location acceptable to the owner (DEC-029 defers legal/PSE for alpha only; production revisits it).
+- DNS (owner action): A records for the four staging hosts (§2), no AAAA; whoever controls the
+  `geraiexpress.com` zone publishes them.
+
+**I2 — mail**
+- The code supports any SMTP submission service with TLS (`MAIL_TRANSPORT=smtp`, port 465 `tls` or 587
+  `starttls`, DEC-027/T-063); no provider SDK. Options: a transactional mail provider, or the owner's existing
+  mailbox provider if it allows SMTP submission for `no-reply@geraiexpress.com`. Needed: host/port/user and an
+  app password (stored only in the host env file), plus the provider's SPF include, DKIM record and a DMARC
+  record (start `p=none`, tighten after delivery is confirmed). Volume at alpha is only sign-in codes and
+  invitations, so a free or entry tier is normally enough (owner checks the tier's limits).
+
+**I3 — backup and recovery**
+- Supported mechanism: `pnpm db:backup` logical dumps (`pg_dump -Fc`, 0600) + `pnpm db:restore-check`
+  (RELEASE gates 12–13). PITR/WAL archiving is NOT built (RELEASE gate 14), so the RPO cannot be shorter than
+  the dump interval.
+- Off-host target options: an S3-compatible bucket (e.g. the same provider's object storage) or a second host;
+  archives are credentials, so encrypt before upload and keep the key outside the bucket.
+- Recommended pilot targets (assumptions: one pilot gerai, low write volume, staff can re-enter a few hours of
+  shipments from Mengantar/paper records, sandbox key on staging):
+  - **RPO 24 h** (daily dump + dump before every migration); move to 6-hourly dumps when real transactions
+    start (Level B), since that only changes the schedule.
+  - **RTO 4 h** (new host + Coolify + restore from the off-host copy + provider fence per §6), to be confirmed
+    by the timed restore drill in §6; if the drill takes longer, the owner either accepts the measured time or
+    keeps a warm second host.
+
+**Owner choices still required (nothing remote starts before them):** (a) approve or change the host size and
+pick the region; (b) confirm who publishes the four A records; (c) pick the SMTP service and confirm the sender
+DNS can be published; (d) pick the off-host backup target and who holds the encryption key; (e) accept or change
+RPO 24 h / RTO 4 h for the pilot.
+
 ## 1. Host (Vultr + Coolify) — skills `vultr`, `vps-deploy`
 - [ ] Owner-approved instance with a **fixed IPv4**; Coolify v4 installed; firewall: 80/443 public, SSH from the owner's addresses only.
 - [ ] Record the IPv4 (needed later for the Mengantar production allowlist; staging uses the sandbox).
