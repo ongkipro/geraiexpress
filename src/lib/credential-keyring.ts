@@ -2,7 +2,7 @@
 // ring's current key. Server-side (machine identity); the database only ever sees ciphertext. Run it
 // after adding a key to CREDENTIAL_KEYS and switching CREDENTIAL_KEY_CURRENT, and drop the old key
 // from the ring only when a run reports nothing left to re-wrap.
-import { credentialAad, openCredential, resolveKeyRing, sealCredential, type CredentialKeyMaterial, type CredentialKeyRing } from "./credential-crypto";
+import { credentialAad, openCredential, resolveKeyRing, sealCredential, webhookSecretAad, type CredentialKeyMaterial, type CredentialKeyRing } from "./credential-crypto";
 
 type RpcResult = PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>;
 export type RewrapRpc = (fn: string, args: Record<string, unknown>) => RpcResult;
@@ -119,4 +119,47 @@ export async function rewrapNextBatch(opts: {
 // Test hook: forget the rewrap cursors.
 export function resetRewrapCursors() {
   cursorHolder[CURSORS]?.clear();
+}
+
+// T-045 / ADR-0003 §2.2: Mengantar Webhook Secrets are sealed with the same key ring (own AAD), so they follow the
+// same rotation: a page of endpoints still on an older key version is re-sealed under the current key, the SAME
+// secret version (same AAD), fenced by the expected key version. Never downgrades. Bounded per run, with an
+// in-process cursor per environment (like the seller-key rewrap): rows that keep failing are stepped past, so a
+// failing first page can never starve readable endpoints behind it (review round 2). A run that ends a pass
+// clears the cursor; a restart starts a new pass (idempotent). Counts only; never tenant ids or material.
+export const WEBHOOK_REWRAP_BATCH = 200;
+const WEBHOOK_CURSORS = Symbol.for("geraiexpress.webhook-rewrap-cursors");
+const webhookCursorHolder = globalThis as typeof globalThis & { [WEBHOOK_CURSORS]?: Map<string, string> };
+export function resetWebhookRewrapCursors() { webhookCursorHolder[WEBHOOK_CURSORS]?.clear(); }
+type WebhookSealedRow = { tenant_id: string; ciphertext: string; iv: string; key_version: string; secret_version: number };
+export async function rewrapWebhookSecrets(opts: { rpc: RewrapRpc; key: CredentialKeyMaterial; environment: "sandbox" | "production"; batchSize?: number })
+  : Promise<{ scanned: number; rewrapped: number; conflicts: number; failed: number; pending: boolean }> {
+  const ring = resolveKeyRing(opts.key);
+  const limit = opts.batchSize ?? WEBHOOK_REWRAP_BATCH;
+  const cursors = (webhookCursorHolder[WEBHOOK_CURSORS] ??= new Map());
+  const after = cursors.get(opts.environment) ?? null;
+  const { data, error } = await opts.rpc("machine_webhook_rewrap_candidates", { p_env: opts.environment, p_current_version: ring.current, p_after: after, p_limit: limit });
+  // A failed page read keeps the cursor (and throws: a partial list must not look like a finished run).
+  if (error || !Array.isArray(data)) throw new Error("webhook_list_failed");
+  const rows = data as WebhookSealedRow[];
+  const out = { scanned: rows.length, rewrapped: 0, conflicts: 0, failed: 0, pending: rows.length === limit };
+  if (out.pending) cursors.set(opts.environment, rows[rows.length - 1].tenant_id);
+  else cursors.delete(opts.environment);
+  for (const row of rows) {
+    try {
+      if (keyVersionNumber(row.key_version) >= keyVersionNumber(ring.current)) continue;
+      const aad = webhookSecretAad(row.tenant_id, opts.environment, row.secret_version);
+      const sealed = await sealCredential(await openCredential(row, aad, ring), aad, ring);
+      const write = await opts.rpc("rewrap_webhook_secret", {
+        p_tenant: row.tenant_id, p_env: opts.environment, p_secret_version: row.secret_version, p_expected_key_version: row.key_version,
+        p_ciphertext: sealed.ciphertext, p_iv: sealed.iv, p_new_key_version: sealed.keyVersion,
+      });
+      if (write.error) out.failed += 1;
+      else if (write.data === true) out.rewrapped += 1;
+      else out.conflicts += 1;
+    } catch {
+      out.failed += 1;
+    }
+  }
+  return out;
 }

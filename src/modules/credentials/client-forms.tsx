@@ -20,6 +20,7 @@ import {
   removeSellerKeyAction,
   setPartnerIdAction,
   storeSellerKeyAction,
+  storeWebhookSecretAction,
   type CredentialState,
 } from "./actions";
 import { recoverRotatedPartnerKeyAction, regeneratePartnerKeyAction } from "./rotation-actions";
@@ -341,6 +342,23 @@ export function PartnerSellerOnboardingFields({ onboarding, documents }: {
         </form>
       ) : null}
     </div>
+  );
+}
+
+// T-045 / ADR-0003: the Mengantar Webhook Secret, write-only (only a short hint is ever shown).
+export function WebhookSecretForm({ secretVersion, replacing }: { secretVersion: number; replacing: boolean }) {
+  const [state, action] = useActionState<CredentialState, FormData>(storeWebhookSecretAction, {});
+  return (
+    <form action={action} className="flex flex-col gap-4" noValidate>
+      <Status state={state} />
+      <input type="hidden" name="secret_version" value={secretVersion} />
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="webhook-secret">Rahasia webhook (Webhook Secret)</Label>
+        <p id="webhook-secret-hint" className="text-sm text-muted-foreground">Muncul di Mengantar setelah URL webhook disimpan. Disimpan terenkripsi dan tidak bisa ditampilkan lagi.</p>
+        <Input id="webhook-secret" name="webhook_secret" type="password" autoComplete="off" spellCheck={false} aria-describedby="webhook-secret-hint" />
+      </div>
+      <SubmitButton pendingLabel="Menyimpan rahasia…" className="self-start">{replacing ? "Ganti rahasia" : "Simpan rahasia"}</SubmitButton>
+    </form>
   );
 }
 

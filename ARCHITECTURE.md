@@ -151,6 +151,42 @@ no fake status or expiry is inferred here. The public page is readable without J
 missing phone and `testInfo.outputPath` screenshots). Execution is pending the parent-run gates;
 this section is an implementation record, not a release-readiness claim.
 
+
+### Provider status ingestion (T-045, ADR-0003, 2026-11-06)
+
+- **Webhook:** `POST https://hooks.geraiexpress.com/api/webhooks/mengantar/<endpoint_id>` (route family `hook`,
+  cookie-less hooks host). `endpoint_id` is 32 random bytes per tenant and environment
+  (`private.webhook_endpoints`); it selects the sealed Webhook Secret and never authenticates. The handler
+  (`src/lib/mengantar/webhook-ingest.ts`, verifier `webhook.ts`) checks method and JSON content type, reads at
+  most 4 KiB, opens the secret (key ring, AAD `geraiexpress:webhook-secret:<tenant>:<env>:<version>`),
+  verifies HMAC-SHA256 over `${x-timestamp}.${raw body}` in constant time, then the ±5-minute millisecond
+  window and `x-environment` against the endpoint's environment, then the body. Answers carry no body:
+  204 (authenticated, whatever the result), 401 (signature: logs `webhook_secret_mismatch`, sets
+  `last_mismatch_at`), 400/404/405/413/415/503 otherwise.
+- **Ingestion:** `ingest_provider_status` (machine only) resolves the shipment only among this tenant's
+  succeeded `create_order` operations of this environment by the provider order id (AWB must match when
+  both are known; simulated shipments never match), dedupes on `(shipment, provider_ts, raw status)`,
+  appends a `shipment_events` row (`kind = provider_status`, `provider_status`, `provider_ts`, `source`) and
+  moves `shipments.provider_status_kind` only forward in provider time; finals (`delivered`, `returned`,
+  `cancelled`) never move and set `delivered_at` / `returned_at` once. Mapping: `private.provider_status_kind`
+  (unrecognized values, incl. a possible `LOST`, stay verbatim with the non-final kind `unknown`).
+- **Pull (floor):** the hourly `cleanup` task runs `status_pull` (`src/lib/mengantar/status-pull.ts`): issued,
+  non-final shipments not updated for 2 hours, least recently pulled first (`status_pulled_at`, so unchanged or
+  failing orders rotate to the back), at most 200 per run, `GET /order?order_id=` with each seller's own key
+  (Public API, read-only: outside the Partner quota and mutation fence), through the same RPC with
+  `source = 'pull'` (branching on `statusCategory`, never `status`). A missing or future `lastStatusChange` is
+  sent as untrusted and is history only (state and ordering watermark unchanged).
+- **Key rotation:** the hourly `webhook_secret_rewrap` step re-seals Webhook Secrets still on an older key
+  version (`machine_webhook_rewrap_candidates` / fenced `rewrap_webhook_secret`), with a resumable in-process
+  cursor so failing rows are stepped past, like seller keys.
+- **Admin:** `/pengaturan` shows the webhook URL and stores the secret write-only (`store_webhook_secret`,
+  audited `webhook_secret.store`), with a notice when deliveries were refused for a mismatching secret.
+- **Public:** `track_shipment` returns the mapped label and a `{kind, at}` timeline only; the app projection
+  (`src/modules/tracking/projection.ts`) accepts only the whitelisted labels and kinds.
+- **Not yet proven live:** a real Mengantar delivery (sandbox `order/simulation` with a public hooks URL) and
+  the production per-account webhook rollout (T-048). Cancel / batch-delete refunds and re-weigh are later
+  T-045 slices.
+
 ## Canonical design
 
 The target architecture lives in [04-SYSTEM-ARCHITECTURE.md](docs/spec/04-SYSTEM-ARCHITECTURE.md)

@@ -39,6 +39,12 @@ export function credentialAad(tenantId: string, version: number): string {
   return `geraiexpress:seller-credential:${tenantId}:${version}`;
 }
 
+// T-045 / ADR-0003: the Mengantar Webhook Secret is sealed with the same key ring under its own AAD (a sealed
+// seller key can never be opened as a webhook secret or across tenant/environment/version).
+export function webhookSecretAad(tenantId: string, environment: "sandbox" | "production", version: number): string {
+  return `geraiexpress:webhook-secret:${tenantId}:${environment}:${version}`;
+}
+
 // "2" and "v2" both name key version v2 (the form stored on rows). Anything else is refused.
 function versionLabel(raw: string, source: string): string {
   const m = /^v?([0-9]{1,4})$/.exec(raw.trim());

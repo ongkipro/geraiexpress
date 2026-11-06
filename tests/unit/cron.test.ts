@@ -7,6 +7,7 @@ import type { TaskResult } from "../../src/lib/mengantar/scheduled";
 // route (T-062): same dispatcher sweep, same demo cleanup, same log events, now behind the host, secret
 // and lock gates of src/lib/cron.ts.
 const sweepMock = vi.fn<(...args: unknown[]) => Promise<SweepSummary>>();
+const pullMock = vi.fn(async (..._args: unknown[]) => ({ checked: 0, applied: 0, unchanged: 0, skipped: 0, failed: 0 }));
 const rpcMock = vi.fn<(...args: unknown[]) => Promise<{ data: unknown; error: { message: string } | null }>>();
 const clientOptions = vi.fn();
 // The rewrap selection (T-057 rewrap, T-105 keyset, T-109 RPC): machine_rewrap_candidates is answered by
@@ -25,6 +26,8 @@ vi.mock("@supabase/postgrest-js", () => ({
         candidateArgs(args);
         return tenantPages(args.p_after ?? null, args.p_limit!);
       }
+      // T-045: no webhook secret needs a rewrap in these runs (covered by mengantar-webhook-rewrap.test.ts).
+      if (fn === "machine_webhook_rewrap_candidates") return Promise.resolve({ data: [], error: null });
       return rpcMock(fn, args);
     }
     from(table: string) {
@@ -33,6 +36,8 @@ vi.mock("@supabase/postgrest-js", () => ({
   },
 }));
 vi.mock("../../src/lib/mengantar/dispatcher", () => ({ sweep: (...args: unknown[]) => sweepMock(...args) }));
+// T-045: the status pull is its own module (tested in mengantar-status-pull.test.ts); here it is a step.
+vi.mock("../../src/lib/mengantar/status-pull", () => ({ pullStatuses: (...args: unknown[]) => pullMock(...args) }));
 vi.mock("@/lib/config", () => vi.importActual("../../src/lib/config"));
 vi.mock("@/lib/hosts", () => vi.importActual("../../src/lib/hosts"));
 vi.mock("@/lib/mengantar/scheduled", () => vi.importActual("../../src/lib/mengantar/scheduled"));
@@ -56,6 +61,7 @@ const EMPTY_SWEEP: SweepSummary = { checked: 0, results: [], stuck: { unknown: 0
 
 beforeEach(() => {
   sweepMock.mockReset();
+  pullMock.mockClear();
   rpcMock.mockReset();
   tenantPages.mockReset();
   tenantPages.mockResolvedValue({ data: [], error: null });
@@ -211,7 +217,7 @@ describe("auth purge and combined hourly cleanup (T-065 / T-066 / T-104)", () =>
     rpcMock.mockResolvedValueOnce({ data: { deleted_tenants: 0, deleted_users: 0, has_more: false }, error: null });
     rpcMock.mockResolvedValue({ data: { sessions: 1000, otp_codes: 0, remaining: true }, error: null });
     await expect(runCleanup(CLEANUP_ONLY)).resolves.toEqual({
-      result: "partial", steps: { demo_cleanup: "done", auth_purge: "partial", credential_rewrap: "disabled" } });
+      result: "partial", steps: { demo_cleanup: "done", auth_purge: "partial", credential_rewrap: "disabled", webhook_secret_rewrap: "disabled", status_pull: "disabled" } });
   });
 
   it("treats a null or malformed reply as failed, not as zero work", async () => {
@@ -247,7 +253,7 @@ describe("auth purge and combined hourly cleanup (T-065 / T-066 / T-104)", () =>
     for (const env of [{}, { POSTGREST_URL: CLEANUP_ONLY.POSTGREST_URL }, { AUTH_JWT_SECRET: CLEANUP_ONLY.AUTH_JWT_SECRET }]) {
       await expect(runAuthPurge(env)).resolves.toBe("disabled");
       await expect(runCleanup(env)).resolves.toEqual({
-        result: "disabled", steps: { demo_cleanup: "disabled", auth_purge: "disabled", credential_rewrap: "disabled" } });
+        result: "disabled", steps: { demo_cleanup: "disabled", auth_purge: "disabled", credential_rewrap: "disabled", webhook_secret_rewrap: "disabled", status_pull: "disabled" } });
     }
     expect(rpcMock).not.toHaveBeenCalled();
     for (const call of log.mock.calls) expect(JSON.parse(String(call[0]))).toMatchObject({ outcome: "disabled", disabled: true });
@@ -265,11 +271,13 @@ describe("auth purge and combined hourly cleanup (T-065 / T-066 / T-104)", () =>
       .mockResolvedValueOnce({ data: { deleted_tenants: 1, deleted_users: 1, has_more: false }, error: { message: "demo_err" } })
       .mockResolvedValueOnce({ data: { sessions: 3, otp_codes: 4, remaining: false }, error: null });
     await expect(runCleanup(CLEANUP_ONLY)).resolves.toEqual({
-      result: "failed", steps: { demo_cleanup: "failed", auth_purge: "done", credential_rewrap: "disabled" } });
+      result: "failed", steps: { demo_cleanup: "failed", auth_purge: "done", credential_rewrap: "disabled", webhook_secret_rewrap: "disabled", status_pull: "disabled" } });
     const events = log.mock.calls.map((c) => JSON.parse(String(c[0])));
     expect(events.filter((e) => e.event === "auth_purge").at(-1)).toEqual({ event: "auth_purge", outcome: "done", sessions: 3, otpCodes: 4, hasMore: false, failed: false });
     // A cleanup-only configuration has no key ring: the rewrap step is disabled, not failed.
-    expect(events.at(-1)).toEqual({ event: "credential_rewrap", outcome: "disabled", disabled: true });
+    expect(events.at(-3)).toEqual({ event: "credential_rewrap", outcome: "disabled", disabled: true });
+    expect(events.at(-2)).toEqual({ event: "webhook_secret_rewrap", outcome: "disabled", disabled: true });
+    expect(events.at(-1)).toEqual({ event: "status_pull", outcome: "disabled", disabled: true });
   });
 });
 
@@ -351,7 +359,7 @@ describe("hourly credential rewrap (T-057, SEC-7)", () => {
       .mockResolvedValueOnce({ data: { deleted_tenants: 0, deleted_users: 0, has_more: false }, error: null })
       .mockResolvedValueOnce({ data: { sessions: 0, otp_codes: 0, remaining: false }, error: null })
       .mockResolvedValueOnce({ data: null, error: { message: "boom" } });
-    await expect(runCleanup(RING)).resolves.toMatchObject({ result: "failed", steps: { credential_rewrap: "failed" } });
+    await expect(runCleanup(RING)).resolves.toMatchObject({ result: "failed", steps: { credential_rewrap: "failed", webhook_secret_rewrap: "done", status_pull: "done" } });
     expect(rpcMock).toHaveBeenLastCalledWith("machine_seller_key", { p_tenant: "00000000-0000-4000-a000-0000000000c1", p_env: "sandbox" });
   });
 });
@@ -432,7 +440,7 @@ describe("the internal cron route gates (T-062)", () => {
     const cleanup = await call("cleanup");
     expect(cleanup.status).toBe(200);
     expect(await cleanup.json()).toEqual({ task: "cleanup", result: "done", correlationId: expect.stringMatching(UUID),
-      steps: { demo_cleanup: "done", auth_purge: "done", credential_rewrap: "done" } });
+      steps: { demo_cleanup: "done", auth_purge: "done", credential_rewrap: "done", webhook_secret_rewrap: "done", status_pull: "done" } });
     expect(rpcMock).toHaveBeenNthCalledWith(1, "cleanup_expired_demos", { p_max_age_hours: 24 });
     expect(rpcMock).toHaveBeenNthCalledWith(2, "auth_purge_expired", { p_limit: AUTH_PURGE_BATCH });
     expect(sweepMock).toHaveBeenCalledTimes(1);
@@ -473,7 +481,7 @@ describe("the internal cron route gates (T-062)", () => {
     expect(first.correlationId).not.toBe(second.correlationId);
     const events = log.mock.calls.map((c) => JSON.parse(String(c[0])));
     const ofFirst = events.filter((e) => e.correlationId === first.correlationId).map((e) => e.event);
-    expect(ofFirst).toEqual(["demo_cleanup", "auth_purge", "credential_rewrap", "cron_run"]);
+    expect(ofFirst).toEqual(["demo_cleanup", "auth_purge", "credential_rewrap", "webhook_secret_rewrap", "status_pull", "cron_run"]);
     expect(events.every((e) => UUID.test(e.correlationId))).toBe(true);
     const text = log.mock.calls.join("\n");
     for (const secret of [SECRET, VALID_BINDINGS.AUTH_JWT_SECRET!, VALID_BINDINGS.CREDENTIAL_KEY!]) expect(text).not.toContain(secret);

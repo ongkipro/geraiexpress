@@ -616,6 +616,11 @@ export type ProviderOrder = {
   reference: string | null;
   trackingNumber: string | null;
   status: string;
+  // T-045: the normalized category (statusCategory), when the row carries one; branch on this, not `status`
+  // (the two differ per courier, operations note §5.1). null = not present / unreadable.
+  statusCategory: string | null;
+  // T-045: the provider's last status change, when readable (ISO); null otherwise.
+  lastStatusChange: string | null;
   paid: boolean;
   createdAt: string;
 };
@@ -700,7 +705,9 @@ function parseOrder(row: unknown): ProviderOrder {
   const batch = batchCode(row.batch);
   const batchId = batchObjectId(row.batch_id);
   const price = typeof row.estimatedPrice === "number" && Number.isSafeInteger(row.estimatedPrice) && row.estimatedPrice > 0 ? row.estimatedPrice : null;
-  return { orderId, ...(typeof row.cargo === "boolean" ? { cargo: row.cargo } : {}), batch, batchId, price, reference, trackingNumber, status: row.status.slice(0, 40), paid: row.isPaid === true, createdAt: row.createdAt };
+  const statusCategory = typeof row.statusCategory === "string" && row.statusCategory.trim() && row.statusCategory.length <= 60 ? row.statusCategory.trim().toUpperCase() : null;
+  const lastStatusChange = typeof row.lastStatusChange === "string" && !Number.isNaN(Date.parse(row.lastStatusChange)) ? row.lastStatusChange : null;
+  return { orderId, ...(typeof row.cargo === "boolean" ? { cargo: row.cargo } : {}), batch, batchId, price, reference, trackingNumber, status: row.status.slice(0, 40), statusCategory, lastStatusChange, paid: row.isPaid === true, createdAt: row.createdAt };
 }
 
 // A pickup time record (`POST /time` answer or a `GET /time` row). The id shape is unverified (the
