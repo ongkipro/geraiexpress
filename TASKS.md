@@ -922,6 +922,13 @@ updated in the same task. Every new tenant route is added to the host matrix in 
 - **Allowed Paths:** `src/app/**` (excluding the T-055/T-105 files above), `src/modules/**/*.tsx`, `src/components/**` (excluding `ui/**`), `tests/e2e/**`, `tests/unit/**`, `docs/spec/17-UX-FLOWS-SCREEN-CONTRACTS.md`, `TASKS.md`, `STATUS.md`
 - **Done when:** every Server Action submit uses `SubmitButton` (pending label, `aria-busy`, duplicate-click guard) except documented GET/filter exceptions, pinned by `tests/unit/submit-button-usage.test.ts`; destructive actions (archive address, revoke invitation, withdraw application, revoke tracking link) confirm in the shared dialog naming the object, with Escape returning focus to the trigger; disabled actions reference their reason via `aria-describedby`; role-change success is announced after its dialog closes; e2e for the changed flows (contacts, members, registration, tracking, sign-in pending) pass at 390 and 1280; typecheck and unit pass; screenshots of the changed pages at 390 and 1280 reviewed.
 
+### [ ] T-111 — Dependency bump after the release-age window (2026-11-05)
+- **Primary requirement:** NFR-1
+- **Constraints:** T-102 held `lucide-react` (1.67.0) and `@supabase/postgrest-js` (2.118.0) under the pnpm `minimumReleaseAge` 24 h policy. Bumped to the newest releases older than 24 h at 2026-11-05 13:34 UTC: `lucide-react` 1.68.0 (1.69.0 was 7 h old) and `@supabase/postgrest-js` 2.119.0. Exact pins; the lockfile passes the supply-chain policy.
+- **Risk Level:** R2
+- **Allowed Paths:** `package.json`, `pnpm-lock.yaml`, `src/**` (only if an upgrade requires it), `TASKS.md`, `ARCHITECTURE.md`
+- **Done when:** typecheck and unit pass on the image's installed dependencies, the image build (`next build`) passes and the full container e2e at 390/1280 passes.
+
 ### Deferred — Multi-cabang owner (Super Admin → owner → cabang admins), DEC-024 (3)
 Not scheduled. Today one gerai = one cabang with its own admin; another cabang registers separately.
 
