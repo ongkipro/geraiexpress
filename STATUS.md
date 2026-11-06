@@ -1,13 +1,14 @@
 # GeraiExpress — Status
 
-Updated: 2026-11-05
+Updated: 2026-11-06
 Status: Active
 State: INTEGRATING
-Review-Risk: R3
+Review-Risk: R4
 Primary-Worker: pi-parent-01a1a300
-Independent-Review: wave 3 source runs T-084, T-086, T-087 and T-102 closed PASS after independent GPT-6.1 Sol R3 digest approvals (T-084 9f57d07f, T-086 a997d52b, T-087 6866779d, T-102 3f723e5f). This does not close provider, legal or release gates.
-Independent-Reviewer: separate reviewer per run (T-084 9f57d07f, T-086 a997d52b, T-087 6866779d, T-102 3f723e5f)
-Independent-Review-Head: merges 3202184 (T-102), b16edc6 (T-084), 35f3f13 (T-087), 844f2ca (T-086) on feat/counter-ops-2026-11; this handoff is a separate docs-only run.
+Independent-Review: PASS
+Independent-Review-Detail: M4: T-045 R4 GPT-6.1 Sol 68b3b525 -> c14f0e6d -> 3844489b APPROVE; T-063 R3 1f30518c -> c1137370 APPROVE; T-059 R2 no code change; each also recorded as review-boundary in its ledger run
+Independent-Reviewer: reviewer (cx/gpt-6.1-sol, high), separate subagent per task; implementer pi-parent-01a1a300 (cc/claude-opus-5-5)
+Independent-Review-Head: c9c7164
 
 ## CHECKPOINT 2026-11-05 ~23:55 WIB (machine maintenance; session may be force-closed)
 
@@ -202,6 +203,14 @@ Merge log (2026-11-06, `feat/counter-ops-2026-11`; pushed through `8e3a643`):
 - T-058 + T-060 closed: code from 2026-10-28; their open e2e item proven by INT-M2 (390/1280) and
   `RUN-20261106T030530Z-41231083` tablet-768 (29 passed).
 - TASKS.md checkbox sync: T-055, T-058, T-060, T-104..T-111 marked [x] with their evidence line.
+- T-059: `f20e4f4` (M4). Run `RUN-20261106T044359Z-bfbcedad` PASS: full serialized DB suite x5 from a controlled
+  reset, 609/609 each, 0 account_busy (cause bounded to shared-DB + scheduler interference).
+- T-063: commit `1de32c6`, merge `ae1a8ad` (M4). Run `RUN-20261106T043102Z-1ee01768` PASS: provider-neutral SMTP
+  (TLS mandatory), sender no-reply@geraiexpress.com, DEC-027; reviews 1f30518c -> c1137370 APPROVE.
+- T-045 slice 1: commit `536ecba`, merge `c9c7164` (M4). Run `RUN-20261106T050507Z-e0943f7f` PASS: signed status
+  webhook + pull floor + public status (ADR-0003, DEC-028, migration 20261106100000); db/upgrade 622/622, related
+  e2e 86/0; R4 reviews 68b3b525 -> c14f0e6d -> 3844489b APPROVE. Cancel/refund/re-weigh and live capture remain.
+- Next: INT-M4 on the M4 head, single push on its PASS finish.
 - M3 PUSHED `4d86c48..ba5e1e4` after INT-M3 `RUN-20261106T031040Z-96b35408` PASS on ba5e1e4: typecheck, unit, db,
   upgrade, FULL e2e on three viewports 721 passed / 0 failed / 26 skipped (249 per viewport), diff-hygiene, boundary.
 - T-062 closed on that evidence (every other clause verified by read-only audit 683ee8c9).

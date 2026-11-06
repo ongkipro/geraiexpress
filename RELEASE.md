@@ -5,7 +5,7 @@ Base: f059a9a14d46813bf94ef3424073914fcc2d8b47
 Environment: production
 Declared-Risk: R4
 Rollback-Ref: f059a9a14d46813bf94ef3424073914fcc2d8b47
-Rollback-Command: GX_IMAGE=geraiexpress:<previous-tag> GX_ENV_FILE=<env-file> docker compose --env-file <env-file> --profile prod up -d
+Rollback-Command: docker compose --env-file <env-file> --profile prod up -d (with GX_IMAGE=geraiexpress:<previous-tag> set in that env file)
 Backup-Proof: snapshot://supabase-geraiexpress-preview/jezxplwwmjogrmlixdcw-2026-10-27 (HISTORICAL: the snapshot of the old Supabase preview project; it is not a backup of anything the current code deploys)
 Status: NOT_RELEASED (metadata above records prior Worker + Supabase preview; no Node container deployed. Local PostgreSQL backup/restore and TOTP rotation drills passed below; production backup storage and PITR remain owner-gated: T-067)
 
@@ -401,6 +401,20 @@ The preview runs T-001..T-030 and PERF-1 (2026-10-27). The local 2026-10-28 work
 E/F is not deployed there; migrations through `20261028260000_pickup_known_time_ids.sql`
 are not applied to that project. Live Mengantar stays off there (no machine identity/provider
 environment; preview crons are empty). Local completion is not release readiness.
+
+## Local release-gate state (2026-11-06)
+
+`production-gate` on `feat/counter-ops-2026-11` is expected to stay BLOCKED until a real release exists:
+- `release_manifest` INVALID (Status is NOT_RELEASED) and `rollback` BLOCKED (Backup-Proof is the historical Supabase
+  snapshot): both turn only with a deployed server, a real backup artifact and a rollback target that exists. They
+  are not edited to pass.
+- `security` FAIL is a known limitation of the shared `security-check` scanner, which has no per-repository allowlist:
+  its 42 hits were reviewed one by one on 2026-11-06 and are synthetic test fixtures (named test/fixture values, the
+  RFC 6238 Base32 test vector, the documented local fixture password `geraiexpress-local-dev`) or plain code that
+  compares or copies variables (`AUTH_JWT_SECRET === AUTH_SECRET`, `PGPASSWORD = decodeURIComponent(...)`). No real
+  credential. Separately, every revision of the repository (236 commits, all branches) was scanned for committed
+  sensitive files and high-signal secret patterns, with a planted-fake control (2/2 caught): nothing found.
+- `independent_review` reads the STATUS header (reviewer and reviewed head of the current milestone).
 
 ## Production gates for live Mengantar (integration audit, 2026-10-14)
 
