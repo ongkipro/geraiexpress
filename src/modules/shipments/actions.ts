@@ -300,6 +300,7 @@ export async function confirmShipmentAction(_: ConfirmState, form: FormData): Pr
   const { data: recipient } = await db.from("shipments")
     .select("recipient_name,recipient_address,recipient_phone,is_simulated,handover,pickup_date,pickup_slot_hour")
     .eq("id", id).eq("tenant_id", ws.tenant.id).maybeSingle();
+  if (!recipient) return { error: friendlyError({ message: "not_found" }) }; // not in the selected gerai: never reaches the RPC or the provider
   // T-043: a pickup slot that has passed (or is inside the 90-minute lead time) cannot be confirmed;
   // the database re-checks it under lock (pickup_time_invalid).
   if (recipient?.handover === "pickup") {

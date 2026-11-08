@@ -108,6 +108,13 @@ describe("shipment action redirects (T-105 F-1)", () => {
     expect(await redirectOf(actions.createDraftAction())).toBe(`/pengiriman/${SHIPMENT}`);
   });
 
+  it("confirmShipmentAction refuses a shipment outside the selected gerai before the RPC and the provider", async () => {
+    maybeSingle.mockResolvedValue({ data: null, error: null });
+    const result = await actions.confirmShipmentAction({}, form({ shipment_id: SHIPMENT, quote_id: OPERATION, revision: "1", idempotency_key: "k" }));
+    expect(result).toEqual({ error: expect.any(String) });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it("returns not_found from the form actions for a non-UUID id without a database call", async () => {
     expect(await actions.saveDraftAction({}, form({ shipment_id: "1 or 1=1" }))).toEqual({ error: expect.any(String) });
     expect(await actions.confirmShipmentAction({}, form({ shipment_id: "1 or 1=1" }))).toEqual({ error: expect.any(String) });
