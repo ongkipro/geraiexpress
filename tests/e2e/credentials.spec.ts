@@ -2,6 +2,17 @@
 // sealed server-side, never shown again, and readiness stays "not verified".
 import { expect, test } from "./fixtures";
 import { expectNoHorizontalOverflow, expectTouchTargets, localSql, signIn, signInAdmin } from "./helpers";
+import type { Page, Route } from "@playwright/test";
+
+// Server Action POSTs of the page, held (and counted) instead of sent; abort() releases them without a response.
+async function holdServerActions(page: Page) {
+  const held: Route[] = [];
+  await page.route(/\/pengaturan/, async (route) => {
+    if (route.request().method() === "POST" && route.request().headers()["next-action"]) held.push(route);
+    else await route.continue();
+  });
+  return { held, abort: async () => { for (const route of held) await route.abort(); } };
+}
 
 test("an admin stores a seller key that is never shown again and stays unverified", async ({ page }) => {
   const key = `mk_e2e_${Date.now()}SECRETVALUEWXYZ`;
@@ -36,8 +47,12 @@ test("an admin stores a seller key that is never shown again and stays unverifie
   await expect(dialog).toHaveCount(0);
   await expect(page.getByTestId("seller-key-status")).toContainText("…WXYZ");
   await page.getByRole("button", { name: "Hapus kunci" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Ya, hapus kunci" }).click();
+  // A double click on the confirmation removes the key with one request (SubmitButton lock).
+  let posts = 0;
+  page.on("request", (request) => { if (request.method() === "POST" && request.headers()["next-action"]) posts += 1; });
+  await page.getByTestId("remove-key-confirm").dblclick();
   await expect(page.getByTestId("seller-key-status")).toHaveCount(0);
+  expect(posts).toBe(1);
 });
 
 test("operators see the connection state but cannot change it", async ({ page }) => {
@@ -151,6 +166,24 @@ test("a Partner-managed admin must confirm before the key is regenerated, and ca
 
     expect(localSql(`select onboarding_state from private.tenant_mengantar_onboarding where tenant_id = '${TENANT_A}'`)).toBe("connected");
     expect(localSql(`select count(*) from private.seller_credentials where tenant_id = '${TENANT_A}' and superseded_at is null`)).toBe("1");
+  } finally {
+    clearPartner();
+  }
+});
+
+test("a double click on 'Ya, buat ulang kunci' sends one request", async ({ page }) => {
+  seedPartner("connected", { credential: true });
+  try {
+    await signIn(page, "owner-a@geraiexpress.test");
+    await page.goto("/pengaturan");
+    const requests = await holdServerActions(page);
+    await page.getByRole("region", { name: "Pendaftaran akun Mengantar baru (Partner)" }).getByRole("button", { name: "Buat ulang kunci API" }).click();
+    const dialog = page.getByRole("dialog", { name: "Buat ulang kunci API Mengantar?" });
+    await dialog.screenshot({ path: test.info().outputPath("regenerate-dialog.png") });
+    await page.getByTestId("partner-key-regenerate-confirm").dblclick();
+    await page.waitForTimeout(800);
+    expect(requests.held).toHaveLength(1);
+    await requests.abort();
   } finally {
     clearPartner();
   }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { AlertTriangle, CheckCircle2, CircleDashed, FileText, Printer } from "lucide-react";
 import { InvoiceSheet } from "@/components/invoice/invoice-sheet";
 import { LabelSheet } from "@/components/label/label-sheet";
@@ -52,6 +52,8 @@ export function InvoiceWorkbench({
   const [jobs, setJobs] = useState<Job[]>([]);
   const [issuing, startIssue] = useTransition();
   const [printing, startPrint] = useTransition();
+  // Synchronous guard: `pending` only changes on the next render, so a same-tick double click would repeat the command.
+  const busy = useRef(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [ackError, setAckError] = useState(false);
 
@@ -74,11 +76,17 @@ export function InvoiceWorkbench({
   }, [jobs]);
 
   const issue = () => {
+    if (busy.current) return;
     setFailure(null);
+    busy.current = true;
     startIssue(async () => {
-      const result = await issueInvoiceAction(shipmentId);
-      if (!result.ok) setFailure(result.error);
-      else router.refresh();
+      try {
+        const result = await issueInvoiceAction(shipmentId);
+        if (!result.ok) setFailure(result.error);
+        else router.refresh();
+      } finally {
+        busy.current = false;
+      }
     });
   };
 
@@ -91,18 +99,24 @@ export function InvoiceWorkbench({
       document.getElementById("invoice-masking-ack")?.focus();
       return;
     }
+    if (busy.current) return;
+    busy.current = true;
     startPrint(async () => {
-      if (showLabel && labelSnapshotId) {
-        const result = await recordLabelPrintAction(labelSnapshotId, labelAcceptance !== null && acknowledged);
-        if (!result.ok) {
-          setFailure(result.error);
-          return;
+      try {
+        if (showLabel && labelSnapshotId) {
+          const result = await recordLabelPrintAction(labelSnapshotId, labelAcceptance !== null && acknowledged);
+          if (!result.ok) {
+            setFailure(result.error);
+            return;
+          }
         }
+        setNotice(scope === "both"
+          ? "Dialog cetak resi lalu dialog cetak invoice dibuka. Ini belum membuktikan kertas tercetak."
+          : "Dialog cetak peramban dibuka. Ini belum membuktikan kertas tercetak.");
+        setJobs(scope === "both" ? ["label", "invoice"] : [scope]);
+      } finally {
+        busy.current = false;
       }
-      setNotice(scope === "both"
-        ? "Dialog cetak resi lalu dialog cetak invoice dibuka. Ini belum membuktikan kertas tercetak."
-        : "Dialog cetak peramban dibuka. Ini belum membuktikan kertas tercetak.");
-      setJobs(scope === "both" ? ["label", "invoice"] : [scope]);
     });
   };
 

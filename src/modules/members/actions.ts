@@ -25,10 +25,18 @@ export async function inviteAction(_: MemberState, form: FormData): Promise<Memb
 }
 
 export async function revokeInvitationAction(_: MemberState, form: FormData): Promise<MemberState> {
-  await requireWorkspace();
+  const ws = await requireWorkspace();
+  const invitationId = String(form.get("id"));
+  if (!UUID.test(invitationId)) return { error: friendlyError({ message: "not_found" }) };
   const db = await dbServer();
+  // Invitations have no direct table grant: the tenant-scoped list is the proof of ownership.
+  const listed = await db.rpc("tenant_invitations_list", { p_tenant: ws.tenant.id });
+  if (listed.error) return { error: friendlyError(listed.error) };
+  if (!Array.isArray(listed.data) || !listed.data.some((row: { id?: string }) => row.id === invitationId)) {
+    return { error: friendlyError({ message: "not_found" }) };
+  }
   const { error } = await db.rpc("revoke_invitation", {
-    p_id: String(form.get("id")), p_expected_revision: Number(form.get("revision")),
+    p_id: invitationId, p_expected_revision: Number(form.get("revision")),
   });
   if (error) return { error: friendlyError(error) };
   revalidatePath("/anggota");

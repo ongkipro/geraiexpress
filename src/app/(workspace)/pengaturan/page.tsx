@@ -156,7 +156,9 @@ export default async function SettingsPage() {
       detail: ws.isDemo ? "Tidak berlaku di demo."
         : maskingAllowed ? "Dipilih per label dan standarnya mati. Penerimaan kurir terhadap label bermasking belum terbukti."
         : "Dinonaktifkan oleh administrator platform. Label dicetak dengan identitas gerai." },
-    { name: "Pelacakan status kurir", state: "blocked", detail: "Belum diaktifkan pada versi ini." },
+    { name: "Pelacakan status kurir", state: ws.isDemo ? "simulated" : "unverified",
+      detail: ws.isDemo ? "Demo tidak menerima status dari kurir."
+        : "Status dari Mengantar diterima lewat webhook bertanda tangan dan diperbarui berkala. Penerimaan status langsung dari Mengantar belum terbukti." },
   ];
 
   const connectionMode = onboarding.connection_mode === "partner_managed" ? "Partner Mengantar"

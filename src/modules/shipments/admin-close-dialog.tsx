@@ -1,7 +1,7 @@
 "use client";
 
-// T-056 / UX-13: the tenant admin's two close commands on the shipment detail (an unresolved batch
-// payment attempt, an ambiguous pickup reservation). Both only record a decision in GeraiExpress and
+// T-056 / UX-13: the tenant admin's three close commands on the shipment detail (a failed attempt that
+// may still exist at Mengantar, an unresolved batch payment attempt, an ambiguous pickup reservation). Both only record a decision in GeraiExpress and
 // send nothing to Mengantar; each sits behind a danger-tier confirmation that says so, needs a reason
 // (5–500 characters, audited) and submits through a pending-safe SubmitButton. The Server Actions
 // redirect back with ?galat=<code> on refusal; the typed reason is kept in sessionStorage for this
@@ -16,13 +16,20 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { closeAmbiguousReservationAction, closeUnknownBatchPaymentAction } from "./actions";
+import { closeAmbiguousReservationAction, closeFailedAction, closeUnknownBatchPaymentAction } from "./actions";
 
 type Props =
+  | { kind: "failed"; shipmentId: string; reference: string }
   | { kind: "payment"; shipmentId: string; attemptId: string; batch: string }
   | { kind: "reservation"; shipmentId: string; reference: string };
 
 const COPY = {
+  failed: {
+    trigger: "Tutup percobaan",
+    title: "Tutup percobaan sebagai “tidak ada pesanan”?",
+    confirm: "Tutup percobaan",
+    example: "sudah dicek di aplikasi Mengantar, tidak ada pesanan dengan referensi ini.",
+  },
   payment: {
     trigger: "Tutup percobaan pembayaran",
     title: "Tutup percobaan pembayaran batch?",
@@ -35,6 +42,12 @@ const COPY = {
     confirm: "Tutup pemesanan slot",
     example: "sudah dicek di aplikasi Mengantar, tidak ada slot maupun pesanan.",
   },
+} as const;
+
+const ACTION = {
+  failed: closeFailedAction,
+  payment: closeUnknownBatchPaymentAction,
+  reservation: closeAmbiguousReservationAction,
 } as const;
 
 export function AdminCloseDialog(props: Props) {
@@ -60,7 +73,7 @@ export function AdminCloseDialog(props: Props) {
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg" data-testid={`close-${props.kind}-dialog`}>
-        <form action={props.kind === "payment" ? closeUnknownBatchPaymentAction : closeAmbiguousReservationAction} className="flex flex-col gap-5">
+        <form action={ACTION[props.kind]} className="flex flex-col gap-5">
           <input type="hidden" name="shipment_id" value={props.shipmentId} />
           {props.kind === "payment" ? <input type="hidden" name="attempt_id" value={props.attemptId} /> : null}
           <DialogHeader className="pr-12">
@@ -70,7 +83,12 @@ export function AdminCloseDialog(props: Props) {
             </DialogDescription>
           </DialogHeader>
           <ul className="flex flex-col gap-2 rounded-md bg-danger-soft p-4 text-sm">
-            {props.kind === "payment" ? (
+            {props.kind === "failed" ? (
+              <>
+                <li>Lakukan hanya setelah Anda memeriksa aplikasi Mengantar dan memastikan tidak ada pesanan dengan referensi <span className="tabular font-semibold">{props.reference}</span>.</li>
+                <li>Setelah ditutup, draf bisa dibuka lagi dan dikirim ulang ke Mengantar; bila pesanannya ternyata ada, pengiriman bisa terduplikasi.</li>
+              </>
+            ) : props.kind === "payment" ? (
               <>
                 <li>Lakukan hanya setelah Anda memeriksa aplikasi Mengantar dan memastikan batch <span className="tabular font-semibold">{props.batch}</span> belum dibayar.</li>
                 <li>Setelah ditutup, batch bisa diotorisasi dan dibayar lagi dari halaman ini bila pesanannya masih belum dibayar.</li>

@@ -1,10 +1,8 @@
 import { StatusBadge } from "@/components/status-badge";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { FAILURE_REASON as BASE_FAILURE_REASON, courierName, formatIdr, formatWib } from "@/lib/format";
-import { checkPaymentAction, closeFailedAction, reconcileAction, reopenAction } from "./actions";
+import { checkPaymentAction, reconcileAction, reopenAction } from "./actions";
 import { DispatchQueuedDialog } from "./dispatch-queued-dialog";
 import { AdminCloseDialog } from "./admin-close-dialog";
 import { BatchPayControl } from "./batch-actions";
@@ -212,15 +210,9 @@ export function NextStepCard({ s, op, hasLabel, isAdmin, batchReview }: {
         {isAdmin && rechecked ? (
           <>
             <div className="flex">{form(reconcileAction, "Periksa lagi di Mengantar", "Memeriksa…")}</div>
-            <form action={closeFailedAction} className="flex flex-col gap-2 border-t border-border pt-4">
-              <input type="hidden" name="shipment_id" value={s.id} />
-              <Label htmlFor="close-reason">Tutup sebagai “tidak ada pesanan”</Label>
-              <p id="close-reason-hint" className="text-sm text-muted-foreground">
-                Hanya setelah Anda memastikan di aplikasi Mengantar bahwa pesanan dengan referensi {s.reference} tidak ada. Alasan dicatat di audit; setelah ditutup, draf bisa dibuka lagi.
-              </p>
-              <Textarea id="close-reason" name="reason" rows={2} required minLength={5} maxLength={500} aria-describedby="close-reason-hint" />
-              <SubmitButton pendingLabel="Menutup…" variant="outline" className="w-full sm:w-auto sm:self-start">Tutup percobaan</SubmitButton>
-            </form>
+            <div className="flex border-t border-border pt-4" data-testid="close-failed">
+              <AdminCloseDialog kind="failed" shipmentId={s.id} reference={s.reference} />
+            </div>
           </>
         ) : !isAdmin ? <p className="font-semibold">Minta admin gerai memeriksanya.</p> : null}
       </>

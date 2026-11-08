@@ -84,6 +84,8 @@ export function LabelWorkbench({
   const [printed, setPrinted] = useState<LabelSnapshot | null>(null);
   const [printNonce, setPrintNonce] = useState(0);
   const [pending, startTransition] = useTransition();
+  // Synchronous guard: `pending` only changes on the next render, so a same-tick double click would print twice.
+  const printing = useRef(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [ackError, setAckError] = useState(false);
   const [preferenceRestored, setPreferenceRestored] = useState(false);
@@ -163,6 +165,8 @@ export function LabelWorkbench({
       document.getElementById("masking-ack")?.focus();
       return;
     }
+    if (printing.current) return;
+    printing.current = true;
     startTransition(async () => {
       try {
         const result = await printLabelAction({ shipmentId, mask: effectiveMask, size, sender, acknowledged: effectiveMask && acknowledged });
@@ -180,6 +184,8 @@ export function LabelWorkbench({
       } catch {
         setReconcile(true);
         setFailure(LABEL_UNKNOWN_RESULT);
+      } finally {
+        printing.current = false;
       }
     });
   };

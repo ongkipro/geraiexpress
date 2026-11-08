@@ -45,7 +45,7 @@ const redirectOf = async (run: Promise<unknown>) => {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  maybeSingle.mockResolvedValue({ data: null, error: null });
+  maybeSingle.mockResolvedValue({ data: { id: SHIPMENT }, error: null });
 });
 
 describe("shipment action redirects (T-105 F-1)", () => {
@@ -69,6 +69,18 @@ describe("shipment action redirects (T-105 F-1)", () => {
       rpc.mockResolvedValueOnce({ data: null, error: { message: "payment_recorded" } });
       expect(await redirectOf(action(form({ shipment_id: SHIPMENT, reason: "alasan cukup" })))).toBe(`/pengiriman/${SHIPMENT}?galat=payment_recorded`);
     });
+
+  // P2-1: a shipment of another gerai (the scoped lookup finds nothing) never reaches a command or the provider.
+  it.each([
+    actions.reconcileAction, actions.payUnpaidBatchAction, actions.reopenAction, actions.closeFailedAction,
+    actions.closeUnknownBatchPaymentAction, actions.closeAmbiguousReservationAction, actions.requestLabelAction,
+  ].map((action) => [action.name, action] as const))("%s refuses a shipment outside the selected gerai without a command", async (_, action) => {
+    maybeSingle.mockResolvedValue({ data: null, error: null });
+    const target = await redirectOf(action(form({ shipment_id: SHIPMENT, reason: "alasan cukup", attempt_id: OPERATION, batch_digest: "d" })));
+    expect(target).toBe("/pengiriman?galat=not_found");
+    expect(rpc).not.toHaveBeenCalled();
+    expect(reconcileOperation).not.toHaveBeenCalled();
+  });
 
   it("maps a raw reason of a dispatch summary to unknown in both the redirect and the log line", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});

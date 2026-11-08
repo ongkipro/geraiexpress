@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition, type ReactNode } from "react";
+import { useActionState, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Clock, Info, type LucideIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -86,12 +86,10 @@ function PanelTitle({ tone, children }: { tone: keyof typeof PANEL; children: Re
 // Partner-managed gerai only (the parent renders it for them); the action refuses everyone else.
 function RegenerateKeyControl({ action, pending }: { action: (data: FormData) => void; pending: boolean }) {
   const [open, setOpen] = useState(false);
-  const [, startTransition] = useTransition();
-  function confirm() {
+  // The confirm button submits a form through SubmitButton, which refuses a second click in the same tick.
+  function confirm(data: FormData) {
     setOpen(false);
-    const data = new FormData();
-    data.set("confirm_regenerate", "yes");
-    startTransition(() => action(data));
+    action(data);
   }
   return (
     <div className="flex flex-col gap-2" data-testid="partner-key-regenerate">
@@ -112,10 +110,13 @@ function RegenerateKeyControl({ action, pending }: { action: (data: FormData) =>
             Kunci baru disimpan terenkripsi dan tidak ditampilkan. Alamat pickup outlet tidak berubah. Pastikan tidak ada aplikasi lain
             yang masih memakai kunci lama.
           </p>
-          <DialogFooter className="gap-3">
-            <DialogClose asChild><Button type="button" variant="outline">Batal</Button></DialogClose>
-            <Button type="button" variant="destructive" onClick={confirm} data-testid="partner-key-regenerate-confirm">Ya, buat ulang kunci</Button>
-          </DialogFooter>
+          <form action={confirm}>
+            <input type="hidden" name="confirm_regenerate" value="yes" />
+            <DialogFooter className="gap-3">
+              <DialogClose asChild><Button type="button" variant="outline">Batal</Button></DialogClose>
+              <SubmitButton variant="destructive" pendingLabel="Membuat ulang…" data-testid="partner-key-regenerate-confirm">Ya, buat ulang kunci</SubmitButton>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
@@ -388,12 +389,9 @@ export function SellerKeyForm({ latestVersion, replacing }: { latestVersion: num
 export function RemoveSellerKeyForm({ version }: { version: number }) {
   const [state, action, pending] = useActionState<CredentialState, FormData>(removeSellerKeyAction, {});
   const [open, setOpen] = useState(false);
-  const [, startTransition] = useTransition();
-  function confirm() {
+  function confirm(data: FormData) {
     setOpen(false);
-    const data = new FormData();
-    data.set("version", String(version));
-    startTransition(() => action(data));
+    action(data);
   }
   return (
     <div className="flex flex-col gap-2">
@@ -412,10 +410,13 @@ export function RemoveSellerKeyForm({ version }: { version: number }) {
           <p className="text-sm text-muted-foreground">
             Pesanan yang sudah dibuat di Mengantar tidak berubah, tetapi pemeriksaannya tertunda sampai ada kunci baru.
           </p>
-          <DialogFooter className="gap-3">
-            <DialogClose asChild><Button type="button" variant="outline">Batal</Button></DialogClose>
-            <Button type="button" variant="destructive" onClick={confirm} data-testid="remove-key-confirm">Ya, hapus kunci</Button>
-          </DialogFooter>
+          <form action={confirm}>
+            <input type="hidden" name="version" value={version} />
+            <DialogFooter className="gap-3">
+              <DialogClose asChild><Button type="button" variant="outline">Batal</Button></DialogClose>
+              <SubmitButton variant="destructive" pendingLabel="Menghapus…" data-testid="remove-key-confirm">Ya, hapus kunci</SubmitButton>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

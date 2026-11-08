@@ -121,6 +121,28 @@ test("closing and reopening the revoke dialog while the request runs sends one r
   await expect(page.getByTestId("invitation").filter({ hasText: email })).toHaveCount(0);
 });
 
+test("an admin changes a member's role through the dialog and the change shows at once", async ({ page }) => {
+  const operator = "operator-a@geraiexpress.test";
+  try {
+    await signIn(page, "owner-a@geraiexpress.test");
+    await page.goto("/anggota");
+    const member = page.getByTestId("member").filter({ hasText: operator });
+    await member.getByRole("button", { name: `Ubah peran ${operator}` }).click();
+    const dialog = page.getByRole("dialog", { name: "Ubah peran" });
+    await expect(dialog.getByRole("radio", { name: /Operator/ })).toBeChecked();
+    await dialog.getByRole("radio", { name: /Admin gerai/ }).check();
+    await dialog.screenshot({ path: test.info().outputPath("member-role-dialog.png") });
+    await dialog.getByRole("button", { name: "Simpan peran" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Peran diperbarui." })).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    expect(localSql(`select m.role from public.memberships m join auth.users u on u.id = m.user_id
+      where m.tenant_id = '00000000-0000-4000-b000-00000000000a' and u.email = '${operator}'`)).toBe("tenant_admin");
+  } finally {
+    localSql(`update public.memberships m set role = 'operator' from auth.users u
+      where u.id = m.user_id and u.email = '${operator}' and m.tenant_id = '00000000-0000-4000-b000-00000000000a'`);
+  }
+});
+
 test("the only admin of a gerai cannot step down or remove themselves", async ({ page }) => {
   await signIn(page, "owner-b@geraiexpress.test");
   await page.goto("/anggota");

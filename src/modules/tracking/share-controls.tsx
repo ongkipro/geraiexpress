@@ -15,6 +15,8 @@ export function ShareControls({ shipmentId, hasPhone, linkId, isAdmin, shared, r
   const [manual, setManual] = useState("");
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const manualRef = useRef<HTMLTextAreaElement>(null);
+  // Synchronous guard: `pending` only changes on the next render, so a same-tick double click would repeat the command.
+  const busy = useRef(false);
   const id = useId();
 
   async function copy(value: string, label: string) {
@@ -29,14 +31,35 @@ export function ShareControls({ shipmentId, hasPhone, linkId, isAdmin, shared, r
   }
 
   function share(intent: "whatsapp" | "message" | "link") {
+    if (busy.current) return;
+    busy.current = true;
     startTransition(async () => {
-      setNotice("");
-      const result = await shareTrackingAction(shipmentId);
-      if ("error" in result) { setNotice(result.error); return; }
-      if (intent === "whatsapp" && result.whatsapp) {
-        // User-initiated navigation, not a popup after an async call and never automated sending.
-        window.location.assign(result.whatsapp);
-      } else await copy(intent === "link" ? result.link : result.message, intent === "link" ? "Tautan" : "Pesan");
+      try {
+        setNotice("");
+        const result = await shareTrackingAction(shipmentId);
+        if ("error" in result) { setNotice(result.error); return; }
+        if (intent === "whatsapp" && result.whatsapp) {
+          // User-initiated navigation, not a popup after an async call and never automated sending.
+          window.location.assign(result.whatsapp);
+        } else await copy(intent === "link" ? result.link : result.message, intent === "link" ? "Tautan" : "Pesan");
+      } finally {
+        busy.current = false;
+      }
+    });
+  }
+
+  function revoke(link: string) {
+    setConfirmRevoke(false);
+    if (busy.current) return;
+    busy.current = true;
+    startTransition(async () => {
+      try {
+        const result = await revokeTrackingAction(shipmentId, link);
+        setManual("");
+        setNotice(result.error ?? "Tautan dicabut.");
+      } finally {
+        busy.current = false;
+      }
     });
   }
 
@@ -58,14 +81,7 @@ export function ShareControls({ shipmentId, hasPhone, linkId, isAdmin, shared, r
               </DialogHeader>
               <DialogFooter className="gap-3">
                 <DialogClose asChild><Button type="button" variant="outline">Kembali</Button></DialogClose>
-                <Button type="button" variant="destructive" onClick={() => {
-                  setConfirmRevoke(false);
-                  startTransition(async () => {
-                    const result = await revokeTrackingAction(shipmentId, linkId);
-                    setManual("");
-                    setNotice(result.error ?? "Tautan dicabut.");
-                  });
-                }}>Ya, cabut tautan</Button>
+                <Button type="button" variant="destructive" disabled={pending} aria-busy={pending || undefined} onClick={() => revoke(linkId)}>Ya, cabut tautan</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

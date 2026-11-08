@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import { StatusAlert } from "@/components/auth/auth-shell";
 import { CodeInput, useResetKey } from "@/components/auth/code-input";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,19 @@ import { startTotpEnrollAction, verifyTotpAction, type EnrollState } from "@/lib
 export function TotpForm({ enrolled }: { enrolled: boolean }) {
   const [enrolment, setEnrolment] = useState<EnrollState>({});
   const [starting, startTransition] = useTransition();
+  // Synchronous guard: `starting` only changes on the next render, so a same-tick double click would enrol twice.
+  const startingRef = useRef(false);
+  const start = () => {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    startTransition(async () => {
+      try {
+        setEnrolment(await startTotpEnrollAction());
+      } finally {
+        startingRef.current = false;
+      }
+    });
+  };
   const [state, verify] = useActionState<EnrollState, FormData>(
     (prev, form) => verifyTotpAction({ ...enrolment, ...prev, factorId: enrolment.factorId }, form),
     {},
@@ -22,7 +35,7 @@ export function TotpForm({ enrolled }: { enrolled: boolean }) {
       <div className="flex flex-col gap-4">
         {error ? <StatusAlert variant="destructive">{error}</StatusAlert> : null}
         <Button type="button" className="w-full" disabled={starting} aria-busy={starting || undefined}
-          onClick={() => startTransition(async () => setEnrolment(await startTotpEnrollAction()))}>
+          onClick={start}>
           {/* Both labels share one grid cell so the width stays put while the QR code is prepared. */}
           <span className="inline-grid">
             <span className={starting ? "invisible col-start-1 row-start-1" : "col-start-1 row-start-1"}>Mulai pasang autentikator</span>

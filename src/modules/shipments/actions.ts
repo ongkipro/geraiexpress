@@ -33,6 +33,14 @@ function shipmentIdOf(form: FormData): string {
   return id;
 }
 
+// P2-1: the shipment must belong to the selected gerai before any command runs, so a user with
+// memberships in two gerai cannot act on the other one through the workspace they are looking at.
+async function inWorkspace(id: string, tenantId: string): Promise<boolean> {
+  const { data } = await (await dbServer()).from("shipments").select("id").eq("tenant_id", tenantId).eq("id", id).maybeSingle();
+  return Boolean(data);
+}
+const NOT_FOUND_PATH = "/pengiriman?galat=not_found";
+
 export type DraftState = {
   ok?: string;
   warning?: string;
@@ -338,6 +346,7 @@ export async function dispatchQueuedAction(form: FormData) {
 export async function reconcileAction(form: FormData) {
   const ws = await requireWorkspace();
   const id = shipmentIdOf(form);
+  if (!(await inWorkspace(id, ws.tenant.id))) redirect(NOT_FOUND_PATH);
   const op = await shipmentOperation(id, ws.tenant.id);
   if (op && !op.is_simulated) {
     if (ws.role !== "tenant_admin") redirect(`/pengiriman/${id}?galat=admin_required`);
@@ -375,6 +384,7 @@ export async function payUnpaidBatchAction(form: FormData) {
   const id = shipmentIdOf(form);
   const batchDigest = String(form.get("batch_digest") ?? "").trim();
   if (ws.role !== "tenant_admin") redirect(`/pengiriman/${id}?galat=admin_required`);
+  if (!(await inWorkspace(id, ws.tenant.id))) redirect(NOT_FOUND_PATH);
   const db = await dbServer();
   const { error: authorizeError } = await db.rpc("authorize_batch_payment", { p_shipment: id, p_batch_digest: batchDigest });
   if (authorizeError) redirect(`/pengiriman/${id}?${galat(authorizeError)}`);
@@ -392,8 +402,9 @@ export async function payUnpaidBatchAction(form: FormData) {
 
 // After a definite refusal (nothing created at Mengantar) the counter fixes the draft and retries.
 export async function reopenAction(form: FormData) {
-  await requireWorkspace();
+  const ws = await requireWorkspace();
   const id = shipmentIdOf(form);
+  if (!(await inWorkspace(id, ws.tenant.id))) redirect(NOT_FOUND_PATH);
   const { error } = await (await dbServer()).rpc("reopen_shipment", { p_shipment: id });
   redirect(`/pengiriman/${id}${error ? `?${galat(error)}` : ""}`);
 }
@@ -401,8 +412,9 @@ export async function reopenAction(form: FormData) {
 // A tenant admin closes an unresolved failure after checking the Mengantar app (audited; the
 // database re-checks the role, age and that a re-check ran). The shipment can then be reopened.
 export async function closeFailedAction(form: FormData) {
-  await requireWorkspace();
+  const ws = await requireWorkspace();
   const id = shipmentIdOf(form);
+  if (!(await inWorkspace(id, ws.tenant.id))) redirect(NOT_FOUND_PATH);
   const { error } = await (await dbServer()).rpc("close_failed_operation", {
     p_shipment: id, p_reason: String(form.get("reason") ?? ""),
   });
@@ -413,8 +425,9 @@ export async function closeFailedAction(form: FormData) {
 // app. No provider request; the database re-checks the role and state under the batch locks, records
 // the reason and the per-order reads, and frees the batch for a new authorization. A replay is a no-op.
 export async function closeUnknownBatchPaymentAction(form: FormData) {
-  await requireWorkspace();
+  const ws = await requireWorkspace();
   const id = shipmentIdOf(form);
+  if (!(await inWorkspace(id, ws.tenant.id))) redirect(NOT_FOUND_PATH);
   // The attempt the admin reviewed (review_unpaid_batch.payment_attempt_id); a newer one is refused.
   const attempt = String(form.get("attempt_id") ?? "");
   const { error } = UUID.test(attempt)
@@ -429,8 +442,9 @@ export async function closeUnknownBatchPaymentAction(form: FormData) {
 // T-056: a tenant admin closes a pickup reservation whose answer was lost and could not be tied to
 // one record, after checking the Mengantar app. Nothing is resent; the shipment can then be reopened.
 export async function closeAmbiguousReservationAction(form: FormData) {
-  await requireWorkspace();
+  const ws = await requireWorkspace();
   const id = shipmentIdOf(form);
+  if (!(await inWorkspace(id, ws.tenant.id))) redirect(NOT_FOUND_PATH);
   const { error } = await (await dbServer()).rpc("close_ambiguous_pickup_reservation", {
     p_shipment: id, p_reason: String(form.get("reason") ?? ""),
   });
@@ -440,8 +454,9 @@ export async function closeAmbiguousReservationAction(form: FormData) {
 }
 
 export async function requestLabelAction(form: FormData) {
-  await requireWorkspace();
+  const ws = await requireWorkspace();
   const id = shipmentIdOf(form);
+  if (!(await inWorkspace(id, ws.tenant.id))) redirect(NOT_FOUND_PATH);
   const db = await dbServer();
   const { error } = await db.rpc("request_label", { p_shipment: id });
   if (error) redirect(`/pengiriman/${id}?${galat(error)}`);

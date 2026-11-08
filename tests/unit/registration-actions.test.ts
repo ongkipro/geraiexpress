@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { changeEmailAction, requestCodeAction, reviewApplicationAction, setRegistrationAction, setPasswordAction, verifyCodeAction } from "../../src/lib/registration-actions";
+import { changeEmailAction, requestCodeAction, reviewApplicationAction, setRegistrationAction, setPasswordAction, verifyCodeAction, withdrawApplicationAction } from "../../src/lib/registration-actions";
 import { AuthUnavailableError } from "../../src/lib/auth/store";
 
 // The code flow on the auth service (PR-29 / DEC-007): generic replies that never reveal whether an
@@ -137,6 +137,20 @@ describe("requestCodeAction", () => {
     expect(cookieSet).toHaveBeenCalledTimes(2);
     expect(auth.requestEmailCode).not.toHaveBeenCalled();
     expect(deliver).not.toHaveBeenCalled();
+  });
+});
+
+describe("withdrawApplicationAction", () => {
+  const application = "33333333-3333-4333-8333-333333333333";
+  const form = () => { const data = new FormData(); data.set("id", application); data.set("revision", "3"); return data; };
+  it("forwards the application and the revision the applicant saw, then confirms", async () => {
+    rpc.mockResolvedValueOnce({ error: null });
+    expect(await withdrawApplicationAction({}, form())).toEqual({ ok: "Pengajuan dibatalkan." });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("withdraw_application", { p_id: application, p_expected_revision: 3 });
+  });
+  it("returns the mapped refusal instead of a success", async () => {
+    rpc.mockResolvedValueOnce({ error: { message: "stale_revision" } });
+    expect(await withdrawApplicationAction({}, form())).toEqual({ error: expect.any(String) });
   });
 });
 

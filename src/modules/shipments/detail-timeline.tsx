@@ -23,6 +23,11 @@ const EVENT_LABEL: Record<string, string> = {
   payment_count_mismatch: "Jumlah pembayaran berbeda",
   payment_closed: "Pembayaran ditutup admin",
   // T-086: case lifecycle on the shipment history (details live on the case).
+  provider_status: "Status kurir diperbarui",
+  cancelled: "Dibatalkan di kurir",
+  counter_payment: "Pembayaran kasir dicatat",
+  counter_payment_voided: "Pembayaran kasir dibatalkan",
+  quote_weight_excluded: "Berat dikecualikan dari ongkir",
   case_opened: "Kasus dibuka",
   case_closed: "Kasus ditutup",
 };
