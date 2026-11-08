@@ -74,6 +74,22 @@ test("people without a platform grant get a plain not-found on the discount scre
   }
 });
 
+test("a Super Admin saves a default template version from the overview; it is only a suggestion (T-041)", async ({ page }) => {
+  await signInAdmin(page);
+  await page.goto("/admin/diskon");
+  const section = page.getByTestId("discount-template");
+  await section.getByText("Ubah templat…").click();
+  await fillForm(page, { percent: "12,5", source: "Kebijakan internal e2e", reason: "Uji e2e templat default" });
+  await expectNoHorizontalOverflow(page);
+  await page.getByRole("button", { name: "Tinjau & simpan" }).click();
+  const confirm = page.getByRole("dialog");
+  await expect(confirm).toContainText("Templat default");
+  await confirm.screenshot({ path: test.info().outputPath("template-dialog.png") });
+  await confirm.getByRole("button", { name: "Simpan versi" }).click();
+  await expect(page.getByTestId("discount-saved")).toContainText("Versi 1 disimpan");
+  await expect(section).toContainText("Saat ini 12,50% (versi 1)");
+});
+
 test("a Super Admin assigns versioned terms; above-observed values are blocked; variance and history show", async ({ page }) => {
   test.setTimeout(90_000); // one long flow: sign-in with TOTP, four saves, two refusals, audit
   const name = `Gerai Diskon ${randomUUID().slice(0, 6)}`;

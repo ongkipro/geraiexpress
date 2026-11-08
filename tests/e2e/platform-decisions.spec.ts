@@ -15,6 +15,7 @@ const tag = randomUUID().slice(0, 6);
 const SUSPENDED = { id: randomUUID(), name: `Gerai Beku ${tag}` };
 const PROVISIONING = { id: randomUUID(), name: `Gerai Disiapkan ${tag}` };
 const APPROVE = { user: randomUUID(), app: randomUUID(), name: `Toko Setuju ${tag}` };
+const CHANGES = { user: randomUUID(), app: randomUUID(), name: `Toko Perbaiki ${tag}` };
 const REJECT = { user: randomUUID(), app: randomUUID(), name: `Toko Tolak ${tag}` };
 
 function addApplication(a: { user: string; app: string; name: string }) {
@@ -32,6 +33,7 @@ test.beforeAll(async ({ browser }) => {
     ('${PROVISIONING.id}', '${PROVISIONING.name}', 'provisioning', false)`);
   addApplication(APPROVE);
   addApplication(REJECT);
+  addApplication(CHANGES);
   const use = test.info().project.use;
   const context = await browser.newContext({ baseURL: use.baseURL, viewport: use.viewport, hasTouch: use.hasTouch });
   await actAsVisitor(context, use.baseURL!, randomVisitorIp());
@@ -43,7 +45,7 @@ test.afterAll(async () => {
   await page?.context().close();
   // An approval created a tenant for its applicant: remove it with the fixtures, then the applicants
   // (their applications and memberships cascade). Audit events stay; they are append-only by design.
-  const users = `'${APPROVE.user}', '${REJECT.user}'`;
+  const users = `'${APPROVE.user}', '${REJECT.user}', '${CHANGES.user}'`;
   localSql(`delete from public.tenants where id in ('${SUSPENDED.id}', '${PROVISIONING.id}')
       or id in (select tenant_id from public.tenant_applications where applicant in (${users}) and tenant_id is not null);
     delete from auth.users where id in (${users});
@@ -187,6 +189,26 @@ test("an application is rejected through the dialog with a required reason", asy
   await expect(page.getByTestId("application-detail").getByText("Ditolak", { exact: true })).toBeVisible();
   await expect(page.getByTestId("application-detail").getByRole("button", { name: /Setujui|Tolak/ })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
+});
+
+test("an application is sent back for changes through the dialog with a required reason", async () => {
+  await page.goto(`/admin/pengajuan?status=submitted&id=${CHANGES.app}`);
+  const detail = page.getByTestId("application-detail");
+  await detail.getByRole("button", { name: `Minta perbaikan ${CHANGES.name}` }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("heading", { name: `Minta perbaikan: ${CHANGES.name}?` })).toBeVisible();
+  await expect(dialog).toContainText("Pemohon diminta memperbaiki data.");
+  await expectNoHorizontalOverflow(page);
+  await dialog.screenshot({ path: test.info().outputPath("request-changes-dialog.png") });
+  await dialog.getByRole("button", { name: "Minta perbaikan", exact: true }).click();
+  expect(await dialog.getByLabel("Alasan (dicatat di audit)").evaluate((el: HTMLTextAreaElement) => el.validity.valueMissing)).toBe(true);
+  expect(localSql(`select status from public.tenant_applications where id = '${CHANGES.app}'`)).toBe("submitted");
+  await dialog.getByLabel("Alasan (dicatat di audit)").fill("Uji e2e alamat pickup kurang jelas");
+  await dialog.getByRole("button", { name: "Minta perbaikan", exact: true }).click();
+
+  await expect(page).toHaveURL(/keputusan=request_changes/);
+  await expect(page.getByRole("status").filter({ hasText: "Pemohon diminta memperbaiki data." })).toBeVisible();
+  expect(localSql(`select status from public.tenant_applications where id = '${CHANGES.app}'`)).toBe("changes_requested");
 });
 
 test("the registration switch asks for confirmation, states the effect and needs a reason", async () => {
