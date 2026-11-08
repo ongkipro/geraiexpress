@@ -61,6 +61,19 @@ describe("cancel decision (T-045 slice 2)", () => {
     expect(cancelState(f.shipment).state).toBe("requested");
   });
 
+  it("rejects a NULL outcome and keeps the no-replay fence: requested/unknown stay and the next begin only reads back", async () => {
+    const f = await issued();
+    await begin(f);
+    const nullRecord = () => machine().rpc("cancel_record", { p_tenant: f.tenant, p_env: "sandbox", p_shipment: f.shipment, p_outcome: null });
+    expect((await nullRecord()).error?.message).toBe("invalid_input");
+    expect(cancelState(f.shipment).state).toBe("requested");
+    expect((await begin(f)).data[0].action).toBe("readback");
+    await record(f, "unknown");
+    expect((await nullRecord()).error?.message).toBe("invalid_input");
+    expect(cancelState(f.shipment).state).toBe("unknown");
+    expect((await begin(f)).data[0].action).toBe("readback");
+  });
+
   it("a cancellation read back after the parcel was delivered is a conflict and never rewrites the delivery", async () => {
     const f = await issued();
     await begin(f);

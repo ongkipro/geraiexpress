@@ -4,7 +4,10 @@
 // DELETE was already sent. The outcome is then taken from a read-back of the order (GET /order, same seller key):
 //   deleted or a cancelled category        -> cancelled
 //   readable, still active, DELETE reported not-deleted or rejected -> refused (stays NOT cancelled)
+//   delivered or returned on the read-back -> conflict (never cancelled; the state stays unresolved for a person)
 //   anything else (unreadable read-back, DELETE answer unknown, contradiction) -> unknown (nothing concluded)
+// The key is the ORIGINAL create_order operation's credential (the version cancel_begin returns), resolved
+// in SQL; a replaced BYOK key is never used, so no provider request is made with it.
 // The refund of DELETE /order is unknown and is not read, stored or shown. Keys and URLs are never logged.
 import { credentialAad, openCredential } from "../credential-crypto";
 import { createMengantarPublicClient, MengantarError, type ProviderOrder } from "./public-api";
@@ -16,10 +19,13 @@ type SealedKey = { ciphertext: string; iv: string; key_version: string; version:
 type Reported = "deleted" | "not_deleted" | "rejected" | "unknown" | null;
 
 const CANCELLED_CATEGORIES = new Set(["CANCELED", "CANCELLED"]);
+const ENDED_CATEGORIES = new Set(["DELIVERED", "RTS", "RETURNED"]);
 
 // The read-back verdict. `reported` is what the DELETE answered (null = no DELETE was sent in this decision).
-export function judgeReadback(order: ProviderOrder | null, reported: Reported): "cancelled" | "refused" | "unknown" {
+export function judgeReadback(order: ProviderOrder | null, reported: Reported): "cancelled" | "refused" | "unknown" | "conflict" {
   if (!order) return "unknown";
+  // Delivery learned from the read-back wins over every cancellation flag, even deleted: true.
+  if (order.statusCategory !== null && ENDED_CATEGORIES.has(order.statusCategory.trim().toUpperCase())) return "conflict";
   if (order.deleted === true || (order.statusCategory !== null && CANCELLED_CATEGORIES.has(order.statusCategory))) return "cancelled";
   if (order.deleted === false && (reported === "not_deleted" || reported === "rejected")) return "refused";
   return "unknown";
@@ -41,7 +47,8 @@ export async function cancelShipment(
     return written.data === "conflict" ? "conflict" : outcome;
   };
 
-  const read = await deps.rpc("machine_seller_key", { p_tenant: tenant, p_env: deps.environment });
+  const read = row.credential_version === null ? { data: null, error: null }
+    : await deps.rpc("machine_operation_key", { p_tenant: tenant, p_env: deps.environment, p_version: row.credential_version });
   const keyRow = (Array.isArray(read.data) ? read.data[0] : read.data) as SealedKey | null;
   let key: string | null = null;
   if (!read.error && keyRow) {
@@ -67,5 +74,8 @@ export async function cancelShipment(
   }
   let order: ProviderOrder | null = null;
   try { order = await find(key, row.order_id, row.courier); } catch { order = null; }
-  return record(judgeReadback(order, reported));
+  const verdict = judgeReadback(order, reported);
+  // A delivered/returned read-back keeps the decision unresolved ('unknown', read-back-only next time).
+  if (verdict === "conflict") return (await record("unknown")) === "unavailable" ? "unavailable" : "conflict";
+  return record(verdict);
 }

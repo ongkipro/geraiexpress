@@ -193,8 +193,11 @@ this section is an implementation record, not a release-readiness claim.
   (`GET /order`) and `cancel_record` stores `cancelled` (read-back shows `isDeleted` or a cancelled category; also sets the
   `cancelled` kind and one event), `refused` (still active after a DELETE that reported not-deleted or was rejected: the
   shipment stays NOT cancelled and may be decided again) or `unknown` (unreadable answer or read-back, no key, or a
-  contradiction). A cancellation read back after delivery/return is a `conflict` and never rewrites the delivery. The
-  refund of `DELETE /order` has no column anywhere: it is unknown.
+  contradiction). A cancellation read back after delivery/return is a `conflict` and never rewrites the delivery, including
+  delivery learned only from the read-back (`judgeReadback` checks it before any cancellation flag; the state stays
+  `unknown`). The key is the original `create_order` operation's credential through machine-only
+  `machine_operation_key` (`private.operation_credential`: a replaced BYOK key is never used, a Partner regeneration
+  is); `cancel_record` rejects a NULL outcome. The refund of `DELETE /order` has no column anywhere: it is unknown.
 - **Batch delete (slice 2, parser and private record):** `deleteBatch` / `parseBatchDelete` read `deletedCount`,
   `unDeletedCount`, `totalCount`, `isBatchDraft` for every courier and `ordersCount`, `totalBalanceRefund`,
   `errorMessages` only for lion, anteraja, pos and spx; the refund is a non-negative integer or null (never 0 for

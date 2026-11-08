@@ -219,6 +219,45 @@ describe("what never crosses versions (M2)", () => {
   });
 });
 
+describe("machine_operation_key serves the cancellation the ORIGINAL operation's credential (T-045)", () => {
+  const key = (t: Tenant, version: number | null, env: Env = "sandbox") =>
+    machine().rpc("machine_operation_key", { p_tenant: t.tenant, p_env: env, p_version: version });
+
+  it("returns the original version while it is active, and nothing for a replaced BYOK key", async () => {
+    const t = await tenantWith("byok");
+    try {
+      await opens({ credential: (await key(t, 1)).data, provider_env: "sandbox" }, t.tenant, 1);
+      supersede(t.tenant, "sandbox");
+      await insertCredential(t.tenant, 2, "byok", "sandbox");
+      const replaced = await key(t, 1);
+      expect(replaced.error).toBeNull();
+      expect(replaced.data).toBeNull();
+      expect((await key(t, null)).data).toBeNull();
+      expect((await key(t, 1, "production")).data).toBeNull();
+    } finally {
+      cleanup(t);
+    }
+  });
+
+  it("keeps the Partner-only regeneration exception: the regenerated key opens the original operation", async () => {
+    const t = await tenantWith("partner");
+    try {
+      await (await regenerate(t, 1))();
+      const regenerated = (await key(t, 1)).data as Payload["credential"];
+      expect(regenerated?.version).toBe(2);
+      expect(await openCredential(regenerated!, credentialAad(t.tenant, 2), SEAL)).toBe(PLAIN);
+    } finally {
+      cleanup(t);
+    }
+  });
+
+  it("is machine-only", async () => {
+    for (const role of ["anon", "authenticated", "service_role"]) {
+      expect(sql(`select has_function_privilege('${role}', 'public.machine_operation_key(uuid, text, integer)', 'execute')`)).toBe(role === "service_role" ? "t" : "f");
+    }
+  });
+});
+
 describe("no onboarding while a regeneration is in flight (L1)", () => {
   it("begin and complete refuse in rotation_unknown and work again once the key is stored", async () => {
     const t = await tenantWith("partner");

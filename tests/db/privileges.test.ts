@@ -199,6 +199,8 @@ const MACHINE_ONLY = [
   "public.fence_partner_key_rotation(uuid,uuid,text,integer,text)",
   "public.ingest_provider_status(uuid,text,text,timestamp with time zone,text,text,text,boolean,integer,text)",
   // T-109: tenant ids whose active credential of an environment is below the current key version.
+  // T-045 slice 2: the sealed credential of the original operation, for a cancellation.
+  "public.machine_operation_key(uuid,text,integer)",
   "public.machine_rewrap_candidates(text,text,uuid,integer)",
   "public.machine_seller_key(uuid,text)",
   "public.machine_status_pull_candidates(text,interval,integer)",

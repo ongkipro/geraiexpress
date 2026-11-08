@@ -125,6 +125,14 @@ describe("cancel read-back verdict (T-045)", () => {
     expect(judgeReadback(order({ deleted: true }), "unknown")).toBe("cancelled");
     expect(judgeReadback(order({ statusCategory: "CANCELED", deleted: false }), "unknown")).toBe("cancelled");
   });
+  it("a delivered or returned read-back is a conflict, checked before any cancellation flag", () => {
+    for (const statusCategory of ["DELIVERED", "RTS", "delivered"]) {
+      for (const reported of ["deleted", "not_deleted", "rejected", "unknown", null] as const) {
+        expect(judgeReadback(order({ statusCategory, deleted: false }), reported)).toBe("conflict");
+        expect(judgeReadback(order({ statusCategory, deleted: true }), reported)).toBe("conflict");
+      }
+    }
+  });
 });
 
 async function setup(action: "send" | "readback" | "done", opts: { key?: boolean } = {}) {
@@ -133,7 +141,7 @@ async function setup(action: "send" | "readback" | "done", opts: { key?: boolean
   const rpc = async (fn: string, args: Record<string, unknown>) => {
     calls.push({ fn, args });
     if (fn === "cancel_begin") return { data: [{ action, order_id: "ORD12345", courier: "JT", credential_version: 1 }], error: null };
-    if (fn === "machine_seller_key") return { data: opts.key === false ? [] : [{ ciphertext: sealed.ciphertext, iv: sealed.iv, key_version: sealed.keyVersion, version: 1 }], error: null };
+    if (fn === "machine_operation_key") return { data: opts.key === false ? [] : [{ ciphertext: sealed.ciphertext, iv: sealed.iv, key_version: sealed.keyVersion, version: 1 }], error: null };
     return { data: args.p_outcome ?? null, error: null };
   };
   return { deps: { rpc, environment: "sandbox" as const, credentialKey: KEY }, calls };
@@ -200,6 +208,38 @@ describe("cancelShipment (T-045, failure injection)", () => {
     const del = vi.fn();
     expect(await cancelShipment(deps, TENANT, SHIPMENT, { deleteOrder: del })).toBe("no_key");
     expect(del).not.toHaveBeenCalled();
+    expect(recorded(calls)).toEqual(["unknown"]);
+  });
+
+  it("delivery learned only from the read-back is a conflict: never cancelled, never refused, left unresolved", async () => {
+    // No ingestion happened: the local state has no delivery, only the GET shows it.
+    const refused = await setup("send");
+    expect(await cancelShipment(refused.deps, TENANT, SHIPMENT, { deleteOrder: async () => ({ reported: "not_deleted" }), findOrder: async () => order({ statusCategory: "DELIVERED", deleted: false }) })).toBe("conflict");
+    expect(recorded(refused.calls)).toEqual(["unknown"]);
+    const flagged = await setup("send");
+    expect(await cancelShipment(flagged.deps, TENANT, SHIPMENT, { deleteOrder: async () => ({ reported: "deleted" }), findOrder: async () => order({ statusCategory: "DELIVERED", deleted: true }) })).toBe("conflict");
+    expect(recorded(flagged.calls)).toEqual(["unknown"]);
+    const again = await setup("readback");
+    expect(await cancelShipment(again.deps, TENANT, SHIPMENT, { findOrder: async () => order({ statusCategory: "RTS", deleted: true }) })).toBe("conflict");
+    expect(recorded(again.calls)).toEqual(["unknown"]);
+  });
+
+  it("uses the ORIGINAL operation's credential version; a replaced BYOK key makes no provider request", async () => {
+    const { deps, calls } = await setup("send");
+    const rpc = async (fn: string, args: Record<string, unknown>) => {
+      // The sealed key of the original version is not available (BYOK replaced it): SQL answers null.
+      if (fn === "machine_operation_key") { calls.push({ fn, args }); return { data: null, error: null }; }
+      return deps.rpc(fn, args);
+    };
+    const fetchImpl = vi.fn(async () => new Response("{}"));
+    const del = vi.fn();
+    const find = vi.fn();
+    expect(await cancelShipment({ ...deps, rpc, fetchImpl: fetchImpl as unknown as typeof fetch }, TENANT, SHIPMENT, { deleteOrder: del, findOrder: find })).toBe("no_key");
+    expect(calls.find((c) => c.fn === "machine_operation_key")?.args).toEqual({ p_tenant: TENANT, p_env: "sandbox", p_version: 1 });
+    expect(calls.some((c) => c.fn === "machine_seller_key")).toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(del).not.toHaveBeenCalled();
+    expect(find).not.toHaveBeenCalled();
     expect(recorded(calls)).toEqual(["unknown"]);
   });
 

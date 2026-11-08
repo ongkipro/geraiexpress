@@ -193,7 +193,8 @@ declare
   s public.shipments;
 begin
   perform private.require_provider_env(p_env);
-  if p_outcome not in ('cancelled', 'refused', 'unknown') then raise exception 'invalid_input' using errcode = '22023'; end if;
+  -- A NULL outcome must not pass (NULL NOT IN (...) is unknown, not true): it would clear the no-replay fence.
+  if p_outcome is null or p_outcome not in ('cancelled', 'refused', 'unknown') then raise exception 'invalid_input' using errcode = '22023'; end if;
   select sh.* into s from public.shipments sh where sh.tenant_id = p_tenant and sh.id = p_shipment for update;
   if not found then raise exception 'not_found' using errcode = '22023'; end if;
   if s.cancel_state is null or s.cancel_state not in ('requested', 'unknown') then
@@ -213,6 +214,25 @@ begin
   end if;
   return p_outcome;
 end $$;
+
+-- ============================================================ cancel: the original operation's sealed credential
+
+-- The sealed key the cancellation must use: the credential of the ORIGINAL create_order operation (the
+-- version cancel_begin returned), resolved by private.operation_credential, never the tenant's current key.
+-- A BYOK replacement may identify another seller account, so it never crosses versions; a verified Partner
+-- regeneration (same write-once seller binding, same environment) does. null when no such credential exists.
+create function public.machine_operation_key(p_tenant uuid, p_env text, p_version integer)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare c private.seller_credentials;
+begin
+  perform private.require_provider_env(p_env);
+  if (select is_demo from public.tenants where id = p_tenant) is distinct from false then return null; end if;
+  c := private.operation_credential(p_tenant, p_env, p_version);
+  if c.id is null then return null; end if;
+  return jsonb_build_object('ciphertext', c.ciphertext, 'iv', c.iv, 'key_version', c.key_version, 'version', c.version);
+end $$;
+revoke all on function public.machine_operation_key(uuid, text, integer) from public, anon, authenticated;
+grant execute on function public.machine_operation_key(uuid, text, integer) to service_role;
 
 -- ============================================================ batch delete: record counts and the private refund
 
