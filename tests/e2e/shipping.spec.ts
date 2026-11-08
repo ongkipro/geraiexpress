@@ -826,6 +826,76 @@ test("an admin closes an ambiguous pickup reservation once it is closable; the d
   }
 });
 
+// UAT: closing a failed attempt as "no order at Mengantar" unlocks a resend, so it sits behind the same danger
+// confirmation as the other close commands, needs a reason, sends once on a double click and keeps the reason
+// after a refusal.
+test("an admin closes a failed attempt through a danger dialog; an operator is not offered it", async ({ page }) => {
+  const seeded = seedReal({ state: "failed" });
+  const age = (minutes: number) => localSql(`update public.provider_operations set result_code = 'NOT_CREATED', last_checked_at = now(),
+    dispatched_at = now() - interval '${minutes} minutes' where shipment_id = '${seeded.id}'`);
+  try {
+    age(40);
+    await signIn(page, "operator-a@geraiexpress.test");
+    await page.goto(`/pengiriman/${seeded.id}`);
+    await expect(page.getByRole("button", { name: "Tutup percobaan", exact: true })).toHaveCount(0);
+    await signOut(page);
+
+    await signIn(page, "owner-a@geraiexpress.test");
+    await page.goto(`/pengiriman/${seeded.id}`);
+    // Nothing closes without the dialog: the trigger only opens it.
+    await page.getByRole("button", { name: "Tutup percobaan", exact: true }).click();
+    const dialog = page.getByTestId("close-failed-dialog");
+    await expect(dialog).toContainText("tidak mengirim apa pun ke Mengantar");
+    await expect(dialog).toContainText(seeded.ref);
+    await expect(dialog).toContainText("bisa terduplikasi");
+    await expectNoHorizontalOverflow(page);
+    await dialog.screenshot({ path: test.info().outputPath("close-failed-dialog.png") });
+    expect(localSql(`select result_code from public.provider_operations where shipment_id = '${seeded.id}'`)).toBe("NOT_CREATED");
+
+    // The reason is required (5–500 characters).
+    const reason = dialog.getByLabel("Alasan penutupan");
+    await reason.fill("abc");
+    await dialog.getByTestId("close-failed-confirm").click();
+    expect(await reason.evaluate((el: HTMLTextAreaElement) => el.validity.valid)).toBe(false);
+
+    // A refusal (the attempt is too recent) keeps the typed reason in the reopened dialog.
+    age(5);
+    await reason.fill(REASON);
+    await dialog.getByTestId("close-failed-confirm").click();
+    await expect(page).toHaveURL(/[?&]galat=not_closable$/);
+    await page.getByRole("button", { name: "Tutup percobaan", exact: true }).click();
+    await expect(page.getByTestId("close-failed-dialog").getByLabel("Alasan penutupan")).toHaveValue(REASON);
+    expect(localSql(`select result_code from public.provider_operations where shipment_id = '${seeded.id}'`)).toBe("NOT_CREATED");
+
+    // A double click on the confirmation sends one request.
+    age(40);
+    const requests = await holdServerActions(page);
+    const confirm = page.getByTestId("close-failed-confirm");
+    await confirm.dblclick();
+    await expect(confirm).toHaveAttribute("aria-busy", "true");
+    await page.waitForTimeout(600);
+    expect(requests.held).toHaveLength(1);
+    await requests.abort();
+  } finally {
+    seeded.cleanup();
+  }
+
+  const closable = seedReal({ state: "failed" });
+  try {
+    localSql(`update public.provider_operations set result_code = 'NOT_CREATED', last_checked_at = now(), dispatched_at = now() - interval '40 minutes'
+      where shipment_id = '${closable.id}'`);
+    await page.goto(`/pengiriman/${closable.id}`);
+    await page.getByRole("button", { name: "Tutup percobaan", exact: true }).click();
+    await page.getByTestId("close-failed-dialog").getByLabel("Alasan penutupan").fill(REASON);
+    await page.getByTestId("close-failed-confirm").click();
+    await expect(page).toHaveURL(/[?&]info=closed$/);
+    expect(localSql(`select result_code from public.provider_operations where shipment_id = '${closable.id}'`)).toBe("CLOSED_NOT_CREATED");
+    await expect(page.getByRole("button", { name: "Ubah & coba lagi" })).toBeVisible();
+  } finally {
+    closable.cleanup();
+  }
+});
+
 // T-070 / UX-14: the counter handoff after confirmation, one test per row of the UX-14 table.
 const printLink = (page: Page) => page.getByRole("link", { name: "Cetak label", exact: true });
 

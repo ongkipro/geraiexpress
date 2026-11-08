@@ -20,26 +20,35 @@ test("a Super Admin disables and re-allows masking for one gerai, with a require
     await expectNoHorizontalOverflow(page);
     await expectTouchTargets(page);
 
-    // The reason is required: the browser refuses an empty one and the database has not changed.
+    // The trigger only opens a confirmation dialog naming the gerai; nothing changes until it is confirmed.
     const form = page.getByTestId("masking-form");
-    await form.getByRole("button", { name: "Nonaktifkan masking" }).click();
-    expect(await form.getByLabel("Alasan (dicatat di audit)").evaluate((el: HTMLTextAreaElement) => el.validity.valueMissing)).toBe(true);
+    await form.getByRole("button", { name: `Nonaktifkan masking untuk ${name}` }).click();
+    const dialog = page.getByTestId("masking-dialog");
+    await expect(dialog.getByRole("heading", { name: `Nonaktifkan masking untuk ${name}?` })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await expectTouchTargets(page);
+    await dialog.screenshot({ path: test.info().outputPath("masking-dialog.png") });
+    // The reason is required: the browser refuses an empty one and the database has not changed.
+    await dialog.getByRole("button", { name: "Nonaktifkan masking", exact: true }).click();
+    expect(await dialog.getByLabel("Alasan (dicatat di audit)").evaluate((el: HTMLTextAreaElement) => el.validity.valueMissing)).toBe(true);
     expect(masking()).toBe("t");
     // The refused click must not lock the button: typing a reason and clicking again at once submits
     // (the lock used to swallow clicks for 5 seconds after an invalid submit).
-    await expect(form.getByRole("button", { name: "Nonaktifkan masking" })).not.toHaveAttribute("aria-disabled", "true");
+    await expect(dialog.getByRole("button", { name: "Nonaktifkan masking", exact: true })).not.toHaveAttribute("aria-disabled", "true");
 
-    await form.getByLabel("Alasan (dicatat di audit)").fill("Uji e2e kurir menolak label");
-    await form.getByRole("button", { name: "Nonaktifkan masking" }).click();
+    await dialog.getByLabel("Alasan (dicatat di audit)").fill("Uji e2e kurir menolak label");
+    await dialog.getByRole("button", { name: "Nonaktifkan masking", exact: true }).click();
     await expect(page.getByTestId("masking-result")).toContainText("Masking pengirim dinonaktifkan");
+    await expect(dialog).toHaveCount(0);
     await expect(page.getByTestId("masking-state")).toContainText("Dinonaktifkan");
     await expect(page.getByTestId("masking-last-change")).toContainText("dinonaktifkan pada");
     expect(masking()).toBe("f");
     await expectNoHorizontalOverflow(page);
 
-    // The flip button now offers the opposite action.
-    await page.getByLabel("Alasan (dicatat di audit)").fill("Uji e2e diizinkan lagi");
-    await page.getByRole("button", { name: "Izinkan masking" }).click();
+    // The flip button now offers the opposite action, again behind the dialog.
+    await form.getByRole("button", { name: `Izinkan masking untuk ${name}` }).click();
+    await page.getByTestId("masking-dialog").getByLabel("Alasan (dicatat di audit)").fill("Uji e2e diizinkan lagi");
+    await page.getByTestId("masking-confirm").click();
     await expect(page.getByTestId("masking-result")).toContainText("Masking pengirim diizinkan");
     await expect(page.getByTestId("masking-state")).toContainText("Diizinkan");
     expect(masking()).toBe("t");

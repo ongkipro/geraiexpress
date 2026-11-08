@@ -48,7 +48,8 @@ export function parseDraft(form: FormData, live = false, now: Date = new Date())
     if (v.length < min || v.length > max) errors[field] = `Isi ${min}–${max} karakter.`;
     else update[field] = v;
   };
-  text("sender_name", 120, 2);
+  // Matches the intake field and the masked label (SENDER_LIMITS.nameMax): a longer name would save here and fail at print.
+  text("sender_name", 60, 2);
   // Same limits as the printed masked sender (owner, 2026-11-04: tidy label). The street's whitespace
   // runs collapse to one space, as the label snapshot does.
   values.sender_address = values.sender_address.replace(/\s+/g, " ");

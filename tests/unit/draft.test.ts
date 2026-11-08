@@ -29,6 +29,13 @@ describe("sender address (T-094)", () => {
   });
 });
 
+describe("sender name limit (matches the intake field and the masked label)", () => {
+  it("accepts 60 characters and rejects 61", () => {
+    expect(parseDraft(form({ sender_name: "a".repeat(60), sender_phone: "081234567890" })).errors.sender_name).toBeUndefined();
+    expect(parseDraft(form({ sender_name: "a".repeat(61), sender_phone: "081234567890" })).errors.sender_name).toBe("Isi 2–60 karakter.");
+  });
+});
+
 describe("draft parsing", () => {
   it("normalizes Indonesian phone formats", () => {
     expect(normalizePhone("+62 812-3456-7890")).toBe("081234567890");
