@@ -427,6 +427,7 @@ test("shipment detail shows handover type, slot and reservation state for pickup
   const seed = (opts: { handover: "pickup" | "dropoff"; state: string; phase?: string; opState?: string; code?: string }) => {
     const id = randomUUID(), op = randomUUID(), quote = randomUUID();
     const ref = `GX261028-P${op.slice(0, 5).toUpperCase()}`;
+    const timeId = op.replace(/-/g, "").slice(0, 24); // one provider time id per seeded operation (ownership index)
     const snapshot = opts.handover === "pickup"
       ? `'{"outlet":"Outlet Uji A","address":"Jl. Pickup Gerai No. 7","area":"KEBAYORAN BARU","handover":"pickup","pickup_date":"2026-12-15","pickup_slot_hour":12,"pickup_volume":"volumeMobil","pickup_note":"Titip di satpam"}'::jsonb`
       : `'{"outlet":"Outlet Uji A","address":"Jl. Pickup Gerai No. 7","area":"KEBAYORAN BARU","handover":"dropoff"}'::jsonb`;
@@ -444,7 +445,7 @@ test("shipment detail shows handover type, slot and reservation state for pickup
       insert into public.provider_operations (id, tenant_id, shipment_id, kind, idempotency_key, input_digest, state, is_simulated,
         actor, provider_env, dispatched_at, attempts, result_code${opts.phase ? ", pickup_phase, pickup_time_id" : ""})
       values ('${op}', '${TENANT}', '${id}', 'create_order', 'e2e-pickup-${op}', 'digest-${op}', '${opts.opState ?? "queued"}', false,
-        '${OWNER}', 'sandbox', now(), 1, ${opts.code ? `'${opts.code}'` : "null"}${opts.phase ? `, '${opts.phase}'${opts.phase === "reserving" ? ", null" : ", '6b0c2a1e9d3f4a5b6c7d8e90'"}` : ""});
+        '${OWNER}', 'sandbox', now(), 1, ${opts.code ? `'${opts.code}'` : "null"}${opts.phase ? `, '${opts.phase}'${opts.phase === "reserving" ? ", null" : `, '${timeId}'`}` : ""});
     `);
     seeded.push(id);
     return id;
