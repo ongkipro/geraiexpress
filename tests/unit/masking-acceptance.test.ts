@@ -8,7 +8,9 @@ import {
 const rpc = vi.fn();
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/workspace", () => ({ requireWorkspace: async () => ({ tenant: { id: "t" } }) }));
-vi.mock("@/lib/db/server", () => ({ dbServer: async () => ({ rpc }) }));
+// The snapshot lookup that scopes the command to the selected gerai (P2-1) finds the row.
+const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data: { id: "s" }, error: null }) };
+vi.mock("@/lib/db/server", () => ({ dbServer: async () => ({ rpc, from: () => chain }) }));
 vi.mock("@/lib/errors", () => ({ friendlyError: () => "Terjadi kesalahan. Coba lagi." }));
 
 describe("masking acceptance state helpers", () => {
