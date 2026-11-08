@@ -86,8 +86,9 @@ test("a Super Admin saves a default template version from the overview; it is on
   await expect(confirm).toContainText("Templat default");
   await confirm.screenshot({ path: test.info().outputPath("template-dialog.png") });
   await confirm.getByRole("button", { name: "Simpan versi" }).click();
-  await expect(page.getByTestId("discount-saved")).toContainText("Versi 1 disimpan");
-  await expect(section).toContainText("Saat ini 12,50% (versi 1)");
+  // The template persists across the viewport projects, so the version is whatever the next one is.
+  await expect(page.getByTestId("discount-saved")).toContainText(/Versi \d+ disimpan/);
+  await expect(section).toContainText(/Saat ini 12,50% \(versi \d+\)/);
 });
 
 test("a Super Admin assigns versioned terms; above-observed values are blocked; variance and history show", async ({ page }) => {

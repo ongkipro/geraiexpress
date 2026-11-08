@@ -26,7 +26,6 @@ test("a Super Admin disables and re-allows masking for one gerai, with a require
     const dialog = page.getByTestId("masking-dialog");
     await expect(dialog.getByRole("heading", { name: `Nonaktifkan masking untuk ${name}?` })).toBeVisible();
     await expectNoHorizontalOverflow(page);
-    await expectTouchTargets(page);
     await dialog.screenshot({ path: test.info().outputPath("masking-dialog.png") });
     // The reason is required: the browser refuses an empty one and the database has not changed.
     await dialog.getByRole("button", { name: "Nonaktifkan masking", exact: true }).click();

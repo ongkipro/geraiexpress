@@ -876,6 +876,7 @@ test("an admin closes a failed attempt through a danger dialog; an operator is n
     await page.waitForTimeout(600);
     expect(requests.held).toHaveLength(1);
     await requests.abort();
+    await page.unrouteAll({ behavior: "ignoreErrors" });
   } finally {
     seeded.cleanup();
   }
