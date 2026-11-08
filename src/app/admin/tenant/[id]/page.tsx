@@ -24,7 +24,7 @@ type Summary = {
   seller: { connected: boolean; mode: string | null; provider_env: string | null; since: string | null };
   discount: { gerai_discount_bps: number | null; status: string | null; effective_from: string | null };
   by_state: Record<string, number>;
-  activity: { today: number; last_7_days: number; last_30_days: number; issued_30_days: number; cod_30_days: number; charge_30_days_idr: number; last_shipment_at: string | null };
+  activity: { today: number; last_7_days: number; last_30_days: number; issued_30_days: number; cod_30_days: number; charge_30_days_idr: number | null; charge_unknown_30_days?: number; last_shipment_at: string | null };
 };
 
 // T-053 / DEC-018 item 3: per-gerai platform controls. Today: allow or disable sender masking. The id
@@ -66,7 +66,7 @@ export default async function PlatformTenantPage({ params }: { params: Promise<{
     ["30 hari terakhir", String(a.last_30_days)],
     ["Resi terbit 30 hari", String(a.issued_30_days)],
     ["COD 30 hari", String(a.cod_30_days)],
-    ["Ongkir pelanggan terbit 30 hari", formatIdr(a.charge_30_days_idr)],
+    ["Ongkir pelanggan terbit 30 hari", a.charge_30_days_idr === null ? "belum diketahui" : formatIdr(a.charge_30_days_idr)],
     ["Kiriman terakhir", a.last_shipment_at ? formatWib(a.last_shipment_at) : "Belum ada"],
   ];
 

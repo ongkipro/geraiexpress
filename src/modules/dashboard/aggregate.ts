@@ -75,7 +75,8 @@ export type DashboardSummary = {
   delta: { created: number; issued: number };
   statuses: StatusShare[];
   couriers: CourierShare[];
-  chargeIdr: number; // sum of the customer charge of issued shipments ("ongkir pelanggan")
+  chargeIdr: number | null; // sum of the customer charge of issued shipments ("ongkir pelanggan"); null when any is unknown
+  chargeUnknownCount: number; // issued shipments in the period whose customer charge is unknown (never counted as 0)
   codIssued: number; // issued shipments with COD, a count only
 };
 
@@ -115,6 +116,7 @@ export function summarize(rows: PeriodRow[], opts: { now: Date; periodDays: Peri
   const statusCounts = new Map<string, number>();
   const courierCounts = new Map<string | null, number>();
   let chargeIdr = 0;
+  let chargeUnknownCount = 0;
   let codIssued = 0;
   let total = 0;
 
@@ -129,7 +131,8 @@ export function summarize(rows: PeriodRow[], opts: { now: Date; periodDays: Peri
     statusCounts.set(row.submission_state, (statusCounts.get(row.submission_state) ?? 0) + 1);
     courierCounts.set(row.courier, (courierCounts.get(row.courier) ?? 0) + 1);
     if (issued) {
-      chargeIdr += row.customer_charge_idr ?? 0;
+      if (row.customer_charge_idr === null) chargeUnknownCount += 1;
+      else chargeIdr += row.customer_charge_idr;
       if (row.is_cod) codIssued += 1;
     }
   }
@@ -170,7 +173,8 @@ export function summarize(rows: PeriodRow[], opts: { now: Date; periodDays: Peri
     delta: { created: today.created - yesterday.created, issued: today.issued - yesterday.issued },
     statuses,
     couriers,
-    chargeIdr,
+    chargeIdr: chargeUnknownCount > 0 ? null : chargeIdr,
+    chargeUnknownCount,
     codIssued,
   };
 }

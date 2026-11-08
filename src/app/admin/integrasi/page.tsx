@@ -10,6 +10,7 @@ import { keyMaterialFromReader } from "@/lib/credential-crypto";
 import { config } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { PartnerIdForm } from "@/modules/credentials/forms";
+import { resolvePartnerId } from "@/lib/mengantar/partner-onboarding";
 import { Notice } from "@/components/notice";
 import { EmptyState, LifecycleBadge, PageHeader, RT, SectionHeader } from "../ui";
 import { LoadError } from "@/components/notice";
@@ -55,8 +56,10 @@ export default async function IntegrationsPage() {
     db.rpc("platform_masking_acceptance"),
   ]);
   if (pe || re || ae) return <LoadError title="Integrasi Mengantar" what="Konfigurasi Partner atau daftar akun penjual" />;
-  const partnerId = ((partnerConfig ?? []) as { partner_id: string | null }[])[0]?.partner_id ?? null;
-  const secretPresent = Boolean(config("MENGANTAR_PARTNER_SECRET"));
+  const storedPartnerId = ((partnerConfig ?? []) as { partner_id: string | null }[])[0]?.partner_id ?? null;
+  // The same resolution the Partner API callers use: stored value, else PARTNER_ID, else the default.
+  const partnerId = resolvePartnerId(storedPartnerId, config("PARTNER_ID"));
+  const secretPresent = Boolean(config("MENGANTAR_PARTNER_SECRET") ?? config("GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET"));
   const sealingPresent = Boolean(keyMaterialFromReader(config));
   const environment = config("MENGANTAR_ENV");
   const rows = (raw ?? []) as Row[];
@@ -66,8 +69,10 @@ export default async function IntegrationsPage() {
 
   const settings = [
     {
-      testId: "partner-id-status", title: "Partner ID", ok: Boolean(partnerId), label: partnerId ? "Terisi" : "Belum diisi",
-      body: <span className="break-all">{partnerId ?? "Belum diisi."}</span>,
+      testId: "partner-id-status", title: "Partner ID", ok: true, label: storedPartnerId?.trim() ? "Terisi" : "Bawaan",
+      body: storedPartnerId?.trim()
+        ? <span className="break-all">{partnerId}</span>
+        : <>Belum diisi di sini; server memakai <span className="break-all">{partnerId}</span> (dari variabel lingkungan atau bawaan).</>,
     },
     {
       testId: "partner-secret-status", title: "Partner Secret", ok: secretPresent, label: secretPresent ? "Terpasang" : "Belum dipasang",

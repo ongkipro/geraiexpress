@@ -32,26 +32,36 @@ describe("verifyWebhook (signature over the raw bytes, then window, environment,
     expect(base(body({ status_category: "DELIVERED" }), { signature: sign(raw) })).toEqual({ ok: false, reason: "signature" });
     const reserialized = Buffer.from(JSON.stringify(JSON.parse(raw.toString())) + " ");
     expect(base(reserialized, { signature: sign(raw) })).toEqual({ ok: false, reason: "signature" });
+  });
+
+  it("missing or malformed signature/timestamp headers are 'malformed', never a secret mismatch (P2-4)", () => {
+    const raw = body();
     for (const signature of [null, "", "zz", sign(raw).slice(0, 63), `${sign(raw)}00`]) {
-      expect(base(raw, { signature }), String(signature)).toEqual({ ok: false, reason: "signature" });
+      expect(base(raw, { signature }), String(signature)).toEqual({ ok: false, reason: "malformed" });
+    }
+    for (const timestamp of [null, "", "abc", String(Math.floor(NOW / 1000))]) {
+      expect(base(raw, { timestamp }), String(timestamp)).toEqual({ ok: false, reason: "malformed" });
     }
   });
 
-  it("enforces the millisecond replay window (5 minutes) after the signature", () => {
+  it("enforces the millisecond replay window (5 minutes); a stale replay with a wrong secret is not a mismatch", () => {
     const raw = body();
     const old = String(NOW - 5 * 60_000 - 1);
     expect(base(raw, { timestamp: old, signature: sign(raw, old) })).toEqual({ ok: false, reason: "timestamp" });
     const future = String(NOW + 5 * 60_000 + 1);
     expect(base(raw, { timestamp: future, signature: sign(raw, future) })).toEqual({ ok: false, reason: "timestamp" });
-    // Seconds instead of milliseconds is not a valid timestamp shape.
-    const seconds = String(Math.floor(NOW / 1000));
-    expect(base(raw, { timestamp: seconds, signature: sign(raw, seconds) })).toEqual({ ok: false, reason: "signature" });
+    expect(base(raw, { timestamp: old, signature: sign(raw, old), secret: "other" })).toEqual({ ok: false, reason: "timestamp" });
   });
 
   it("never lets a sandbox delivery reach production, nor production reach sandbox", () => {
     expect(base(body(), { expectedEnvironment: "production" })).toEqual({ ok: false, reason: "environment" });
     expect(base(body(), { environmentHeader: null })).toEqual({ ok: false, reason: "environment" });
     expect(base(body(), { environmentHeader: null, expectedEnvironment: "production" }).ok).toBe(true);
+    // Production refuses any non-empty header other than production.
+    for (const environmentHeader of ["staging", "test", "Sandbox"]) {
+      expect(base(body(), { environmentHeader, expectedEnvironment: "production" }), environmentHeader).toEqual({ ok: false, reason: "environment" });
+    }
+    expect(base(body(), { environmentHeader: "production", expectedEnvironment: "production" }).ok).toBe(true);
   });
 
   it("refuses a body without a valid order id or status, and drops unreadable optional fields", () => {
@@ -112,6 +122,13 @@ describe("the webhook handler (endpoint -> sealed secret -> ingestion)", () => {
     expect(res.status).toBe(401);
     expect(calls.map((c) => c.fn)).toEqual(["machine_webhook_secret", "machine_webhook_mismatch"]);
     expect(logs).toEqual([{ event: "webhook_secret_mismatch", tenantId: TENANT }]);
+  });
+
+  it("a request without signature headers is 400 and never marks the endpoint mismatched (P2-4)", async () => {
+    const { deps, calls } = await setup();
+    const res = await handleMengantarWebhook(req(body(), { "x-signature": "", "x-timestamp": "" }), ENDPOINT, deps);
+    expect(res.status).toBe(400);
+    expect(calls.some((c) => c.fn === "machine_webhook_mismatch")).toBe(false);
   });
 
   it("refuses before reading the secret: wrong method, content type, endpoint shape, oversize body", async () => {

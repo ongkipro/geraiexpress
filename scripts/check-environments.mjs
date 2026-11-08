@@ -115,6 +115,11 @@ export function checkEnvFiles(envs) {
     if (vars.MAIL_TRANSPORT === "smtp" && !["tls", "starttls"].includes(vars.SMTP_SECURITY?.trim() ?? "")) {
       problems.push(`${name}: MAIL_TRANSPORT=smtp needs SMTP_SECURITY=tls or starttls`);
     }
+    if (!template && vars.MAIL_TRANSPORT === "smtp") {
+      for (const required of ["SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD"]) {
+        if (placeholder(vars[required])) problems.push(`${name}: MAIL_TRANSPORT=smtp needs ${required}`);
+      }
+    }
     if (vars.AUTH_CAPTCHA_DISABLED?.trim().toLowerCase() === "true") problems.push(`${name}: AUTH_CAPTCHA_DISABLED=true is for local use only`);
     const postgrestHost = hostOf(vars.POSTGREST_URL ?? "");
     if (vars.POSTGREST_URL && !postgrestHost) problems.push(`${name}: POSTGREST_URL is not a valid URL`);
@@ -265,7 +270,7 @@ export function checkCompose(model, { name = "compose", coolify = false } = {}) 
 }
 
 // Inspection of the proxy configuration text (the invariants the app's trust model rests on).
-export function checkProxyConfig(text, { local = false, name = "proxy" } = {}) {
+export function checkProxyConfig(text, { local = false, coolify = false, name = "proxy" } = {}) {
   const problems = [];
   const code = text.split("\n").filter((l) => !l.trim().startsWith("#")).join("\n");
   if (!/header_up\s+X-Real-IP\s+\{(remote_host|client_ip)\}/.test(code)) problems.push(`${name}: X-Real-IP is not overwritten with the peer address`);
@@ -273,11 +278,17 @@ export function checkProxyConfig(text, { local = false, name = "proxy" } = {}) {
     problems.push(`${name}: /api/internal is not denied`);
   }
   const trusting = /trusted_proxies/.test(code);
-  if (!local && trusting) problems.push(`${name}: the production proxy must not trust any client X-Forwarded-* (remove trusted_proxies)`);
+  if (coolify) {
+    // Coolify terminates TLS; only its one verified peer (COOLIFY_PROXY_CIDR) may supply forwarded client IPs.
+    if (!/trusted_proxies\s+static\s+\{\$COOLIFY_PROXY_CIDR\}\s*\n/.test(code) || !/trusted_proxies_strict/.test(code)) {
+      problems.push(`${name}: the Coolify proxy must trust only {$COOLIFY_PROXY_CIDR} (strict)`);
+    }
+  } else if (!local && trusting) problems.push(`${name}: the production proxy must not trust any client X-Forwarded-* (remove trusted_proxies)`);
   if (local && /auto_https\s+off/.test(code) === false) problems.push(`${name}: the local profile is expected to be plain HTTP (auto_https off)`);
   if (local && !/trusted_proxies\s+static\s+172\.30\.62\.1\/32\s*\n/.test(code)) problems.push(`${name}: local forwarded headers may be trusted only from the pinned gateway 172.30.62.1/32`);
   if (!/request_body\s*\{\s*max_size\s+1MB\s*\}/.test(code)) problems.push(`${name}: request bodies must be capped at 1MB`);
-  if (!local && /auto_https\s+off/.test(code)) problems.push(`${name}: production must keep automatic HTTPS`);
+  if (!local && !coolify && /auto_https\s+off/.test(code)) problems.push(`${name}: production must keep automatic HTTPS`);
+  if (coolify && !/auto_https\s+off/.test(code)) problems.push(`${name}: Coolify terminates TLS (auto_https off)`);
   if (!local && !/\{\$SITE_HOST[:}]/.test(code)) problems.push(`${name}: the four hosts are not configured`);
   return problems;
 }
@@ -324,6 +335,7 @@ function main() {
     }
   }
   problems.push(...checkProxyConfig(readFileSync("infra/proxy/Caddyfile", "utf8"), { name: "infra/proxy/Caddyfile" }));
+  problems.push(...checkProxyConfig(readFileSync("infra/proxy/Caddyfile.coolify", "utf8"), { name: "infra/proxy/Caddyfile.coolify", coolify: true }));
   problems.push(...checkProxyConfig(readFileSync("infra/proxy/Caddyfile.local", "utf8"), { name: "infra/proxy/Caddyfile.local", local: true }));
   if (problems.length) {
     console.error(`check-environments: FAIL\n${problems.map((p) => `  - ${p}`).join("\n")}`);

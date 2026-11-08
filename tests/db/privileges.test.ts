@@ -174,7 +174,9 @@ const MACHINE_ONLY = [
   "public.auth_verify_otp(text,text,text,text,integer,integer)",
   // T-045 slice 2: one DELETE /order decision per shipment, and its read-back outcome.
   "public.cancel_begin(uuid,text,uuid)",
+  "public.cancel_mark_sent(uuid,text,uuid)",
   "public.cancel_record(uuid,text,uuid,text)",
+  "public.cancel_release(uuid,text,uuid)",
   "public.cleanup_expired_demos(integer,integer)",
   "public.complete_partner_seller_onboarding(uuid,text,text,text,text,text,integer,text)",
   "public.dispatch_begin_batch_payment(uuid,uuid,text,text)",
@@ -201,6 +203,7 @@ const MACHINE_ONLY = [
   // T-109: tenant ids whose active credential of an environment is below the current key version.
   // T-045 slice 2: the sealed credential of the original operation, for a cancellation.
   "public.machine_operation_key(uuid,text,integer)",
+  "public.machine_partner_id()",
   "public.machine_rewrap_candidates(text,text,uuid,integer)",
   "public.machine_seller_key(uuid,text)",
   "public.machine_status_pull_candidates(text,interval,integer)",

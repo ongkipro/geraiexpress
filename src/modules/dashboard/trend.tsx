@@ -21,7 +21,7 @@ export async function TrendRegion({ tenantId, periodDays, sample, reloadHref }: 
     { key: "total", label: "Pengiriman", value: total.toLocaleString("id-ID"), note: `dibuat dalam ${periodDays} hari` },
     { key: "issued", label: "Resi terbit", value: issued.toLocaleString("id-ID"), note: total > 0 ? `${Math.round((issued / total) * 100)}% dari pengiriman` : "belum ada pengiriman" },
     { key: "cod", label: "COD", value: summary.codIssued.toLocaleString("id-ID"), note: "resi terbit dengan COD" },
-    { key: "charge", label: "Ongkir pelanggan", value: formatIdr(summary.chargeIdr), note: "dari resi terbit" },
+    { key: "charge", label: "Ongkir pelanggan", value: summary.chargeIdr === null ? "belum diketahui" : formatIdr(summary.chargeIdr), note: summary.chargeIdr === null ? `${summary.chargeUnknownCount} resi terbit belum diketahui ongkirnya` : "dari resi terbit" },
   ];
 
   return (

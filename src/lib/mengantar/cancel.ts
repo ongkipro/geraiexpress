@@ -54,8 +54,17 @@ export async function cancelShipment(
   if (!read.error && keyRow) {
     try { key = await openCredential(keyRow, credentialAad(tenant, keyRow.version), deps.credentialKey); } catch { key = null; }
   }
-  // No key: a DELETE was not sent by this decision; a pending 'requested' becomes 'unknown' so it is visible.
-  if (!key) { await record("unknown"); return "no_key"; }
+  // Nothing was sent by this decision (no key, no courier, or the send mark failed): a decision that cancel_begin
+  // just opened ('send') is released back to NULL, so the shipment is not stuck in read-back-only mode. If the
+  // release is refused (a DELETE may have left) or fails, the pending state becomes 'unknown' so it is visible.
+  const releaseUnsent = async (): Promise<void> => {
+    if (row.action === "send") {
+      const released = await deps.rpc("cancel_release", { p_tenant: tenant, p_env: deps.environment, p_shipment: shipment });
+      if (!released.error && released.data === true) return;
+    }
+    await record("unknown");
+  };
+  if (!key) { await releaseUnsent(); return "no_key"; }
 
   const client = createMengantarPublicClient(deps.environment, key, deps.fetchImpl);
   const del = opts.deleteOrder ?? ((k: string, orderId: string, courier: string) =>
@@ -64,7 +73,10 @@ export async function cancelShipment(
 
   let reported: Reported = null;
   if (row.action === "send") {
-    if (!row.courier) { return record("unknown"); }
+    if (!row.courier) { await releaseUnsent(); return "unavailable"; }
+    // The write-ahead mark: from here on the decision can never be released, because a DELETE may leave.
+    const marked = await deps.rpc("cancel_mark_sent", { p_tenant: tenant, p_env: deps.environment, p_shipment: shipment });
+    if (marked.error) { await releaseUnsent(); return "unavailable"; }
     try {
       reported = (await del(key, row.order_id, row.courier)).reported;
     } catch (error) {

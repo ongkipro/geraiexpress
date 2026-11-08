@@ -135,13 +135,15 @@ describe("cancel read-back verdict (T-045)", () => {
   });
 });
 
-async function setup(action: "send" | "readback" | "done", opts: { key?: boolean } = {}) {
+async function setup(action: "send" | "readback" | "done", opts: { key?: boolean; releaseRefused?: boolean; markError?: boolean } = {}) {
   const sealed = await sealCredential(KEY_SECRET, credentialAad(TENANT, 1), KEY);
   const calls: { fn: string; args: Record<string, unknown> }[] = [];
   const rpc = async (fn: string, args: Record<string, unknown>) => {
     calls.push({ fn, args });
     if (fn === "cancel_begin") return { data: [{ action, order_id: "ORD12345", courier: "JT", credential_version: 1 }], error: null };
     if (fn === "machine_operation_key") return { data: opts.key === false ? [] : [{ ciphertext: sealed.ciphertext, iv: sealed.iv, key_version: sealed.keyVersion, version: 1 }], error: null };
+    if (fn === "cancel_release") return { data: opts.releaseRefused ? false : true, error: null };
+    if (fn === "cancel_mark_sent") return { data: null, error: opts.markError ? { message: "boom" } : null };
     return { data: args.p_outcome ?? null, error: null };
   };
   return { deps: { rpc, environment: "sandbox" as const, credentialKey: KEY }, calls };
@@ -203,12 +205,36 @@ describe("cancelShipment (T-045, failure injection)", () => {
     expect(calls.some((c) => c.fn === "cancel_begin")).toBe(true);
   });
 
-  it("without a readable seller key nothing is sent and the pending decision becomes unknown", async () => {
+  it("without a readable seller key nothing is sent and the pending decision is released (not wedged read-back-only)", async () => {
     const { deps, calls } = await setup("send", { key: false });
     const del = vi.fn();
     expect(await cancelShipment(deps, TENANT, SHIPMENT, { deleteOrder: del })).toBe("no_key");
     expect(del).not.toHaveBeenCalled();
-    expect(recorded(calls)).toEqual(["unknown"]);
+    expect(calls.map((c) => c.fn)).toEqual(["cancel_begin", "machine_operation_key", "cancel_release"]);
+    expect(recorded(calls)).toEqual([]);
+  });
+
+  it("falls back to unknown when the release is refused, and never releases a read-back decision", async () => {
+    const refused = await setup("send", { key: false, releaseRefused: true });
+    expect(await cancelShipment(refused.deps, TENANT, SHIPMENT, {})).toBe("no_key");
+    expect(recorded(refused.calls)).toEqual(["unknown"]);
+    const pending = await setup("readback", { key: false });
+    expect(await cancelShipment(pending.deps, TENANT, SHIPMENT, {})).toBe("no_key");
+    expect(pending.calls.some((c) => c.fn === "cancel_release")).toBe(false);
+    expect(recorded(pending.calls)).toEqual(["unknown"]);
+  });
+
+  it("marks the DELETE as sent before sending it, and a failed mark sends nothing and releases the decision", async () => {
+    const ok = await setup("send");
+    await cancelShipment(ok.deps, TENANT, SHIPMENT, { deleteOrder: async () => ({ reported: "deleted" }), findOrder: async () => order({ deleted: true }) });
+    const order_ = ok.calls.map((c) => c.fn);
+    expect(order_.indexOf("cancel_mark_sent")).toBeGreaterThan(order_.indexOf("machine_operation_key"));
+    expect(order_.indexOf("cancel_mark_sent")).toBeLessThan(order_.indexOf("cancel_record"));
+    const bad = await setup("send", { markError: true });
+    const del = vi.fn();
+    expect(await cancelShipment(bad.deps, TENANT, SHIPMENT, { deleteOrder: del })).toBe("unavailable");
+    expect(del).not.toHaveBeenCalled();
+    expect(bad.calls.some((c) => c.fn === "cancel_release")).toBe(true);
   });
 
   it("delivery learned only from the read-back is a conflict: never cancelled, never refused, left unresolved", async () => {
@@ -240,7 +266,8 @@ describe("cancelShipment (T-045, failure injection)", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(del).not.toHaveBeenCalled();
     expect(find).not.toHaveBeenCalled();
-    expect(recorded(calls)).toEqual(["unknown"]);
+    expect(recorded(calls)).toEqual([]);
+    expect(calls.some((c) => c.fn === "cancel_release")).toBe(true);
   });
 
   it("an already cancelled shipment sends nothing; a refused begin is not_cancellable", async () => {

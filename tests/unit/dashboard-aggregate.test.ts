@@ -118,6 +118,21 @@ describe("summarize", () => {
     const s = summarize(rows, { now: NOW, periodDays: 7, sample: false });
     expect(s.chargeIdr).toBe(40000);
     expect(s.codIssued).toBe(1);
+    expect(s.chargeUnknownCount).toBe(0);
+  });
+
+  it("surfaces an unknown customer charge instead of counting it as Rp0 (P2-5)", () => {
+    const rows = newestFirst([
+      row("2026-10-29T01:00:00Z", "issued", { customer_charge_idr: 18000 }),
+      row("2026-10-29T01:30:00Z", "issued", { customer_charge_idr: null }),
+      row("2026-10-29T02:00:00Z", "estimated", { customer_charge_idr: null }),
+      row("2026-10-29T02:30:00Z", "issued", { customer_charge_idr: 0 }),
+    ]);
+    const s = summarize(rows, { now: NOW, periodDays: 7, sample: false });
+    expect(s.chargeIdr).toBeNull();
+    expect(s.chargeUnknownCount).toBe(1);
+    const zero = summarize(newestFirst([row("2026-10-29T02:30:00Z", "issued", { customer_charge_idr: 0 })]), { now: NOW, periodDays: 7, sample: false });
+    expect(zero.chargeIdr).toBe(0);
   });
 
   it("marks the bound when more than 5,000 rows arrive and counts only the newest 5,000", () => {
