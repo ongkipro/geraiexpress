@@ -1,0 +1,1 @@
+{"success": true, "message": "2 of 3 orders are deleted", "deletedCount": 2, "unDeletedCount": 1, "totalCount": 3, "isBatchDraft": false, "ordersCount": 3, "totalBalanceRefund": 25500, "errorMessages": ["Order cannot be cancelled after pickup"]}

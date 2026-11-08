@@ -131,13 +131,13 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
 
   // Sends one request and returns the parsed JSON envelope with its status. Transport problems are
   // "unavailable", unreadable answers "malformed"; callers decide what a non-success envelope means.
-  async function send(path: string, params: Record<string, string>, json?: unknown): Promise<{ status: number; payload: Record<string, unknown> }> {
+  async function send(path: string, params: Record<string, string>, json?: unknown, method?: "DELETE"): Promise<{ status: number; payload: Record<string, unknown> }> {
     const query = new URLSearchParams(params).toString();
     const url = `${base}${path}${query ? `?${query}` : ""}`;
     let response: Response;
     try {
       response = await fetchImpl(url, {
-        method: json === undefined ? "GET" : "POST",
+        method: method ?? (json === undefined ? "GET" : "POST"),
         headers: json === undefined ? { Accept: "application/json" } : { Accept: "application/json", "Content-Type": "application/json" },
         body: json === undefined ? undefined : JSON.stringify(json),
         redirect: "manual",
@@ -199,14 +199,16 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
     // Documentation shape (Observed, example only): `data` is an array of `{ _id, date, time }`
     // with `date` in epoch milliseconds and `time` like "12:00". Unverified: whether a row carries
     // its address (read here only when present), what the list holds beyond the seller's own
-    // records, and its size or paging. Rows that do not parse are dropped, never guessed.
-    async listPickupTimes(): Promise<ProviderPickupTime[]> {
+    // records, and its size or paging. Rows that do not parse are dropped, never guessed, EXCEPT
+    // with `strict`: the reservation read-back concludes from absence ("not created") and from
+    // uniqueness, which an unreadable row could falsify, so a list with any unparseable row is
+    // then a MengantarError "malformed" and nothing is concluded from it.
+    async listPickupTimes(options: { strict?: boolean } = {}): Promise<ProviderPickupTime[]> {
       const data = await getData("/time", {});
       if (!Array.isArray(data)) throw new MengantarError("malformed");
-      return data.flatMap((row) => {
-        const parsed = parseTimeRecord(row);
-        return parsed ? [parsed] : [];
-      });
+      const parsed = data.map(parseTimeRecord);
+      if (options.strict && parsed.includes(null)) throw new MengantarError("malformed");
+      return parsed.filter((row): row is ProviderPickupTime => row !== null);
     },
 
     // T-043 / TD-12: reserves one pickup time record (POST /time). A state-changing call that is
@@ -296,6 +298,55 @@ export function createMengantarPublicClient(environment: MengantarEnvironment, a
       const orders = (await listOrders(params)).filter((o) => o.orderId === orderId);
       if (orders.length > 1) throw new MengantarError("malformed");
       return orders[0] ?? null;
+    },
+
+    // T-045: DELETE /order for ONE order, by ORDER_ID (`orderIds`; whether `ids` or `orderIds` is the right key
+    // is unverified, operations note section 3.1). The answer is NOT proof either way: the caller always reads
+    // the order back. Mapping: 200 success with deletedCount 1 = "deleted" (as reported), 0 = "not_deleted"
+    // (a skipped or courier-refused order); a plain 400 success:false = "rejected" with the provider text (nothing
+    // was deleted; the read-back still decides); everything else, a transport failure included, is
+    // "unknown_outcome" and the request is never repeated. The refund of this call is unknown: nothing parses it.
+    async deleteOrder(orderId: string, courier: string): Promise<{ reported: "deleted" | "not_deleted" }> {
+      if (typeof courier === "string" && courier.trim().toLowerCase() === "ninja") throw new InvalidOrderRequest("courier_discontinued");
+      if (!ORDER_ID.test(orderId) || !OFFERED_COURIERS.has(courier)) throw new InvalidOrderRequest();
+      let answer: { status: number; payload: Record<string, unknown> };
+      try {
+        answer = await send("/order", {}, { courier, orderIds: [orderId] }, "DELETE");
+      } catch (error) {
+        if (error instanceof MengantarError && error.code === "not_allowed") throw error;
+        throw new MengantarError("unknown_outcome");
+      }
+      const { status, payload } = answer;
+      if (status === 400 && payload.success === false && !Array.isArray(payload.data)) {
+        throw new MengantarError("rejected", text(payload.message).slice(0, 200) || null);
+      }
+      const count = payload.deletedCount;
+      if (status !== 200 || payload.success !== true || typeof count !== "number" || !Number.isSafeInteger(count) || count < 0 || count > 1) {
+        throw new MengantarError("unknown_outcome");
+      }
+      return { reported: count === 1 ? "deleted" : "not_deleted" };
+    },
+
+    // T-045: DELETE /batch (batch OBJECT id). Counts are required; an unreadable or inconsistent answer is
+    // "unknown_outcome" (the delete may have happened). See parseBatchDelete for the refund rules.
+    async deleteBatch(batchObjectId: string, courier: string): Promise<BatchDeleteResult> {
+      if (typeof courier === "string" && courier.trim().toLowerCase() === "ninja") throw new InvalidOrderRequest("courier_discontinued");
+      if (!BATCH_OBJECT_ID.test(batchObjectId) || !OFFERED_COURIERS.has(courier)) throw new InvalidOrderRequest();
+      let answer: { status: number; payload: Record<string, unknown> };
+      try {
+        answer = await send("/batch", {}, { courier, id: batchObjectId }, "DELETE");
+      } catch (error) {
+        if (error instanceof MengantarError && error.code === "not_allowed") throw error;
+        throw new MengantarError("unknown_outcome");
+      }
+      const { status, payload } = answer;
+      if (status === 400 && payload.success === false && !Array.isArray(payload.data)) {
+        throw new MengantarError("rejected", text(payload.message).slice(0, 200) || null);
+      }
+      if (status !== 200 || payload.success !== true) throw new MengantarError("unknown_outcome");
+      const parsed = parseBatchDelete(payload, courier);
+      if (!parsed) throw new MengantarError("unknown_outcome");
+      return parsed;
     },
 
     // Lists all orders in a Mengantar batch for full-batch scope verification before payment (TD-3, T-026).
@@ -621,6 +672,8 @@ export type ProviderOrder = {
   statusCategory: string | null;
   // T-045: the provider's last status change, when readable (ISO); null otherwise.
   lastStatusChange: string | null;
+  // T-045: the row's `isDeleted` when it is a boolean (a DELETE /order read-back); absent = unreadable/unknown.
+  deleted?: boolean;
   paid: boolean;
   createdAt: string;
 };
@@ -695,6 +748,37 @@ function judgeCreatedItem(item: unknown, reference: string, cargo: boolean): Cre
   throw new MengantarError("unknown_outcome");
 }
 
+// T-045 (c): the documented DELETE /batch answer. `deletedCount`, `unDeletedCount`, `totalCount` and `isBatchDraft`
+// are read for every courier; `ordersCount`, `totalBalanceRefund` and `errorMessages` only for the couriers that
+// document them (lion, anteraja, pos, spx). A refund is provider-private money: an integer rupiah >= 0 when
+// present and readable, otherwise null (unknown, never 0). Other couriers keep the refund unknown whatever the
+// body carries. Counts that are missing, not whole numbers, or inconsistent (deleted + undeleted > total) make
+// the answer unreadable (null).
+export const BATCH_REFUND_COURIERS: ReadonlySet<string> = new Set(["lion", "anteraja", "pos", "spx"]);
+export type BatchDeleteResult = {
+  deleted: number; undeleted: number; total: number; isBatchDraft: boolean;
+  ordersCount: number | null; refundIdr: number | null; refusedCount: number | null;
+  // Courier refusal texts, bounded; for the audit log only, never stored and never shown with money.
+  errorMessages: string[];
+};
+export function parseBatchDelete(payload: Record<string, unknown>, courier: string): BatchDeleteResult | null {
+  const count = (v: unknown) => (typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : null);
+  const deleted = count(payload.deletedCount), undeleted = count(payload.unDeletedCount), total = count(payload.totalCount);
+  if (deleted === null || undeleted === null || total === null || deleted + undeleted > total
+    || (payload.isBatchDraft !== undefined && typeof payload.isBatchDraft !== "boolean")) return null;
+  const reports = BATCH_REFUND_COURIERS.has(courier);
+  const messages = reports && Array.isArray(payload.errorMessages)
+    ? payload.errorMessages.filter((m): m is string => typeof m === "string").map((m) => m.trim().slice(0, 200)).slice(0, 50)
+    : [];
+  return {
+    deleted, undeleted, total, isBatchDraft: payload.isBatchDraft === true,
+    ordersCount: reports ? count(payload.ordersCount) : null,
+    refundIdr: reports ? count(payload.totalBalanceRefund) : null,
+    refusedCount: reports && Array.isArray(payload.errorMessages) ? messages.length : null,
+    errorMessages: messages,
+  };
+}
+
 function parseOrder(row: unknown): ProviderOrder {
   if (!isRecord(row) || typeof row.status !== "string" || typeof row.createdAt !== "string" || Number.isNaN(Date.parse(row.createdAt))) {
     throw new MengantarError("malformed");
@@ -707,7 +791,7 @@ function parseOrder(row: unknown): ProviderOrder {
   const price = typeof row.estimatedPrice === "number" && Number.isSafeInteger(row.estimatedPrice) && row.estimatedPrice > 0 ? row.estimatedPrice : null;
   const statusCategory = typeof row.statusCategory === "string" && row.statusCategory.trim() && row.statusCategory.length <= 60 ? row.statusCategory.trim().toUpperCase() : null;
   const lastStatusChange = typeof row.lastStatusChange === "string" && !Number.isNaN(Date.parse(row.lastStatusChange)) ? row.lastStatusChange : null;
-  return { orderId, ...(typeof row.cargo === "boolean" ? { cargo: row.cargo } : {}), batch, batchId, price, reference, trackingNumber, status: row.status.slice(0, 40), statusCategory, lastStatusChange, paid: row.isPaid === true, createdAt: row.createdAt };
+  return { orderId, ...(typeof row.cargo === "boolean" ? { cargo: row.cargo } : {}), batch, batchId, price, reference, trackingNumber, status: row.status.slice(0, 40), statusCategory, lastStatusChange, ...(typeof row.isDeleted === "boolean" ? { deleted: row.isDeleted } : {}), paid: row.isPaid === true, createdAt: row.createdAt };
 }
 
 // A pickup time record (`POST /time` answer or a `GET /time` row). The id shape is unverified (the

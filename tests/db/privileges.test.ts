@@ -172,6 +172,9 @@ const MACHINE_ONLY = [
   "public.auth_set_password(uuid,text,uuid)",
   "public.auth_sign_in_anonymous(text,text,integer,integer)",
   "public.auth_verify_otp(text,text,text,text,integer,integer)",
+  // T-045 slice 2: one DELETE /order decision per shipment, and its read-back outcome.
+  "public.cancel_begin(uuid,text,uuid)",
+  "public.cancel_record(uuid,text,uuid,text)",
   "public.cleanup_expired_demos(integer,integer)",
   "public.complete_partner_seller_onboarding(uuid,text,text,text,text,text,integer,text)",
   "public.dispatch_begin_batch_payment(uuid,uuid,text,text)",
@@ -194,7 +197,7 @@ const MACHINE_ONLY = [
   "public.dispatch_restore_check_passed(uuid,integer)",
   "public.dispatch_stuck_counts()",
   "public.fence_partner_key_rotation(uuid,uuid,text,integer,text)",
-  "public.ingest_provider_status(uuid,text,text,timestamp with time zone,text,text,text,boolean)",
+  "public.ingest_provider_status(uuid,text,text,timestamp with time zone,text,text,text,boolean,integer,text)",
   // T-109: tenant ids whose active credential of an environment is below the current key version.
   "public.machine_rewrap_candidates(text,text,uuid,integer)",
   "public.machine_seller_key(uuid,text)",
@@ -205,6 +208,8 @@ const MACHINE_ONLY = [
   "public.mark_status_pulled(text,uuid[])",
   // T-110: Partner-wide back-off shared by every tenant (Retry-After, daily registration stop).
   "public.note_partner_retry_after(text,text,timestamp with time zone,text)",
+  // T-045 slice 2: DELETE /batch counts and the provider-private refund.
+  "public.record_batch_delete(uuid,text,text,text,integer,integer,integer,boolean,integer,bigint,integer)",
   "public.record_live_quotes(uuid,uuid,integer,jsonb,text,text)",
   "public.record_partner_key_rotation_outcome(uuid,uuid,text,integer,text,text,integer,text)",
   "public.record_partner_preflight_failure(uuid,uuid,text,integer,text,text,integer)",

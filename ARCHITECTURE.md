@@ -14,8 +14,10 @@ T-066 (DEC-021, ADR-0002, 2026-10-29) replaced Supabase in the code with plain P
 application-owned auth module; see "Data path and auth" under "Self-hosted container runtime". Supabase, GoTrue, the
 Send Email Hook and the Supabase CLI are not part of the current implementation; where a historical passage below
 still names them it is marked as history, and `docs/spec/**` is updated in a separate pass (T-067).
-T-043 is reopened only for the supervised sandbox capture in T-048 item (6). T-037 (release
-record) and T-045 (webhook/cancel/tracking) remain open; T-040 was design only and T-052 (egress
+T-043 remains open for the supervised sandbox capture (T-048 item 6) AND for the 2026-11-02 amendment
+(configurable courier cut-offs, 120-minute default lead time, cut-off warning at intake), which is not implemented.
+T-037 (release record) remains open; T-045 Slice 1 (webhook, status ingestion, pull) is implemented locally and not
+proven live, while cancel, refunds and re-weigh remain open; T-040 was design only and T-052 (egress
 gateway) is cancelled by DEC-020. Batch payment, Partner key regeneration and pickup have no
 supervised sandbox capture, so their response shapes remain unverified. Final merged counts and
 final-build container e2e are recorded by the lead in STATUS.md.
@@ -141,10 +143,11 @@ The projection includes full AWB (UX-18), courier/service, dates in WIB, catalog
 initials and the permitted gerai label. No free-text address/area is used as a city fallback.
 The latest label snapshot alone controls masking and printed-sender initials; no snapshot
 hides both gerai and sender initials. A masked latest snapshot always hides the gerai identity.
-There are no live tracking events yet: the only status is **Status belum tersedia**, with an
-empty timeline and a static courier tracking URL when known (no AWB in outbound tracking URLs).
-T-045 must provide reviewed event mapping, structured hub city and delivered/returned expiry;
-no fake status or expiry is inferred here. The public page is readable without JavaScript at
+Status events are implemented locally by T-045 Slice 1 (see "Provider status ingestion" below): `track_shipment`
+returns the mapped label and a `{kind, at}` timeline once a webhook delivery or a pull has recorded one, and shows
+**Status belum tersedia** with an empty timeline while none exists; no live Mengantar delivery has been received, so
+this is not proven live. The static courier tracking URL is shown when known (no AWB in outbound tracking URLs).
+Structured hub city and delivered/returned expiry remain outstanding T-045 work; no fake status or expiry is inferred. The public page is readable without JavaScript at
 390 px. Tests authored: `tests/unit/tracking-*.test.ts`, host/robots/proxy/environment guards,
 `tests/db/tracking-links.test.ts` plus the signature privilege allowlist, and
 `tests/e2e/tracking.spec.ts` (390 px anonymous no-JS privacy, latest masking, revoke/reshare,
@@ -183,9 +186,29 @@ this section is an implementation record, not a release-readiness claim.
   audited `webhook_secret.store`), with a notice when deliveries were refused for a mismatching secret.
 - **Public:** `track_shipment` returns the mapped label and a `{kind, at}` timeline only; the app projection
   (`src/modules/tracking/projection.ts`) accepts only the whitelisted labels and kinds.
-- **Not yet proven live:** a real Mengantar delivery (sandbox `order/simulation` with a public hooks URL) and
-  the production per-account webhook rollout (T-048). Cancel / batch-delete refunds and re-weigh are later
-  T-045 slices.
+- **Cancel (slice 2, library and SQL only, no route or screen yet):** `cancel_begin` (machine only, shipment row lock)
+  lets exactly one decision send `DELETE /order` (`{courier, orderIds: [ORDER_ID]}`): it records
+  `shipments.cancel_state = 'requested'` before the request and answers `send`, `readback` (a DELETE was already sent:
+  read only, never repeated) or `done`. `cancelShipment` (`src/lib/mengantar/cancel.ts`) then always reads the order back
+  (`GET /order`) and `cancel_record` stores `cancelled` (read-back shows `isDeleted` or a cancelled category; also sets the
+  `cancelled` kind and one event), `refused` (still active after a DELETE that reported not-deleted or was rejected: the
+  shipment stays NOT cancelled and may be decided again) or `unknown` (unreadable answer or read-back, no key, or a
+  contradiction). A cancellation read back after delivery/return is a `conflict` and never rewrites the delivery. The
+  refund of `DELETE /order` has no column anywhere: it is unknown.
+- **Batch delete (slice 2, parser and private record):** `deleteBatch` / `parseBatchDelete` read `deletedCount`,
+  `unDeletedCount`, `totalCount`, `isBatchDraft` for every courier and `ordersCount`, `totalBalanceRefund`,
+  `errorMessages` only for lion, anteraja, pos and spx; the refund is a non-negative integer or null (never 0 for
+  absent), null for every other courier. `record_batch_delete` (machine only) stores it in
+  `private.provider_batch_deletions`, which no application role can read; no operator surface shows it. No caller invokes
+  `deleteBatch` yet.
+- **Provider weight and hub city (slice 2, seam only):** `ingest_provider_status` takes optional `p_provider_weight_grams`
+  and `p_hub_city` (the documented webhook and `GET /order` list carry neither, so no caller passes them yet). The weight
+  goes to `shipments.provider_weight_grams` only (never `weight_grams` or `weight_snapshot`), a null never erases it, an
+  older or final-state event only fills an empty value, and untrusted history never writes it; the hub city is stored on
+  the event row and is never returned by `track_shipment`. Migration `20261106120000_cancel_refund_provider_weight.sql`.
+- **Not yet proven live:** a real Mengantar delivery (sandbox `order/simulation` with a public hooks URL), the real
+  `DELETE /order` / `DELETE /batch` request and answer shapes (key `orderIds` vs `ids`, refusal body, `isDeleted` in the
+  read-back) and the production per-account webhook rollout (T-048). Fixtures are documentation-derived.
 
 ## Canonical design
 
@@ -530,7 +553,7 @@ observed. Counts and executed checks are under "Verified counts and gates".
   route-family matrix; `src/proxy.ts` (the former `src/middleware.ts`) answers a path outside the host's audience, and any
   unknown host, with a plain 404 ("Halaman tidak ditemukan", no redirect, no hint of another
   host). Hosts: apex (public), `app.` (gerai), `owner.` (Super Admin), `hooks.` (the reserved `/api/webhooks` prefix,
-  cookie-less; the Send Email Hook route no longer exists and no route is served there today) and the same four with single-level
+  cookie-less; the one route served there is the Mengantar webhook `/api/webhooks/mengantar/[endpoint]`, implemented locally by T-045 Slice 1 and not proven live; the Send Email Hook route no longer exists) and the same four with single-level
   staging names (`staging.`, `app-staging.`, `owner-staging.`, `hooks-staging.`). A shared
   all-audiences mode exists only on bare loopback names in a non-production build, or where
   `HOST_SHARED_MODE=1` (local `dev-env.sh` writes it for the container only; never staging/production). `*.workers.dev` hosts are no longer served (T-062); `internal.geraiexpress.local` is the fifth, internal-only name.
@@ -1117,11 +1140,11 @@ API.
 | Public (apex `geraiexpress.com`, `staging.`) | `/lacak/[token]` (non-marketing, anonymous fixed projection, noindex), `/` (marketing, without session resolution), `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`, `/robots.txt`, `/sitemap.xml`, `/healthz` | No session; the proxy resolves no session on this host |
 | Gerai application (`app.`, `app-staging.`) | `/` (gerai dashboard after account/workspace checks), `/masuk`, `/daftar`, `/daftar/kata-sandi`, `/daftar/gerai`, `/undangan`, `/akses`, `/pilih-gerai`, `/api/mengantar/area`, `/robots.txt`, `/healthz`, and the workspace: `/pengiriman`, `/pengiriman/baru`, `/pengiriman/cetak`, `/pengiriman/[id]`, `/pengiriman/[id]/label`, `/pengiriman/[id]/invoice`, `/pengiriman/[id]/struk`, `/pengiriman/export.csv`, `/kas`, `/kasus`, `/kasus/[id]`, `/kas/laporan`, `/kas/laporan/export.csv`, `/kontak`, `/kontak/[id]`, `/pengaturan`, `/anggota` | Workspace group: verified active membership; tenant from the `ge_tenant` selector validated against memberships; `/anggota`, the CSV exports and `/kas/laporan` are tenant admin only |
 | Super Admin (`owner.`, `owner-staging.`) | `/`, `/masuk` (demo and registration hidden), `/verifikasi-2fa`, `/admin` (tenant directory with slug), `/admin/tenant/[id]` (masking control), `/admin/pengajuan`, `/admin/konfigurasi`, `/admin/pantau-pengajuan`, `/admin/pelanggan`, `/admin/pelanggan/[tenant]`, `/admin/integrasi`, `/admin/akses`, `/admin/audit`, `/admin/diskon`, `/admin/diskon/[tenant]`, `/robots.txt`, `/healthz` | Platform grant plus capability plus `aal2` with recent TOTP (`requirePlatform`) |
-| Hooks (`hooks.`, `hooks-staging.`) | the reserved prefix `/api/webhooks` (no route exists), `/healthz` | None today; cookies are stripped and none is set (the Send Email Hook route `/api/auth/send-email` was removed by T-066) |
+| Hooks (`hooks.`, `hooks-staging.`) | the reserved prefix `/api/webhooks` (one route: `POST /api/webhooks/mengantar/[endpoint]`, implemented locally by T-045 Slice 1, not proven against a real Mengantar delivery), `/healthz` | The webhook authenticates by HMAC-SHA256 over `${x-timestamp}.${raw body}` with the tenant's sealed Webhook Secret (the endpoint id only selects the secret); cookies are stripped and none is set (the Send Email Hook route `/api/auth/send-email` was removed by T-066) |
 | Shared (loopback in a non-production build, or `HOST_SHARED_MODE=1`, e.g. the local container behind the local proxy profile) | Every route above on one origin (not the internal cron routes) | As the route's own audience |
 | Internal (`internal.geraiexpress.local`, never routed by the proxy) | `POST /api/internal/cron/dispatch`, `POST /api/internal/cron/cleanup`, `/healthz` | `CRON_SECRET` bearer (constant-time compare); 404 while the secret is unset; no cookie reaches the route |
 | API route handlers | `GET /api/mengantar/area` (member-only local catalogue search, including demo; 401 without a workspace; live fallback only on a connected non-demo catalogue miss), `GET /pengiriman/export.csv` (tenant-admin CSV; 403 operator and demo, 404 anonymous), `GET /kas/laporan/export.csv` (tenant-admin pilot report CSV of a real gerai), `GET /healthz` (anonymous SQL-backed readiness, not provider/mail readiness), and the internal `POST /api/internal/cron/*` routes above | Workspace, tenant admin, none, `CRON_SECRET` respectively |
-| Not present | any webhook or cancel route; live tracking events (T-045); responsibility acceptance at activation | |
+| Not present | any cancel route or call, refunds on batch delete and re-weigh (later T-045 slices); proof of a live webhook delivery or live status events (the webhook route and status ingestion exist locally since T-045 Slice 1); responsibility acceptance at activation | |
 
 `src/app/robots.ts` reads the request host: the production apex allows only the five public pages
 and disallows `/api`, `/admin` and `/masuk`; every other host answers a disallow-all `robots.txt`.
@@ -1142,7 +1165,7 @@ Bahasa Indonesia.
 | Tenant slug | `tenants.slug` immutable and unique, `tenants.shipment_prefix` immutable (unique across non-demo tenants), both set by the `tenants_identity` trigger at insert | Built per CTX-41 item 11; DATA-8, PR-37 |
 | Handover | Drop-off or pickup per shipment frozen at confirmation; pickup reserves a provider time slot before create (`src/lib/mengantar/pickup.ts`); response shapes unverified, no live call | Supervised sandbox capture (T-048); TD-12, TASKS T-043 |
 | Label | Local masked label from an immutable snapshot, 10x15 cm and 10x10 cm, Code128 AWB barcode, masking switch, print history (`src/modules/labels`, `src/components/label`); Mengantar app label stays a fallback; courier acceptance unproven | Decision (DEC-017): courier test and counsel wording before masking is announced; TD-13, DATA-10, TASKS T-044, T-048 |
-| Webhook and cancel | None; no webhook route; no cancel call | Signed webhook on its own host and order cancel; SEC-6, TASKS T-045 |
+| Webhook and cancel | Webhook: signed route and status ingestion implemented locally (T-045 Slice 1), no real Mengantar delivery received. Cancel: no cancel call | Live webhook proof (T-048) and the order cancel, refund and re-weigh slices; SEC-6, TASKS T-045 |
 
 ## Verified counts and gates (2026-10-28)
 
@@ -1262,7 +1285,7 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
 | Registration | `/daftar` email code (app-issued, HMAC-hashed, Bahasa Indonesia mail from `renderCodeMail`, generic reply), password set only after verification, one open `tenant_applications` row per identity (revisioned, partial drafts), Super Admin approve / request changes / reject with reason; approval creates one active tenant, outlet and `tenant_admin` membership and no seller. Public account creation is closed unless a governor opens it (`private.settings`, audited); local seed opens it. A password set before an email's first confirmation is discarded at confirmation (pre-registration takeover; trigger `private.discard_pre_verification_password`) | `tests/db/registration.test.ts`, `tests/db/isolation.test.ts` (mutation-checked: password discard, review authority); `tests/e2e/registration.spec.ts` |
 | Staff and roles | `tenant_invitations` (one pending per tenant+email, 7 days, revocable, RPC-only reads); accept only by the verified invited email while the issuer is still an active admin, once (concurrent accepts converge); an invited email may create its account while public registration is closed; `set_member_role` / `deactivate_member` lock the tenant's memberships, re-check the caller, keep one active `tenant_admin`; `reconcile_shipment` re-checks the role after a share lock; demo tenants cannot invite | `tests/db/invitations.test.ts` (mutation-checked: issuer check, last-admin guard, role re-check after lock); `tests/e2e/members.spec.ts` |
 | Mengantar credentials & Partner onboarding | Machine-only seller binding/completion, write-once seller id per provider environment, list verification, consent/version fence, recovery and key regeneration; AES-GCM key ring uses stored encryption version and tenant/credential-version AAD. Partner operations can reconcile with the active same-environment Partner key after regeneration. BYOK never crosses versions; T-054/T-057 add durable stops, rotation-outcome fencing, SQL consent versions, caller `p_env` enforcement and hourly environment-scoped rewrap; deployment verification remains a release gate | `20261028230000_environment_scope_key_ring.sql`, `20261028250000_reconcile_across_key_regeneration.sql`; credential/key-ring/environment/regeneration tests (worker-reported) |
-| Public marketing | `/`, `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami` render under the GeraiExpress brand (zero legacy brand references or redirects) and publish only approved, implemented claims (no numeric commission, fee, payout or partnership copy; `/simulasi` is a neutral page); signed-in `/` routing (`PR-32`) is preserved; every marketing page renders per request since T-055 (CSP nonce) | `tests/unit/marketing-rebrand.test.ts`, `tests/e2e/marketing.spec.ts` (desktop-1280 and mobile-390) |
+| Public marketing | `/`, `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami` render under the GeraiExpress brand (the legacy brand name is absent from `src/` and `public/`, enforced by `tests/unit/marketing-rebrand.test.ts`; it still appears, by design, in historical records, review notes and reference citations under `docs/`, `BUILD-LOG.md`, `STATUS.md` and `.delivery/`) and publish only approved, implemented claims (no numeric commission, fee, payout or partnership copy; `/simulasi` is a neutral page); signed-in `/` routing (`PR-32`) is preserved; every marketing page renders per request since T-055 (CSP nonce) | `tests/unit/marketing-rebrand.test.ts`, `tests/e2e/marketing.spec.ts` (desktop-1280 and mobile-390) |
 | Demo cleanup, quotas & staging | Bounded demo cleanup through the scheduler container's hourly `POST /api/internal/cron/cleanup` (and a pg_cron job only where that extension exists); demo caps by triggers; the staging environment is the template `infra/env/staging.env.example`, whose own database and signing secrets must differ from production and local (`check:environments`) | demo-quota/cleanup DB, `tests/unit/cron.test.ts`, `tests/unit/check-environments.test.ts` |
 | CAPTCHA | Turnstile is verified by the app (`src/lib/auth/turnstile.ts`) before password sign-in, demo entry, code request and code verification, failing closed; account-plus-visitor limits precede the auth call, password account-wide limits follow its CAPTCHA step. Code verification still has no server-bound email state | `tests/unit/auth-turnstile.test.ts`, captcha/auth-account-lockout tests; T-058 |
 | Auth email | The code mail is rendered by `renderCodeMail` (`src/lib/auth-mail.ts`) and sent by `src/lib/mail-transport.ts` after SQL decided a code may exist (registration gate, anonymous requester refused, throttles, 30-second spacing); only the local Mailpit transport exists, fail-closed otherwise (`auth_mail_failed`); the Send Email Hook route and its secret were removed by T-066 (DEC-021) | `tests/unit/auth-mail.test.ts`; `tests/e2e/auth-mail.spec.ts` |
@@ -1286,8 +1309,8 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
 | Production Super Admin bootstrap | Owner runs the first grant on the production database (explicit write approval) and enrols TOTP; a second recovery governor follows (DEC-008). Never via `seed.sql`, which holds local-only working admin credentials |
 | Overview, finance | Later accepted requirements; CSV export and invoices are built (T-047); the local wilayah catalogue is built locally by T-100, its load into a retained or production database awaits owner approval |
 | Production database and server deployment | Explicit release approval and the owner's server (provider, region, fixed IPv4, DNS); where the database runs (same server or managed PostgreSQL), backups and point-in-time recovery are owner decisions and gates (T-067); nothing is provisioned |
-| Host split in production (owner., app., apex, hooks) | Built in code (T-042) and in `infra/proxy/Caddyfile` (T-062); live only after the owner provisions the server and DNS and sets the `*_ORIGIN` values (TD-14); the hooks host serves no route until a provider webhook exists |
-| Order cancel and signed webhook | TASKS T-045; pickup (T-043) and the masked label (T-044) are built, the label announcement waits for the courier test (T-048) |
+| Host split in production (owner., app., apex, hooks) | Built in code (T-042) and in `infra/proxy/Caddyfile` (T-062); live only after the owner provisions the server and DNS and sets the `*_ORIGIN` values (TD-14); the hooks host serves only the webhook route (T-045 Slice 1, implemented locally, not proven live) |
+| Order cancel and signed webhook | Signed webhook and status ingestion: implemented locally (T-045 Slice 1), not proven live. Order cancel, batch-delete refunds and re-weigh: outstanding (T-045 later slices). Pickup (T-043) and the masked label (T-044) are built, the label announcement waits for the courier test (T-048) |
 | Hybrid hosting (Vultr gateway under Coolify) | The separate egress gateway was withdrawn by DEC-020 (T-052 cancelled); DEC-022 later re-selected Vultr + Coolify to run the application itself (`compose.coolify.yaml`), not a gateway |
 
 ## Open production gates found during implementation

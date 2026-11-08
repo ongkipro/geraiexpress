@@ -325,7 +325,12 @@ export async function reconcileOperation(operationId: string, deps: DispatcherDe
   // T-043: a pickup operation whose create never began (phase 'reserving' or 'reserved') has no
   // order to find by reference. Its reservation is read back (never requested again) and the
   // operation goes back to the queue, which sends the order for the first time.
-  if (p.handover === "pickup" && p.operation_state === "unknown" && (p.pickup_phase === "reserving" || p.pickup_phase === "reserved")) {
+  // A lost-reservation read-back that concluded "not created" (failed, phase 'reserving') is checked
+  // again here, never by order reference: the later complete GET /time may show the reservation, and
+  // the database requeues it only from that conclusion (dispatch_pickup_requeue).
+  const reservationUnresolved = p.operation_state === "unknown" && (p.pickup_phase === "reserving" || p.pickup_phase === "reserved");
+  const reservationNotSeen = p.operation_state === "failed" && p.pickup_phase === "reserving";
+  if (p.handover === "pickup" && (reservationUnresolved || reservationNotSeen)) {
     return reconcilePickupReservation(p, client, deps, record);
   }
 
@@ -380,7 +385,8 @@ async function reconcilePickupReservation(p: Payload, client: MengantarPublicCli
   const taken = new Set(known.data.filter((id): id is string => typeof id === "string"));
   let times;
   try {
-    times = await client.listPickupTimes();
+    // Strict: a row that cannot be read might be this reservation (or a second match), so nothing is concluded.
+    times = await client.listPickupTimes({ strict: true });
   } catch {
     return { status: "inconclusive", reason: "lookup_failed" };
   }

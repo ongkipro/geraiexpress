@@ -119,6 +119,9 @@ describe("Mengantar client: POST /time and GET /time (documentation-derived shap
     // Rows that do not parse are dropped, never guessed.
     const odd = (async () => jsonReply({ success: true, data: [{ _id: "x", date: 1, time: "12:00" }, { _id: TIME_ID, date: "bad", time: "13:00" }, { _id: TIME_ID, date: 1770123600000, time: "7:00" }, null] })) as unknown as typeof fetch;
     expect(await client(odd).listPickupTimes()).toEqual([]);
+    // Strict (the reservation read-back): any unparseable row makes the whole list malformed.
+    await expect(client(odd).listPickupTimes({ strict: true })).rejects.toMatchObject({ code: "malformed" });
+    expect(await client(impl).listPickupTimes({ strict: true })).toHaveLength(3);
     const notList = (async () => jsonReply({ success: true, data: {} })) as unknown as typeof fetch;
     await expect(client(notList).listPickupTimes()).rejects.toBeInstanceOf(MengantarError);
   });
@@ -462,10 +465,39 @@ describe("reconcileOperation: pickup reservation read-back (TD-12)", () => {
     }
   });
 
-  it("a failed or closed operation is not requeued from a read-back (only an unknown one is)", async () => {
-    const s = scenario(await pickupPayload({ operation_state: "failed", pickup_phase: "reserving" }), { getTime: () => jsonReply(fixture("pickup-time-get-list.json")) });
-    await reconcileOperation("op-1", s.deps);
+  it("an unreadable /time row is never read as absence: the read-back stays inconclusive and records nothing", async () => {
+    // The audit's row: a valid id and slot hour whose date cannot be parsed. It may be this very reservation.
+    const list = { success: true, data: [{ _id: "6b0c2a1e9d3f4a5b6c7d8e99", date: "bad", time: "13:00" }] };
+    const s = scenario(await unknownReserving(), { getTime: () => jsonReply(list) });
+    expect(await reconcileOperation("op-1", s.deps)).toEqual({ status: "inconclusive", reason: "lookup_failed" });
+    expect(s.recorded()).toEqual([]);
     expect(s.rpcArgs("dispatch_pickup_requeue")).toEqual([]);
-    expect(s.count("http:GET /time")).toBe(0);
+    expect(s.timeline.filter((t) => t.startsWith("http:POST"))).toEqual([]);
+    // Beside a readable matching row the unreadable one could be a second match: still nothing is adopted.
+    const mixed = { success: true, data: [...fixture("pickup-time-get-list.json").data, list.data[0]] };
+    const m = scenario(await unknownReserving(), { getTime: () => jsonReply(mixed) });
+    expect(await reconcileOperation("op-1", m.deps)).toEqual({ status: "inconclusive", reason: "lookup_failed" });
+    expect(m.rpcArgs("dispatch_pickup_requeue")).toEqual([]);
+  });
+
+  it("a reservation read-back that concluded 'not created' is checked again and requeued when a complete read shows it", async () => {
+    const s = scenario(await pickupPayload({ operation_state: "failed", pickup_phase: "reserving" }), { getTime: () => jsonReply(fixture("pickup-time-get-list.json")) });
+    expect(await reconcileOperation("op-1", s.deps)).toEqual({ status: "recorded", outcome: "reservation_confirmed" });
+    expect(s.rpcArgs("dispatch_pickup_requeue")).toEqual([{ p_operation: "op-1", p_attempt: 3, p_time_id: TIME_ID }]);
+    expect(s.timeline.filter((t) => t.startsWith("http:POST"))).toEqual([]);
+    // An unreadable row blocks that recovery too.
+    const bad = { success: true, data: [...fixture("pickup-time-get-list.json").data, { _id: "6b0c2a1e9d3f4a5b6c7d8e99", date: "bad", time: "13:00" }] };
+    const t = scenario(await pickupPayload({ operation_state: "failed", pickup_phase: "reserving" }), { getTime: () => jsonReply(bad) });
+    expect(await reconcileOperation("op-1", t.deps)).toEqual({ status: "inconclusive", reason: "lookup_failed" });
+    expect(t.rpcArgs("dispatch_pickup_requeue")).toEqual([]);
+  });
+
+  it("a failed operation whose create began (or whose reservation was stored) is never requeued from a read-back", async () => {
+    for (const phase of ["reserved", "creating"]) {
+      const s = scenario(await pickupPayload({ operation_state: "failed", pickup_phase: phase, pickup_time_id: TIME_ID }), { getTime: () => jsonReply(fixture("pickup-time-get-list.json")) });
+      await reconcileOperation("op-1", s.deps);
+      expect(s.rpcArgs("dispatch_pickup_requeue")).toEqual([]);
+      expect(s.count("http:GET /time")).toBe(0);
+    }
   });
 });

@@ -134,4 +134,20 @@ describe("reconcile_shipment vs admin close lock order (T-115)", () => {
     expect(r.output).toMatch(/admin_required/);
     expect(sql(`select state from public.provider_operations where id = '${f.op}'`)).toBe("unknown");
   });
+  it("reconciles the LATEST create operation when older history rows exist (audit F4), whatever the plan returns first", async () => {
+    const g = gerai();
+    const f = await realOperation({ tenant: g.tenant, outlet: g.outlet, noCredential: true, simulated: true });
+    // The original operation (physically first) is an old definite refusal; a newer unknown one belongs to the same shipment.
+    sql(`update public.provider_operations set state = 'failed', result_code = 'PROVIDER_REJECTED', created_at = now() - interval '2 days',
+           updated_at = now() - interval '2 days' where id = '${f.op}'`);
+    const newer = randomUUID();
+    sql(`insert into public.provider_operations (tenant_id, shipment_id, id, kind, idempotency_key, input_digest, state, is_simulated, actor, created_at)
+      values ('${g.tenant}', '${f.shipment}', '${newer}', 'create_order', 'key-${newer}', 'digest', 'unknown', true, '${OWNER_A}', now() - interval '1 hour')`);
+    const out = sql(`begin; set local role authenticated;
+      select set_config('request.jwt.claims', '{"sub":"${OWNER_A}","role":"authenticated","is_anonymous":false}', true);
+      select public.reconcile_shipment('${f.shipment}')::jsonb ->> 'operation_id'; commit;`);
+    expect(out).toContain(newer);
+    expect(sql(`select state from public.provider_operations where id = '${newer}'`)).toBe("succeeded");
+    expect(sql(`select state || ':' || result_code from public.provider_operations where id = '${f.op}'`)).toBe("failed:PROVIDER_REJECTED");
+  });
 });

@@ -685,8 +685,10 @@ Executed in parallel across four implementation lanes under run `RUN-20261027T12
 - **T-029 (Public marketing pages on `geraiexpress`, PR-13 & PR-32)**: anonymous visitors on `/`,
   `/fitur`, `/simulasi`, `/cara-kerja`, and `/hubungi-kami` receive the standalone GeraiExpress
   marketing experience (commission simulator, multi-courier overview, `/masuk` demo + `/daftar`
-  CTAs) while signed-in users on `/` continue routing to their workspace per `PR-32`. Zero legacy
-  brand references or redirects exist across code, config, tests, and operational docs.
+  CTAs) while signed-in users on `/` continue routing to their workspace per `PR-32`. The legacy brand name
+  is absent from `src/` and `public/` (guarded by `tests/unit/marketing-rebrand.test.ts`); the earlier
+  "zero across code, config, tests and operational docs" wording overstated the scope (see the
+  2026-11-06 scope correction in TASKS.md T-029).
 
 Verified: `pnpm typecheck`, `pnpm test:unit` (12 files, 104 tests), `supabase db lint`,
 `pnpm test:db` (10 files, 115 tests), `pnpm build`, `pnpm cf:build`, `pnpm check:bundle` (64 files),
@@ -717,8 +719,10 @@ security scan gates, release manifests, and E2E test coverage:
   when `is_cod` is true.
 - **Playwright E2E & zero legacy footprint**: added E2E assertions for T-025 COD shipment flow,
   T-026 `batch-payment-review` (`tenant_admin` vs `operator`), T-027 Partner onboarding consent
-  validation & operator hiding, and T-028 `Arsipkan kontak` role gating; scrubbed all remaining
-  legacy brand references in `docs/**` (0 matches across the entire repo).
+  validation & operator hiding, and T-028 `Arsipkan kontak` role gating; scrubbed legacy brand references
+  from the `docs/**` pages that made product claims. Scope correction (2026-11-06): this was NOT "0 matches across the
+  entire repo"; reference citations to the earlier project remain by design in `BUILD-LOG.md`, `STATUS.md`,
+  `docs/spec/10-*`, `docs/spec/17-*`, `docs/review/**` and the `.delivery/runs/` ledger.
 
 ## 2026-10-28 — Full review, documentation reconciliation, Next.js 16.4.3, local review gerai
 

@@ -156,7 +156,7 @@ container), and `site.localhost`, `app.localhost`, `owner.localhost` and `hooks.
 audience each. A fifth name, `internal.geraiexpress.local`, serves only `/healthz` and the scheduler's
 `/api/internal/cron/*` routes; the proxy routes neither that name nor that path. All configuration is
 read from the container environment through one reader (`src/lib/config.ts`); `.env.example` lists
-the names and `infra/env/*.env.example` are the staging and production templates:
+the public (non-secret) variables only and `infra/env/*.env.example` are the staging and production templates with every name (secrets included, without values):
 
 | Name | Where | Purpose |
 |---|---|---|

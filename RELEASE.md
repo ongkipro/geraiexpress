@@ -2,12 +2,12 @@
 
 Release-ID: preview-2026-10-27-c00e9c85
 Base: f059a9a14d46813bf94ef3424073914fcc2d8b47
-Environment: production
+Environment: preview (HISTORICAL Cloudflare Worker + Supabase preview, withdrawn by DEC-020; production has never been deployed)
 Declared-Risk: R4
-Rollback-Ref: f059a9a14d46813bf94ef3424073914fcc2d8b47
-Rollback-Command: docker compose --env-file <env-file> --profile prod up -d (with GX_IMAGE=geraiexpress:<previous-tag> set in that env file)
-Backup-Proof: snapshot://supabase-geraiexpress-preview/jezxplwwmjogrmlixdcw-2026-10-27 (HISTORICAL: the snapshot of the old Supabase preview project; it is not a backup of anything the current code deploys)
-Status: NOT_RELEASED (metadata above records prior Worker + Supabase preview; no Node container deployed. Local PostgreSQL backup/restore and TOTP rotation drills passed below; production backup storage and PITR remain owner-gated: T-067)
+Rollback-Ref: f9bc88ad-4f62-43ca-8b59-acfcb76deeb9 (the Worker version that preceded `c00e9c85` on `geraiexpress-preview`, 2026-10-18, code of T-024 + PERF-1 at git `d85fa92`, which exists locally as a commit; the Cloudflare version itself was not re-checked remotely in this audit)
+Rollback-Command: env -u CLOUDFLARE_API_TOKEN -u CF_API_TOKEN pnpm exec wrangler rollback f9bc88ad-4f62-43ca-8b59-acfcb76deeb9 --env preview (HISTORICAL: Workers tooling and `scripts/deploy-preview.sh` are gone from the current tree; run it only from commit `f059a9a`, with the token-unset prefix that the old deploy script used so a stray API token cannot select another account. The current stack rolls back by image tag, see gate 5 below)
+Backup-Proof: NOT_REQUIRED for this historical record: the preview held only isolated anonymous demo data (no real accounts, no Mengantar call, no Super Admin). The earlier reference `snapshot://supabase-geraiexpress-preview/jezxplwwmjogrmlixdcw-2026-10-27` does not resolve and is not a backup of anything the current code deploys. For the current stack no production or staging backup artifact exists yet: the local mechanism is proven (gates 12 and 13), the off-server target and RPO/RTO are owner input I3 (`docs/runbooks/staging-alpha.md` section 6)
+Status: NOT_RELEASED (the metadata above describes the withdrawn preview. No Node container, staging host or production host is deployed; alpha staging is prepared locally only and waits for owner inputs I1 (Vultr plan, DNS), I2 (SMTP) and I3 (backup target, RPO/RTO). There is no current release candidate and no `.delivery/releases/` snapshot; production backup storage and PITR remain owner-gated: T-067)
 
 ## Preferred deployment: Vultr + Coolify (DEC-022, T-068)
 
@@ -445,7 +445,7 @@ Not provisioned. Before a real gerai issues orders in production:
    until Mengantar confirms it. Record the confirmed values as the postgres owner, for example
    `update private.partner_quota_limits set requests_per_minute = <n>, new_sellers_per_day = <n>,
    entitlement_verified = true, note = '<evidence reference>', updated_at = now() where provider_env = 'production';`.
-1. Container configuration (see the container gates above; names in `.env.example` and
+1. Container configuration (see the container gates above; public names in `.env.example`; every name in
    `infra/env/production.env.example`): `POSTGREST_URL` (the compose `postgrest` service by default),
    `MENGANTAR_ENV=production`; the auth values `AUTH_JWT_SECRET` and `AUTH_SECRET` (the machine identity of
    DEC-010 is a service_role JWT signed with `AUTH_JWT_SECRET`), `TURNSTILE_SITE_KEY` and
