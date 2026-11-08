@@ -1434,3 +1434,10 @@ showed the old body cycled with `lock_real_operation` (dispatch on a real operat
 INT-M5 (`RUN-20261106T155227Z-d6a2a53f`, head `aa5fad1`) passed typecheck, unit 1500, db 625, upgrade 625 and e2e on
 three viewports 723/0/27; pushed `fdc34ad..aa5fad1`. T-114 prepared the staging runbook locally; deployment waits on the
 server/DNS, SMTP and backup-target inputs.
+
+## 2026-11-09 — M7: cancel/refund seams, pickup ownership, Argon review fixes
+
+- INT-M7 PASS on `d83cf2d` (738 e2e, 1564 unit, 658 db and upgrade); INT-M6 FAIL was a fixture sharing one pickup time id,
+  rejected by the new ownership index. Migrations `20261106120000`, `20261108200000`, `20261109100000`.
+- Lessons: a runner must read the gate result, not the exit of the recording command; worktree workers that share one test
+  lock starve each other (two timed out at 30 minutes); a seed that reuses a unique id is a test defect once the index exists.

@@ -1,6 +1,6 @@
 # GeraiExpress — Status
 
-Updated: 2026-11-06
+Updated: 2026-11-09
 Status: Active
 State: INTEGRATING
 Review-Risk: R4
@@ -9,6 +9,31 @@ Independent-Review: PASS
 Independent-Review-Detail: M4: T-045 R4 GPT-6.1 Sol 68b3b525 -> c14f0e6d -> 3844489b APPROVE; T-063 R3 1f30518c -> c1137370 APPROVE; T-059 R2 no code change; each also recorded as review-boundary in its ledger run
 Independent-Reviewer: reviewer (cx/gpt-6.1-sol, high), separate subagent per task; implementer pi-parent-01a1a300 (cc/claude-opus-5-5)
 Independent-Review-Head: c9c7164
+
+## M7 CLOSED (2026-11-09) — T-045 slice 2, pickup/reconcile fixes, Argon review fix waves; T-037 doc corrections
+
+- INT-M7 `RUN-20261108T202925Z-822d665d` on head `d83cf2d`. Declared before launch: typecheck, unit, db, upgrade, e2e (three
+  viewports). Executed, ledger-recorded PASS: typecheck; unit 109 files / 1564 tests; db 52 / 658; upgrade 52 / 658; e2e
+  738 passed / 0 failed / 27 skipped (390, 768, 1280); diff-hygiene; boundary PASS R2; finished PASS.
+  Evidence: `/data/tmp/geraiexpress/int-m7/run-1/`. `delivery-ledger verify` exit 0.
+- Supersedes INT-M6 `RUN-20261108T183437Z-52ba3114` (FAIL): e2e 3 of 723 failed because `shipping.spec.ts:422` seeded several
+  pickup operations with one shared `pickup_time_id`, which the new ownership index of `20261108200000` rejects (fixture
+  defect; product behaviour correct). The M6 runner also read the exit of `ledger record` instead of the gate result; the
+  M7 runner treats a gate as passed only when the ledger records `<gate>=PASS`.
+- Content: T-045 slice 2 (DELETE /order cancel with unknown-outcome read-back, private batch-delete refund, provider weight and
+  hub city; migration `20261106120000`); pickup time-id ownership, strict `/time` read-back and reconcile order
+  (`20261108200000`); Argon fix wave (`20261109100000`: delivery_state sync, cancel fence and release, stored Partner ID,
+  post-lock role rechecks, unknown-charge handling, environment-scoped known time ids); Server Action tenant scope, key
+  dialog SubmitButton, failed-attempt close dialog, hardened submit-button usage test; T-037 record corrections (RELEASE.md,
+  scrub scope, provenance, .env.example). The Lane A run `RUN-20261108T180453Z-0faad96f` is closed BLOCKED (unproven in-run).
+- Independent review: GPT-6.1 Sol REJECT `eeb71ac` (credential fence P1, schema version P1, 3 P2) then APPROVE WITH NOTES
+  `0b55628`. Argon whole-repo review of `388d310`: 0 P0, 3 P1, 8 P2, 3 P3; re-review of `737b08a` APPROVE WITH NOTES; its
+  NEW-P2-1 (`confirmShipmentAction` scope) fixed in `e0c6d29` with a mutation-proven test.
+- Known gaps, not hidden: (1) the unknown-charge refusal of `compute_unpaid_batch` is checked by function text, not by a row,
+  because quote charges are NOT NULL; (2) `gerai-discount.spec.ts` matches `Versi \d+` and does not prove the version
+  advanced on the 2nd and 3rd viewport; (3) no UI or route calls the cancel, batch-delete or refund seams yet; (4) T-043's
+  2026-11-02 amendment (courier cut-offs, 120-minute lead) is not implemented; (5) live provider shapes stay with T-048.
+  Remaining open tasks: T-037 (release gates below), T-043, T-045, T-048, T-076, T-080, T-088, T-114.
 
 ## M5 CLOSED and pushed (2026-11-06) — T-114 local prep + T-115 deadlock fix; feature freeze in force
 
