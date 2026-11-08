@@ -45,6 +45,15 @@ describe("parseEnv", () => {
 });
 
 describe("env files", () => {
+  it("MAIL_TRANSPORT=smtp needs host, port, username and password in a real environment file (P2-8)", () => {
+    const prod = production();
+    const smtp = { ...prod.vars, MAIL_TRANSPORT: "smtp", SMTP_SECURITY: "tls" };
+    const problems = checkEnvFiles({ staging: staging(), production: { vars: smtp } });
+    for (const name of ["SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD"]) expect(problems).toContain(`production: MAIL_TRANSPORT=smtp needs ${name}`);
+    const full = { ...smtp, SMTP_HOST: "smtp.example.com", SMTP_PORT: "465", SMTP_USERNAME: "mailer", SMTP_PASSWORD: "production-smtp-password-0123456789ab" };
+    expect(checkEnvFiles({ staging: staging(), production: { vars: full } }).filter((p: string) => p.includes("SMTP"))).toEqual([]);
+  });
+
   it("pass when every environment has its own secrets, database and hosts", () => {
     expect(checkEnvFiles({ staging: staging(), production: production() })).toEqual([]);
   });
@@ -338,6 +347,16 @@ describe("compose model", () => {
 describe("proxy configuration (inspection of infra/proxy)", () => {
   const caddy = readFileSync(new URL("../../infra/proxy/Caddyfile", import.meta.url), "utf8");
   const local = readFileSync(new URL("../../infra/proxy/Caddyfile.local", import.meta.url), "utf8");
+  const coolify = readFileSync(new URL("../../infra/proxy/Caddyfile.coolify", import.meta.url), "utf8");
+
+  it("the Coolify proxy file is inspected too (P2-8)", () => {
+    expect(checkProxyConfig(coolify, { coolify: true })).toEqual([]);
+    expect(checkProxyConfig(coolify.replace("trusted_proxies static {$COOLIFY_PROXY_CIDR}", "trusted_proxies static private_ranges"), { coolify: true }))
+      .toContain("proxy: the Coolify proxy must trust only {$COOLIFY_PROXY_CIDR} (strict)");
+    expect(checkProxyConfig(coolify.replace("header_up X-Real-IP {client_ip}", ""), { coolify: true })).toContain("proxy: X-Real-IP is not overwritten with the peer address");
+    expect(checkProxyConfig(coolify.replace("handle @internal", "handle @nothing"), { coolify: true })).toContain("proxy: /api/internal is not denied");
+    expect(readFileSync(new URL("../../scripts/check-environments.mjs", import.meta.url), "utf8")).toContain('"infra/proxy/Caddyfile.coolify"');
+  });
 
   it("the real files pass", () => {
     expect(checkProxyConfig(caddy)).toEqual([]);

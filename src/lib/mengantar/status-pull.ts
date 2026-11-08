@@ -40,17 +40,20 @@ export async function pullStatuses(deps: DispatcherDeps, opts: { now?: () => Dat
     if (mark.error) { summary.failed += 1; break; }
     for (const c of rows) {
       summary.checked += 1;
-      // One key read per tenant per run (the active key of this environment).
-      if (!keys.has(c.tenant_id)) {
-        const read = await deps.rpc("machine_seller_key", { p_tenant: c.tenant_id, p_env: deps.environment });
+      // One key read per tenant and credential version per run: the ORIGINAL create_order operation's credential
+      // (a replaced BYOK key may be another seller account and is never used across versions).
+      const cacheKey = `${c.tenant_id}:${c.credential_version ?? "none"}`;
+      if (!keys.has(cacheKey)) {
+        const read = c.credential_version === null ? { data: null, error: null }
+          : await deps.rpc("machine_operation_key", { p_tenant: c.tenant_id, p_env: deps.environment, p_version: c.credential_version });
         const row = (Array.isArray(read.data) ? read.data[0] : read.data) as SealedKey | null;
         let key: string | null = null;
         if (!read.error && row) {
           try { key = await openCredential(row, credentialAad(c.tenant_id, row.version), deps.credentialKey); } catch { key = null; }
         }
-        keys.set(c.tenant_id, key);
+        keys.set(cacheKey, key);
       }
-      const key = keys.get(c.tenant_id);
+      const key = keys.get(cacheKey);
       if (!key) { summary.skipped += 1; continue; }
       let order: ProviderOrder | null;
       try { order = await find(key, c.order_id, c.courier); } catch { summary.failed += 1; continue; }

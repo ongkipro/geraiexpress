@@ -49,6 +49,12 @@ export function partnerConsentDocuments(config: Partial<PartnerConsentDocuments>
 }
 export const DEFAULT_PARTNER_ID = "ongkirich";
 
+// The Partner ID the runtime signs with: the one the Super Admin stored in the platform settings, else the
+// PARTNER_ID environment value, else the default. /admin/integrasi shows the same resolution.
+export function resolvePartnerId(stored: unknown, fromEnv: string | undefined): string {
+  return (typeof stored === "string" ? stored.trim() : "") || fromEnv?.trim() || DEFAULT_PARTNER_ID;
+}
+
 export type PartnerOnboardingRpc = (
   fn: string,
   args: Record<string, unknown>,

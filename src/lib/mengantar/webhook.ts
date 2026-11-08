@@ -28,18 +28,24 @@ export function verifyWebhook(input: {
 }): WebhookCheck {
   const { secret, rawBody, timestamp, signature } = input;
   if (!timestamp || !/^\d{12,14}$/.test(timestamp) || !signature || !/^[0-9a-f]{64}$/i.test(signature)) {
-    return { ok: false, reason: "signature" };
+    // Missing or malformed headers are not a secret mismatch (any probe or scanner can send them).
+    return { ok: false, reason: "malformed" };
   }
+  // A stale or future timestamp is a replay, not evidence of a wrong secret: refused before the signature, so it
+  // never marks the endpoint as mismatched.
+  const ts = Number(timestamp);
+  if (!Number.isSafeInteger(ts) || Math.abs(input.now - ts) > WEBHOOK_REPLAY_WINDOW_MS) return { ok: false, reason: "timestamp" };
+
   const expected = Buffer.from(signWebhook(secret, timestamp, rawBody), "hex");
   const given = Buffer.from(signature.toLowerCase(), "hex");
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) return { ok: false, reason: "signature" };
 
-  const ts = Number(timestamp);
-  if (!Number.isSafeInteger(ts) || Math.abs(input.now - ts) > WEBHOOK_REPLAY_WINDOW_MS) return { ok: false, reason: "timestamp" };
-
-  // A sandbox delivery never moves a production shipment, and production never carries the header.
-  const sandbox = input.environmentHeader?.trim().toLowerCase() === "sandbox";
-  if (sandbox !== (input.expectedEnvironment === "sandbox")) return { ok: false, reason: "environment" };
+  // A sandbox delivery never moves a production shipment. Production carries no header (an explicit
+  // "production" is tolerated); any other value is refused.
+  const header = input.environmentHeader?.trim().toLowerCase() ?? "";
+  if (input.expectedEnvironment === "sandbox" ? header !== "sandbox" : header !== "" && header !== "production") {
+    return { ok: false, reason: "environment" };
+  }
 
   let body: unknown;
   try { body = JSON.parse(rawBody.toString("utf8")); } catch { return { ok: false, reason: "malformed" }; }

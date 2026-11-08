@@ -1,6 +1,6 @@
 import "server-only";
 import { keyMaterialFromReader } from "@/lib/credential-crypto";
-import { DEFAULT_PARTNER_ID, type PartnerOnboardingDeps } from "@/lib/mengantar/partner-onboarding";
+import { resolvePartnerId, type PartnerOnboardingDeps } from "@/lib/mengantar/partner-onboarding";
 import type { Db } from "@/lib/db/client";
 import { machineClient } from "@/lib/db/server";
 import { config } from "@/lib/config";
@@ -12,11 +12,12 @@ import { configuredPartnerDocuments } from "./partner-config";
 export async function partnerDeps(db: Db): Promise<PartnerOnboardingDeps | null> {
   const machine = await machineClient();
   if (!machine) return null;
+  const stored = await machine.rpc("machine_partner_id");
   return {
     rpc: (fn, args) => db.rpc(fn, args),
     machineRpc: (fn, args) => machine.rpc(fn, args),
     environment: config("MENGANTAR_ENV"),
-    partnerId: config("PARTNER_ID") ?? DEFAULT_PARTNER_ID,
+    partnerId: resolvePartnerId(stored.error ? null : stored.data, config("PARTNER_ID")),
     partnerSecret:
       config("MENGANTAR_PARTNER_SECRET") ?? config("GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET"),
     credentialKey: keyMaterialFromReader(config),

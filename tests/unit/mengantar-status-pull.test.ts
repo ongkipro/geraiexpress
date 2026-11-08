@@ -32,7 +32,8 @@ async function setup(candidates: { tenant_id: string; shipment_id: string; order
       return { data: rest.map((c) => ({ ...c, courier: "jne", credential_version: 1 })), error: null };
     }
     if (fn === "mark_status_pulled") { for (const id of args.p_shipments as string[]) pulled.set(id, ++clock); return { data: null, error: null }; }
-    if (fn === "machine_seller_key") return { data: sealed[args.p_tenant as string] ? [sealed[args.p_tenant as string]] : [], error: null };
+    if (fn === "machine_seller_key") throw new Error("status pull must never use the tenant's current key");
+    if (fn === "machine_operation_key") return { data: sealed[args.p_tenant as string] ? [sealed[args.p_tenant as string]] : [], error: null };
     if (fn === "ingest_provider_status") return { data: "applied", error: null };
     return { data: null, error: null };
   };
@@ -49,7 +50,8 @@ describe("status pull (T-045)", () => {
     const summary = await pullStatuses(deps, { now: () => NOW, findOrder: async (key, orderId) => { seen.push({ key, orderId }); return order({ orderId }); } });
     expect(summary).toEqual({ checked: 3, applied: 3, unchanged: 0, skipped: 0, failed: 0 });
     expect(seen).toEqual([{ key: `seller-key-${T1}`, orderId: "ORD00001" }, { key: `seller-key-${T1}`, orderId: "ORD00002" }, { key: `seller-key-${T2}`, orderId: "ORD00003" }]);
-    expect(calls.filter((c) => c.fn === "machine_seller_key")).toHaveLength(2);
+    expect(calls.filter((c) => c.fn === "machine_operation_key").map((c) => c.args)).toEqual([
+      { p_tenant: T1, p_env: "sandbox", p_version: 1 }, { p_tenant: T2, p_env: "sandbox", p_version: 1 }]);
     expect(calls.find((c) => c.fn === "ingest_provider_status")!.args).toEqual({ p_tenant: T1, p_env: "sandbox", p_source: "pull",
       p_provider_ts: "2026-11-06T04:00:00.000Z", p_order_id: "ORD00001", p_awb: "JP1234567890", p_status: "DELIVERED", p_ts_trusted: true });
   });
