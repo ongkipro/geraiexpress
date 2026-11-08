@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import { CheckCircle2, Circle, Eye, EyeOff } from "lucide-react";
 import { AuthHeading, InlineError, StatusAlert } from "@/components/auth/auth-shell";
 import { CodeInput, useResetKey } from "@/components/auth/code-input";
@@ -56,6 +56,20 @@ export function CodeFlow({ siteKey, registrationOpen }: { siteKey: string | unde
     (prev, form) => verifyCodeAction({ ...requested, ...prev, email: requested.email }, form), {});
   const [clearedVerification, setClearedVerification] = useState<CodeState | null>(null);
   const [changing, startChange] = useTransition();
+  const changeLock = useRef(false);
+  const changeEmail = () => {
+    if (changeLock.current) return;
+    changeLock.current = true;
+    startChange(async () => {
+      try {
+        await changeEmailAction();
+        setClearedVerification(verified);
+        setChangedFrom(requested);
+      } finally {
+        changeLock.current = false;
+      }
+    });
+  };
   const journey = registrationOpen ? "gerai" : "staf";
   const closed = registrationOpen ? null : (
     <StatusAlert variant="info">
@@ -91,11 +105,7 @@ export function CodeFlow({ siteKey, registrationOpen }: { siteKey: string | unde
             variant="ghost"
             size="sm"
             disabled={verifying || changing}
-            onClick={() => startChange(async () => {
-              await changeEmailAction();
-              setClearedVerification(verified);
-              setChangedFrom(requested);
-            })}
+            onClick={changeEmail}
           >
             Ganti email
           </Button>

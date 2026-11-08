@@ -101,19 +101,19 @@ export function RevokeInvitationForm({ id, revision, email }: { id: string; revi
 // Role change and deactivation each confirm in a dialog; the server actions are unchanged.
 export function MemberControls({ userId, email, role, revision }: { userId: string; email: string; role: string; revision: number }) {
   const [roleOpen, setRoleOpen] = useState(false);
-  const [roleState, roleAction] = useActionState<MemberState, FormData>(async (prev, form) => {
+  const [roleState, roleAction, rolePending] = useActionState<MemberState, FormData>(async (prev, form) => {
     const next = await setRoleAction(prev, form);
     if (next.ok) setRoleOpen(false);
     return next;
   }, {});
-  const [offState, offAction] = useActionState<MemberState, FormData>(deactivateAction, {});
+  const [offState, offAction, offPending] = useActionState<MemberState, FormData>(deactivateAction, {});
   return (
     <div className="flex flex-wrap gap-2 md:justify-end">
       {/* The dialog closes on success, so its result is announced next to the controls. */}
       {roleState.ok && !roleOpen ? <p role="status" className="basis-full text-sm text-success md:text-right">{roleState.ok}</p> : null}
       <Dialog open={roleOpen} onOpenChange={setRoleOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm">Ubah peran<span className="sr-only"> {email}</span></Button>
+          <Button variant="outline" size="sm" disabled={rolePending} aria-busy={rolePending || undefined}>Ubah peran<span className="sr-only"> {email}</span></Button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader className="pr-12">
@@ -134,7 +134,7 @@ export function MemberControls({ userId, email, role, revision }: { userId: stri
       </Dialog>
       <Dialog>
         <DialogTrigger asChild>
-          <Button variant="ghost" size="sm" className="text-danger">Nonaktifkan<span className="sr-only"> {email}</span></Button>
+          <Button variant="ghost" size="sm" className="text-danger" disabled={offPending} aria-busy={offPending || undefined}>Nonaktifkan<span className="sr-only"> {email}</span></Button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader className="pr-12">
