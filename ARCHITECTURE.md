@@ -1,28 +1,51 @@
 # GeraiExpress — Current Architecture Record
 
-Updated: 2026-11-05
-State: local foundation, synthetic demo preview, public marketing surfaces, Mengantar Partner
-sandbox seller onboarding, live quotes/issuance, two-pass COD pricing and batch `pay-unpaid`
-recovery are implemented and were verified locally (DEL-1 stages 1–3; T-001 through T-031).
-The review fixes and features through wave E (T-050 environment/key-ring work and T-053 shipment UI)
-and wave F (security and pickup/UI fixes) are merged into the local working tree, uncommitted.
-T-041 and T-051's code integration gaps are closed; the pre-DEC-020 final-build Worker e2e on desktop-1280, mobile-390 and tablet-768 (142 passed / 2 skipped each) is recorded in BUILD-LOG.md as history.
-T-062 (DEC-020, 2026-10-29) replaced the Cloudflare Workers runtime with a self-hosted Node.js container; see
-"Self-hosted container runtime" below. Where older sections in this file still say "Worker", they describe
-the verified pre-DEC-020 history or mean "the application server"; the container section is current.
-T-066 (DEC-021, ADR-0002, 2026-10-29) replaced Supabase in the code with plain PostgreSQL 17 behind PostgREST and an
-application-owned auth module; see "Data path and auth" under "Self-hosted container runtime". Supabase, GoTrue, the
-Send Email Hook and the Supabase CLI are not part of the current implementation; where a historical passage below
-still names them it is marked as history, and `docs/spec/**` is updated in a separate pass (T-067).
-T-043 remains open for the supervised sandbox capture (T-048 item 6) AND for the 2026-11-02 amendment
-(configurable courier cut-offs, 120-minute default lead time, cut-off warning at intake), which is not implemented.
-T-037 (release record) remains open; T-045 Slice 1 (webhook, status ingestion, pull) is implemented locally and not
-proven live, while cancel, refunds and re-weigh remain open; T-040 was design only and T-052 (egress
-gateway) is cancelled by DEC-020. Batch payment, Partner key regeneration and pickup have no
-supervised sandbox capture, so their response shapes remain unverified. Final merged counts and
-final-build container e2e are recorded by the lead in STATUS.md.
-Target design (webhook and provisioned environment separation) lives in docs/spec; its hybrid-hosting
-part is superseded by DEC-020.
+Updated: 2026-11-09
+Branch `feat/counter-ops-2026-11`, head `257cc84`; everything described here is committed and pushed. Evidence
+(counts, review chain, ledger runs) lives in STATUS.md, never here; for a one-screen navigation map see
+[docs/SYSTEM-MAP.md](docs/SYSTEM-MAP.md).
+
+State, as disk shows it:
+
+- **Runtime:** a self-hosted Node.js container (Next.js 16.4.5 standalone, DEC-020, T-062) behind Caddy, deployed as
+  Vultr + Coolify (`compose.coolify.yaml`, DEC-022). The Cloudflare Workers runtime is history; where older sections still
+  say "Worker" they describe the verified pre-DEC-020 build or mean "the application server".
+- **Data and auth:** PostgreSQL 17 behind PostgREST and an application-owned auth module (T-066, DEC-021, ADR-0002).
+  Supabase, GoTrue, the Send Email Hook and the Supabase CLI are not part of the implementation; a historical passage
+  that still names them is marked as history.
+- **Counter product:** local foundation, synthetic demo, marketing, Partner sandbox onboarding, live quotes and issuance,
+  two-pass COD pricing, batch `pay-unpaid`, pickup (time-id ownership, strict `GET /time` read-back, reconcile order),
+  non-COD cargo, counter payments, cash periods, pilot report, return/claim cases and public tracking.
+- **T-045 slice 1:** signed status webhook on the hooks host, ingestion, hourly pull floor and public status; implemented
+  locally, never proven against a real Mengantar delivery.
+- **T-045 slice 2:** `DELETE /order` cancel with unknown-outcome read-back, private batch-delete refund record, provider
+  weight and hub city. **Library and SQL only: no route, screen or Server Action calls them.**
+- **Review fix migrations** through `20261109100000_review_fixes_backend.sql` (69 forward migrations on disk).
+
+Still open: T-037 (release record and gates); T-043 sandbox capture (T-048 item 6) and its 2026-11-02 amendment
+(configurable courier cut-offs, 120-minute default lead time, cut-off warning at intake), which is not implemented;
+T-045 routes, UI and callers for cancel, batch delete, refunds and re-weigh, and every live proof; T-048 supervised
+captures (batch payment, Partner key regeneration, pickup, `DELETE /order`, `DELETE /batch`). T-040 was design only and
+T-052 (egress gateway) is cancelled by DEC-020. Target design (webhook and provisioned environment separation) lives in
+docs/spec; its hybrid-hosting part is superseded by DEC-020.
+
+## Contents
+
+- [Current backend audit and hosting amendment](#current-backend-audit-and-hosting-amendment-t-068-dec-022)
+- [Non-COD cargo transport](#non-cod-cargo-transport-t-080-2026-11-03)
+- [Public tracking and resi sharing](#public-tracking-and-resi-sharing-t-085-2026-11-05)
+- [Provider status ingestion and cancel seams (T-045)](#provider-status-ingestion-t-045-adr-0003-2026-11-06)
+- [Canonical design](#canonical-design)
+- [Self-hosted container runtime](#self-hosted-container-runtime-t-062-dec-020)
+- [System map](#system-map) (runtime and trust boundaries, code map, data map, primary flow)
+- [Runtime route map](#runtime-route-map-implemented-from-srcapp)
+- [Implemented versus target](#implemented-versus-target)
+- [Verified counts and gates](#verified-counts-and-gates-2026-10-28)
+- [Known defects and residuals](#known-defects-and-residuals)
+- [Client JavaScript baseline and budget](#client-javascript-baseline-and-budget-t-074-measured-2026-10-29)
+- [Present on disk](#present-on-disk)
+- [Not implemented (gated)](#not-implemented-gated)
+- [Open production gates](#open-production-gates-found-during-implementation)
 
 ## Current backend audit and hosting amendment (T-068, DEC-022)
 
@@ -547,7 +570,7 @@ T-028, T-029, and T-030 add contact archiving (`archive_contact` with row-lock `
 re-check), public marketing pages (`/`, `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`),
 security response headers, `cleanup_expired_demos`, and the staging environment definition (now `infra/env/staging.env.example`, T-062).
 
-### Merged 2026-10-28 (waves A–F through T-053, uncommitted): what the code does
+### Merged 2026-10-28 (waves A–F through T-053, since committed): what the code does
 
 Each item names its file; "unverified" marks behavior that depends on a provider answer nobody has
 observed. Counts and executed checks are under "Verified counts and gates".
