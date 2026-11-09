@@ -10,6 +10,22 @@ Independent-Review-Detail: M4: T-045 R4 GPT-6.1 Sol 68b3b525 -> c14f0e6d -> 3844
 Independent-Reviewer: reviewer (cx/gpt-6.1-sol, high), separate subagent per task; implementer pi-parent-01a1a300 (cc/claude-opus-5-5)
 Independent-Review-Head: c9c7164
 
+## M9 CLOSED (2026-11-10) — Turnstile hardening: per-form action and hostname allowlist at siteverify
+
+- INT-M9 on head `7cfeb8f`. Executed, ledger-recorded PASS: typecheck; unit 1617; db 661; upgrade 661; e2e 738 passed /
+  0 failed / 27 skipped (390, 768, 1280); diff-hygiene; boundary PASS R2; finished PASS. Evidence
+  `/data/tmp/geraiexpress/int-m9/run-1/`. `delivery-ledger verify` exit 0.
+- Content: each protected form renders Turnstile with its own action (`signin`, `demo`, `code_request`, `code_verify`;
+  `src/lib/turnstile-actions.ts`); the auth service accepts a token only when siteverify returns `success: true`, that
+  action and a hostname in `TURNSTILE_HOSTNAMES` (bare hostnames, lowercased; a secret without hostnames, or a
+  hostname with a scheme, port or path, refuses to start). `check:environments` requires the variable, refuses local
+  hosts and refuses production hosts in staging. Production value `app.geraiexpress.com,owner.geraiexpress.com`.
+- Independent review: Argon (gemini-4-argon-high) APPROVE WITH NOTES; two P2 (scheme/port hostnames passed startup;
+  staging could keep production hosts) and two P3 (empty-allowlist test did not prove no network call; docs) fixed in
+  `7cfeb8f`, each new assertion proved by a mutation.
+- Known gaps: the e2e stack runs with CAPTCHA disabled, so the action and hostname checks are proved by unit and DB
+  tests only, not against real Cloudflare; tokens issued by the previous client fail once after the release.
+
 ## M8 CLOSED (2026-11-10) — T-043 amendment: courier cut-off warning and the 120-minute lead as a setting
 
 - INT-M8 `RUN-20261109T164048Z-0a73292a` on head `f609b65`. Declared before launch: typecheck, unit, db, upgrade, e2e

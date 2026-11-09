@@ -1456,3 +1456,9 @@ server/DNS, SMTP and backup-target inputs.
   the Worker at a fixed 120; the review caught it); an argument list reads the clock before it awaits a later argument;
   `WHERE a AND b` has no evaluation order, so guards go in a `CASE`; a clock hook without a component test needs its
   cleanup line pinned by a source-contract test.
+
+## 2026-11-10 — M9: Turnstile action and hostname checks
+
+- INT-M9 PASS on `7cfeb8f`. Review by Argon. Lesson: a configuration value that the provider compares literally
+  (siteverify returns a bare hostname) must be validated in the same form at startup, or a plausible value such as
+  `https://app.example.com` turns every sign-in into a silent failure.
