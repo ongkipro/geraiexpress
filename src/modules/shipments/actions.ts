@@ -11,6 +11,7 @@ import { couriersForHandover, quoteServices } from "./handover";
 import type { BillableWeightRule } from "@/lib/billable-weight";
 import { estimateBillableQuotes } from "@/lib/mengantar/billable-quotes";
 import { mengantarFailure, tenantMengantar } from "@/lib/mengantar/tenant";
+import { pickupLeadMinutes } from "@/lib/mengantar/pickup-lead";
 import { config } from "@/lib/config";
 import { checkPayment, dispatchOperation, payUnpaidShipmentBatch, reconcileOperation, type DispatchSummary } from "@/lib/mengantar/dispatcher";
 import { dispatcherDeps } from "@/lib/mengantar/machine-deps";
@@ -71,7 +72,7 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
     .eq("id", id).eq("tenant_id", ws.tenant.id).maybeSingle();
   if (!mode) return { error: friendlyError({ message: "not_found" }) };
   const live = !mode.is_simulated;
-  const { values, update, errors } = parseDraft(form, intent === "quote" && live);
+  const { values, update, errors } = parseDraft(form, intent === "quote" && live, new Date(), await pickupLeadMinutes(() => db.rpc("pickup_lead_minutes")));
   // T-094: a sender contact keeps its address only as street + area (contact_addresses requires both).
   // When the operator asks to save the sender, a half-entered address is named instead of silently dropped.
   if (form.get("save_sender") === "on" && !form.get("sender_contact_id")) {
@@ -301,10 +302,11 @@ export async function confirmShipmentAction(_: ConfirmState, form: FormData): Pr
     .select("recipient_name,recipient_address,recipient_phone,is_simulated,handover,pickup_date,pickup_slot_hour")
     .eq("id", id).eq("tenant_id", ws.tenant.id).maybeSingle();
   if (!recipient) return { error: friendlyError({ message: "not_found" }) }; // not in the selected gerai: never reaches the RPC or the provider
-  // T-043: a pickup slot that has passed (or is inside the 90-minute lead time) cannot be confirmed;
-  // the database re-checks it under lock (pickup_time_invalid).
+  // T-043: a pickup slot that has passed (or is inside the lead time setting, default 120 minutes) cannot be
+  // confirmed; the database re-checks it under lock (pickup_time_invalid).
   if (recipient?.handover === "pickup") {
-    const fieldErrors = pickupFieldErrors({ pickup_date: String(recipient.pickup_date ?? ""), pickup_slot_hour: String(recipient.pickup_slot_hour ?? "") }, new Date());
+    const fieldErrors = pickupFieldErrors({ pickup_date: String(recipient.pickup_date ?? ""), pickup_slot_hour: String(recipient.pickup_slot_hour ?? "") },
+      new Date(), await pickupLeadMinutes(() => db.rpc("pickup_lead_minutes")));
     if (Object.keys(fieldErrors).length) return { error: Object.values(fieldErrors).join(" "), fieldErrors };
   }
   if (recipient && !recipient.is_simulated) {

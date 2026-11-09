@@ -4,9 +4,10 @@
 // one-hour slot, the vehicle class and a local note. Every input is a plain named form control, so
 // the values travel with the intake form (names: handover, pickup_date, pickup_slot_hour,
 // pickup_volume, pickup_note) and are validated on the server (draft.ts); what is disabled or
-// hidden here is a hint only. The clock used for the hints is the browser's and is read after
-// mount, so the server render never depends on it. Rendered inside the "Paket & serah" step, so it
-// draws no frame of its own.
+// hidden here is a hint only. The clock used for the hints is the browser's: read after mount (so the
+// server render never depends on it) and refreshed every minute and when the tab is shown again
+// (watchMinuteClock), so a form left open keeps the cut-off warning and the "too soon" slots correct.
+// Rendered inside the "Paket & serah" step, so it draws no frame of its own.
 import { useEffect, useState } from "react";
 import { AlertTriangle, Info, Store, Truck } from "lucide-react";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
@@ -15,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   dateLabel, PICKUP_LEAD_MINUTES, PICKUP_SLOT_HOURS, pickupDates, pickupSlotError, PICKUP_VOLUMES, slotLabel, VOLUME_LABEL, isPickupVolume,
 } from "@/lib/mengantar/pickup";
+import { watchMinuteClock } from "@/lib/minute-clock";
 import { pickupCutoffWarning } from "@/lib/mengantar/pickup-cutoffs";
 import type { DraftField, DraftValues } from "./draft";
 import { FieldMessage } from "./intake-step";
@@ -26,6 +28,8 @@ type Props = {
   onChange: (field: DraftField, value: string) => void;
   // The courier code of the selected live quote, or null (none selected, or a simulated quote).
   courier?: string | null;
+  // The effective minimum lead time in minutes (the setting the server checks use).
+  leadMinutes?: number;
 };
 
 // One line for the confirmation review: how the parcel reaches the courier.
@@ -40,9 +44,9 @@ const OPTIONS = [
   ["pickup", "Jemput kurir", "Kurir menjemput di alamat pickup gerai pada jadwal yang dipilih.", Truck],
 ] as const;
 
-export function PickupFields({ values, errors, onChange, courier = null }: Props) {
+export function PickupFields({ values, errors, onChange, courier = null, leadMinutes = PICKUP_LEAD_MINUTES }: Props) {
   const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => setNow(new Date()), []);
+  useEffect(() => watchMinuteClock(setNow), []);
 
   const pickup = values.handover === "pickup";
   const dates = now ? pickupDates(now) : values.pickup_date ? [values.pickup_date] : [];
@@ -94,11 +98,11 @@ export function PickupFields({ values, errors, onChange, courier = null }: Props
                 onValueChange={(v) => onChange("pickup_slot_hour", v)}
                 options={PICKUP_SLOT_HOURS.map((h) => {
                   // Hint only: the server decides with its own clock.
-                  const early = !!now && !!values.pickup_date && pickupSlotError(values.pickup_date, h, now) === "too_soon";
+                  const early = !!now && !!values.pickup_date && pickupSlotError(values.pickup_date, h, now, leadMinutes) === "too_soon";
                   return { value: String(h), label: `${slotLabel(h)}${early ? " (terlalu dekat)" : ""}`, disabled: early };
                 })} />
               <FieldDescription id="f-pickup_slot_hour-hint">
-                Slot per jam, 09.00 sampai 18.00 WIB, minimal {PICKUP_LEAD_MINUTES} menit dari sekarang.
+                Slot per jam, 09.00 sampai 18.00 WIB, minimal {leadMinutes} menit dari sekarang.
               </FieldDescription>
               {err("pickup_slot_hour", "f-pickup_slot_hour")}
             </Field>

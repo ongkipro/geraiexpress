@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { credentialAad, sealCredential } from "../../src/lib/credential-crypto";
 import { dispatchOperation, reconcileOperation, type Rpc } from "../../src/lib/mengantar/dispatcher";
 import {
-  PICKUP_ERROR_TEXT, PICKUP_LEAD_MINUTES, pickupDates, pickupSlotError, providerTimeFields, slotLabel, slotStartMs, wibDate,
+  PICKUP_ERROR_TEXT, PICKUP_LEAD_MINUTES, pickupDates, pickupErrorText, pickupSlotError, providerTimeFields, slotLabel, slotStartMs, wibDate,
 } from "../../src/lib/mengantar/pickup";
 import { cutoffLabel, PICKUP_CUTOFF_SOURCE, PICKUP_CUTOFFS, pickupCutoffWarning } from "../../src/lib/mengantar/pickup-cutoffs";
 import { createMengantarPublicClient, InvalidOrderRequest, MengantarError } from "../../src/lib/mengantar/public-api";
@@ -72,11 +72,30 @@ describe("per-courier same-day pickup cut-offs (Mengantar help article, verified
 describe("pickup rules (documented: start hours 9:00-18:00; lead time: documented 90 minutes, web UI 2 hours)", () => {
   it("the minimum lead time defaults to 120 minutes (the web UI's 2 hours, stricter than the API's 90)", () => {
     expect(PICKUP_LEAD_MINUTES).toBe(120);
-    expect(PICKUP_ERROR_TEXT.too_soon).toContain("minimal 120 menit");
+    expect(pickupErrorText("too_soon")).toContain("minimal 120 menit");
+    expect(pickupErrorText("too_soon", 180)).toContain("minimal 180 menit");
+    expect(pickupErrorText("too_far")).toBe(PICKUP_ERROR_TEXT.too_far);
     const start = slotStartMs("2026-02-03", 9)!;
     // 119 minutes ahead is refused (it would have passed under the old 90); 120 is accepted.
     expect(pickupSlotError("2026-02-03", 9, new Date(start - 119 * 60_000))).toBe("too_soon");
     expect(pickupSlotError("2026-02-03", 9, new Date(start - 120 * 60_000))).toBeNull();
+  });
+
+  // The lead is the setting (private.settings 'pickup_min_lead_minutes'), passed in by the caller.
+  it.each([90, 120, 180])("takes the lead explicitly: with %i minutes, one minute less is refused and the exact lead is accepted", (lead) => {
+    const start = slotStartMs("2026-02-03", 9)!;
+    expect(pickupSlotError("2026-02-03", 9, new Date(start - (lead - 1) * 60_000), lead)).toBe("too_soon");
+    expect(pickupSlotError("2026-02-03", 9, new Date(start - lead * 60_000), lead)).toBeNull();
+  });
+
+  it("an explicit lead overrides the default in both directions", () => {
+    const start = slotStartMs("2026-02-03", 9)!;
+    const at100 = new Date(start - 100 * 60_000);
+    expect(pickupSlotError("2026-02-03", 9, at100)).toBe("too_soon"); // default 120
+    expect(pickupSlotError("2026-02-03", 9, at100, 90)).toBeNull();
+    const at150 = new Date(start - 150 * 60_000);
+    expect(pickupSlotError("2026-02-03", 9, at150)).toBeNull();
+    expect(pickupSlotError("2026-02-03", 9, at150, 180)).toBe("too_soon");
   });
 
   it("accepts a slot exactly at the lead time and refuses one millisecond less", () => {
@@ -224,6 +243,8 @@ function scenario(claim: unknown, replies: Replies = {}, rpcErrors: Record<strin
   const timeline: string[] = [];
   const rpcCalls: { fn: string; args: Record<string, unknown> }[] = [];
   const rpc: Rpc = async (fn, args) => {
+    // The lead time setting read is not a dispatch step: answered with the default, kept off the timeline.
+    if (fn === "pickup_lead_minutes") return { data: PICKUP_LEAD_MINUTES, error: null };
     timeline.push(`rpc:${fn}`);
     rpcCalls.push({ fn, args });
     if (rpcErrors[fn]) return { data: null, error: { message: rpcErrors[fn] } };
@@ -416,6 +437,23 @@ describe("dispatchOperation: pickup with time reservation (TD-12)", () => {
     const incomplete = scenario(await pickupPayload({ pickup_date: null }));
     await dispatchOperation("op-1", incomplete.deps);
     expect(incomplete.recorded()[0]).toMatchObject({ p_outcome: "rejected", p_code: "INPUT_INCOMPLETE" });
+  });
+
+  it("honours the lead time setting: with 180 minutes a slot 150 minutes ahead is refused before any provider write", async () => {
+    const ahead150 = { now: () => new Date(slotStartMs(DATE, HOUR)! - 150 * 60_000) }; // 10:30 WIB for a 13:00 slot
+    const defaultLead = scenario(await pickupPayload());
+    expect(await dispatchOperation("op-1", { ...defaultLead.deps, ...ahead150 })).toEqual({ status: "recorded", outcome: "issued" });
+    const setting = (minutes: unknown, error: { message: string } | null = null) => (fn: string, args: Record<string, unknown>, base: Rpc) =>
+      fn === "pickup_lead_minutes" ? Promise.resolve({ data: minutes, error }) : base(fn, args);
+    const strict = scenario(await pickupPayload());
+    const strictRpc = (fn: string, args: Record<string, unknown>) => setting(180)(fn, args, strict.deps.rpc);
+    expect(await dispatchOperation("op-1", { ...strict.deps, ...ahead150, rpc: strictRpc })).toEqual({ status: "recorded", outcome: "rejected" });
+    expect(strict.recorded()).toEqual([{ p_operation: "op-1", p_attempt: 3, p_outcome: "rejected", p_code: "PICKUP_TIME_INVALID" }]);
+    expect(strict.timeline.filter((t) => t.includes("/time") || t.includes("POST") || t.includes("pickup_"))).toEqual([]);
+    // A lead the database cannot answer falls back to the default 120 (the database re-checks under lock anyway).
+    const unreadable = scenario(await pickupPayload());
+    const unreadableRpc = (fn: string, args: Record<string, unknown>) => setting(null, { message: "boom" })(fn, args, unreadable.deps.rpc);
+    expect(await dispatchOperation("op-1", { ...unreadable.deps, ...ahead150, rpc: unreadableRpc })).toEqual({ status: "recorded", outcome: "issued" });
   });
 
   it("a requeued operation (phase reserved) sends the order with its stored time id and never reserves again", async () => {

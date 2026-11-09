@@ -140,10 +140,17 @@ describe("handover columns and constraints (T-043 PR-5)", () => {
 
   // The lead time is a setting (private.settings 'pickup_min_lead_minutes', default 120). The clock is real, so the
   // boundary is built from the actual distance to tomorrow 12:00 WIB: whole minutes `ahead`, then lead = ahead - 1
-  // (accepted) and ahead + 1 (refused).
+  // (accepted) and ahead + 1 (refused). ONE target date is captured once and every statement uses that literal; the
+  // distance is re-measured right before each boundary check, so neither a midnight crossing (the date never changes)
+  // nor a slow step (the margin is re-measured, at least one whole minute each side) can move the target.
   it("reads the lead time from the setting, default 120: a slot closer than the lead is refused, farther is accepted", () => {
-    const slot = `((('${wibDay(1)}'::date + make_interval(hours => 12)) at time zone 'Asia/Jakarta'))`;
-    const ahead = Number(sql(`select floor(extract(epoch from ${slot} - now()) / 60)::integer`));
+    const target = wibDay(1);
+    const slot = `((('${target}'::date + make_interval(hours => 12)) at time zone 'Asia/Jakarta'))`;
+    const measure = () => {
+      const statement = `select floor(extract(epoch from ${slot} - now()) / 60)::integer`;
+      console.log(`[pickup lead measure] ${statement}`);
+      return Number(sql(statement));
+    };
     const setLead = (value: string | null) => {
       const statement = value === null
         ? `delete from private.settings where key = 'pickup_min_lead_minutes'`
@@ -152,23 +159,53 @@ describe("handover columns and constraints (T-043 PR-5)", () => {
       console.log(`[pickup lead setting] ${statement.replace(/\s+/g, " ")}`);
       sql(statement);
     };
-    const ok = () => sql(`select private.pickup_slot_ok('${wibDay(1)}', 12)`) === "t";
+    const check = `select private.pickup_slot_ok('${target}', 12)`;
+    const ok = () => { console.log(`[pickup lead check] ${check}`); return sql(check) === "t"; };
+    const leadNow = () => sql(`select private.pickup_lead_minutes()`);
     try {
       setLead(null);
-      expect(sql(`select private.pickup_lead_minutes()`)).toBe("120");
-      // Absent row: the default 120 decides exactly like the application rule (ahead is ~1440 minutes here).
-      expect(ok()).toBe(ahead - 1 >= 120);
-      setLead(String(ahead - 1)); expect(sql(`select private.pickup_lead_minutes()`)).toBe(String(ahead - 1));
+      expect(leadNow()).toBe("120");
+      // Absent row: the default 120 decides exactly like the application rule (the target is ~1440 minutes away).
+      expect(ok()).toBe(measure() - 1 >= 120);
+      let ahead = measure();
+      setLead(String(ahead - 1)); expect(leadNow()).toBe(String(ahead - 1));
       expect(ok()).toBe(true);
+      ahead = measure();
       setLead(String(ahead + 1)); expect(ok()).toBe(false);
       // Unusable values fall back to 120 rather than disabling the check.
       // 525601 (over a year), 1000000 (more than six digits) and the string "90" are unusable too; 1e3 is a valid
       // JSON number worth 1000 whole minutes. The guards live in a CASE: a WHERE may be evaluated in any order.
       for (const bad of ['"abc"', "0", "-5", "1.5", "null", "true", "525601", "1000000", '"90"', "[]"]) {
         setLead(bad);
-        expect(sql(`select private.pickup_lead_minutes()`)).toBe("120");
+        expect(leadNow()).toBe("120");
       }
-      setLead("525600"); expect(sql(`select private.pickup_lead_minutes()`)).toBe("525600");
+      setLead("525600"); expect(leadNow()).toBe("525600");
+    } finally { setLead(null); }
+  });
+
+  // The application reads the setting through public.pickup_lead_minutes(): it equals the private reader and follows the
+  // setting, a signed-in member may call it, a visitor may not.
+  it("exposes the lead time to the application: public.pickup_lead_minutes() follows the setting for a member, not for anon", async () => {
+    const setLead = (value: string | null) => sql(value === null
+      ? `delete from private.settings where key = 'pickup_min_lead_minutes'`
+      : `insert into private.settings (key, value) values ('pickup_min_lead_minutes', '${value}'::jsonb)
+         on conflict (key) do update set value = excluded.value, updated_at = now()`);
+    const owner = await signIn("owner-a@geraiexpress.test");
+    try {
+      for (const setting of [null, "90", "180", '"abc"']) {
+        setLead(setting);
+        expect(sql(`select public.pickup_lead_minutes()`)).toBe(sql(`select private.pickup_lead_minutes()`));
+        const read = await owner.rpc("pickup_lead_minutes");
+        expect(read.error).toBeNull();
+        expect(read.data).toBe(Number(sql(`select private.pickup_lead_minutes()`)));
+      }
+      setLead("180");
+      expect((await owner.rpc("pickup_lead_minutes")).data).toBe(180);
+      setLead(null);
+      expect((await owner.rpc("pickup_lead_minutes")).data).toBe(120);
+      const anon = await client().rpc("pickup_lead_minutes");
+      expect(anon.data).toBeNull();
+      expect(anon.error).not.toBeNull();
     } finally { setLead(null); }
   });
 

@@ -16,6 +16,7 @@ vi.mock("@/lib/db/server", () => ({ dbServer: async () => ({ rpc, from: () => ch
 vi.mock("@/lib/errors", () => vi.importActual("../../src/lib/errors"));
 vi.mock("@/lib/format", () => vi.importActual("../../src/lib/format"));
 vi.mock("@/lib/log", () => vi.importActual("../../src/lib/log"));
+vi.mock("@/lib/mengantar/pickup-lead", () => vi.importActual("../../src/lib/mengantar/pickup-lead"));
 vi.mock("@/lib/mengantar/public-api", () => ({ InvalidOrderRequest: class extends Error {} }));
 vi.mock("@/lib/mengantar/billable-quotes", () => ({ estimateBillableQuotes: vi.fn() }));
 vi.mock("@/lib/mengantar/tenant", () => ({ mengantarFailure: vi.fn(), tenantMengantar: vi.fn() }));

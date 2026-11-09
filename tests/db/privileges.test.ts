@@ -69,6 +69,8 @@ const AUTHENTICATED_EXECUTE = [
   // T-086: member opens one non-closed case on an issued shipment; deadline computed in SQL.
   "public.open_shipment_case(uuid,text,text,text,text[],text,text,timestamp with time zone)",
   "public.partner_onboarding_status(uuid)",
+  // T-043: the pickup lead-time setting in whole minutes, so the application validates with the number the database enforces; not sensitive, no arguments, no table data.
+  "public.pickup_lead_minutes()",
   // T-087: pilot report per outlet/WIB day; current tenant administrator only, derived measures only.
   "public.pilot_report(uuid,date,date)",
   "public.platform_add_declaration_text(text,text[],text,boolean,text)",

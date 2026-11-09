@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { liveRecipientErrors, missingForQuote, normalizePhone, parseDraft } from "../../src/modules/shipments/draft";
+import { liveRecipientErrors, missingForQuote, normalizePhone, parseDraft, pickupFieldErrors } from "../../src/modules/shipments/draft";
 
 const form = (entries: Record<string, string>) => {
   const f = new FormData();
@@ -131,9 +131,22 @@ describe("handover choice (pickup)", () => {
 
   it("refuses a pickup in the past or inside the lead time (120 minutes by default; was 90 before the amendment) with Bahasa field errors", () => {
     expect(parseDraft(pickup({ pickup_date: "2026-02-01" }), false, NOW).errors.pickup_slot_hour).toContain("120 menit");
-    // 10:00 now -> 11:30 is the earliest start, so the 11:00 hour is too soon and 12:00 is fine.
+    // 10:00 now + 120 minutes = 12:00 is the earliest start, so the 11:00 hour is too soon and 12:00 is fine.
     expect(parseDraft(pickup({ pickup_date: "2026-02-02", pickup_slot_hour: "11" }), false, NOW).errors.pickup_slot_hour).toContain("120 menit");
     expect(parseDraft(pickup({ pickup_date: "2026-02-02", pickup_slot_hour: "12" }), false, NOW).errors).toEqual({});
+  });
+
+  it("validates the pickup against an explicit lead time (the setting), default 120", () => {
+    // 10:00 now: the 12:00 slot the same day is exactly 120 minutes ahead.
+    const at12 = { pickup_date: "2026-02-02", pickup_slot_hour: "12" };
+    expect(parseDraft(pickup(at12), false, NOW).errors).toEqual({});
+    expect(parseDraft(pickup(at12), false, NOW, 120).errors).toEqual({});
+    const strict = parseDraft(pickup(at12), false, NOW, 180).errors.pickup_slot_hour;
+    expect(strict).toContain("180 menit");
+    expect(parseDraft(pickup({ pickup_date: "2026-02-02", pickup_slot_hour: "11" }), false, NOW, 60).errors).toEqual({});
+    expect(parseDraft(pickup({ pickup_date: "2026-02-02", pickup_slot_hour: "11" }), false, NOW, 120).errors.pickup_slot_hour).toContain("120 menit");
+    expect(pickupFieldErrors({ pickup_date: "2026-02-02", pickup_slot_hour: "12" }, NOW, 181).pickup_slot_hour).toContain("181 menit");
+    expect(pickupFieldErrors({ pickup_date: "2026-02-02", pickup_slot_hour: "12" }, NOW, 120)).toEqual({});
   });
 
   it("refuses missing or impossible slots, hours outside 9-18, far dates and a long note", () => {

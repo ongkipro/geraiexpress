@@ -1,5 +1,3 @@
-import { PICKUP_LEAD_MINUTES } from "./mengantar/pickup";
-
 // Maps stable database/RPC error codes to operator-facing Bahasa Indonesia messages (UX-1).
 const MESSAGES: Record<string, string> = {
   not_found: "Data tidak ditemukan atau Anda tidak memiliki akses.",
@@ -112,7 +110,7 @@ const MESSAGES: Record<string, string> = {
   rotation_restricted: "Mengantar menonaktifkan akun penjual atau kunci API ini, jadi pembuatan ulang dihentikan dan tidak dicoba lagi. Hubungi dukungan Mengantar; pengiriman tetap dijeda.",
   rotation_store_failed: "Kunci baru dibuat di Mengantar tetapi belum tersimpan. Pengiriman dijeda; pilih Ambil kunci terbaru untuk melanjutkan.",
   // T-043 Pickup orders
-  pickup_time_invalid: `Jam jemput harus minimal ${PICKUP_LEAD_MINUTES} menit dari sekarang (WIB), antara 09.00 dan 18.00. Pilih slot yang lebih lambat lalu cek ongkir lagi.`,
+  pickup_time_invalid: "Jam jemput terlalu dekat dari sekarang (WIB; batas minimal ada di keterangan jam jemput) atau di luar 09.00 sampai 18.00. Pilih slot yang lebih lambat lalu cek ongkir lagi.",
   // T-105: a visitor budget (src/lib/rate-limit.ts) refused the action.
   rate_limited: "Terlalu banyak percobaan dari jaringan ini. Tunggu satu menit lalu coba lagi.",
   // T-110: Partner-wide quota (all gerai share one Partner account) and the post-restore mutation fence.

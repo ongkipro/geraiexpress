@@ -1,6 +1,7 @@
 import { billableWeight, cargoMinimumSummary, weightExclusionText, type BillableWeightRule } from "@/lib/billable-weight";
 import { couriersForHandover, quoteServices } from "./handover";
 import { dbServer } from "@/lib/db/server";
+import { pickupLeadMinutes } from "@/lib/mengantar/pickup-lead";
 import { GeraiCostQuotePanel } from "@/modules/pricing/gerai-cost";
 import { contactSearch } from "./contact-search";
 import { DRAFT_FIELDS, type DraftValues } from "./draft";
@@ -32,7 +33,7 @@ export async function DraftIntake({ s, tenantId, outlet, isAdmin, isDemo, kontak
   let contactsQuery = db.from("contacts").select(CONTACT_COLUMNS)
     .eq("tenant_id", tenantId).is("archived_at", null).order("name").limit(301);
   if (search.filter) contactsQuery = contactsQuery.or(search.filter);
-  const [{ data: contactRows }, { data: quotes }, { data: ruleRows }, { data: declaration }] = await Promise.all([
+  const [{ data: contactRows }, { data: quotes }, { data: ruleRows }, { data: declaration }, leadMinutes] = await Promise.all([
     contactsQuery,
     s.submission_state === "estimated"
       ? db.from("shipment_quotes").select("id, courier, service, normal_tariff_idr, cod_supported, cod_fee_idr, customer_charge_idr, eta_days, is_simulated, actual_weight_grams, volumetric_weight_grams, billable_weight_grams, weight_rule_id")
@@ -43,6 +44,8 @@ export async function DraftIntake({ s, tenantId, outlet, isAdmin, isDemo, kontak
     // PR-41: the current declaration text (newest effective version) shown at confirmation.
     db.from("declaration_texts").select("version, body, prohibited_categories, provisional")
       .lte("effective_at", new Date().toISOString()).order("effective_at", { ascending: false }).limit(1).maybeSingle(),
+    // T-043: the pickup lead time setting, the same number the server checks use (default when unreadable).
+    pickupLeadMinutes(() => db.rpc("pickup_lead_minutes")),
   ]);
   const rows = (contactRows ?? []) as ContactRow[];
   const contactsTruncated = rows.length > 300;
@@ -109,6 +112,7 @@ export async function DraftIntake({ s, tenantId, outlet, isAdmin, isDemo, kontak
       idempotencyKey={crypto.randomUUID()}
       declaration={(declaration ?? null) as Declaration | null}
       live={!isDemo}
+      pickupLeadMinutes={leadMinutes}
       costPanel={isAdmin && !isDemo && s.submission_state === "estimated"
         ? <GeraiCostQuotePanel tenantId={tenantId} quotes={quoteOptions.filter((q) => !q.is_simulated)} />
         : undefined}

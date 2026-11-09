@@ -7,6 +7,7 @@
 import { credentialAad, openCredential } from "../credential-crypto";
 import { createMengantarPublicClient, InvalidOrderRequest, MengantarError, ResponseTooLarge, providerPhone, type CreateOrderRequest, type MengantarEnvironment, type MengantarPublicClient, type ProviderOrder } from "./public-api";
 import { isPickupVolume, pickupSlotError, type PickupVolume } from "./pickup";
+import { pickupLeadMinutes } from "./pickup-lead";
 
 export type Rpc = (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
 
@@ -146,8 +147,9 @@ async function preparePickup(p: Payload, request: CreateOrderRequest, client: Me
   const hour = p.pickup_slot_hour ?? null;
   const volume = p.pickup_volume ?? null;
   if (!date || hour === null || !volume || !isPickupVolume(volume)) return record("rejected", { p_code: "INPUT_INCOMPLETE" });
-  // A queued order can wait past its slot's lead time: refuse locally, before any provider call.
-  const lead = pickupSlotError(date, hour, (deps.now ?? (() => new Date()))());
+  // A queued order can wait past its slot's lead time: refuse locally, before any provider call. The lead is the
+  // setting the database enforces (read with this machine client; the documented default if it cannot be read).
+  const lead = pickupSlotError(date, hour, (deps.now ?? (() => new Date()))(), await pickupLeadMinutes(() => deps.rpc("pickup_lead_minutes", {})));
   if (lead !== null && lead !== "too_far") return record("rejected", { p_code: "PICKUP_TIME_INVALID" });
 
   let timeId = p.pickup_time_id ?? null;

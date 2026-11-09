@@ -15,10 +15,12 @@
 
 export const PICKUP_FIRST_HOUR = 9;
 export const PICKUP_LAST_HOUR = 18;
-// The minimum lead time is a setting. This is its default; the database reads the setting
-// private.settings 'pickup_min_lead_minutes' and falls back to the same 120 in private.pickup_slot_ok
-// (migration 20261109200000). A row there overrides the database check; the application hints and the
-// Worker's own re-check keep this default (tests/db/pickup-orders.test.ts keeps the two defaults equal).
+// The minimum lead time is a setting (private.settings 'pickup_min_lead_minutes'), read by
+// private.pickup_slot_ok (migration 20261109200000) and exposed to the application as
+// public.pickup_lead_minutes() (migration 20261109210000). This is its DEFAULT: the value of an absent or
+// unusable setting, and the application's fallback when the setting cannot be read (./pickup-lead.ts).
+// Every application check takes the effective lead explicitly (pickupSlotError's `leadMinutes`).
+// tests/db/pickup-orders.test.ts keeps this default equal to the database's.
 export const PICKUP_LEAD_MINUTES = 120;
 // Local policy, not a provider rule (the documentation states no maximum): keeps typos out.
 export const PICKUP_MAX_DAYS_AHEAD = 14;
@@ -65,11 +67,12 @@ export type PickupSlotError = "date_invalid" | "slot_invalid" | "too_soon" | "to
 
 // Why a date and start hour cannot be reserved at `now`, or null when they can. Mirrors the
 // database check (private.pickup_slot_ok) for the lead time; the database is the authority.
-export function pickupSlotError(date: string, hour: number, now: Date): PickupSlotError | null {
+// `leadMinutes` is the effective setting (see ./pickup-lead.ts); the default is the documented 120.
+export function pickupSlotError(date: string, hour: number, now: Date, leadMinutes: number = PICKUP_LEAD_MINUTES): PickupSlotError | null {
   if (!parseDate(date)) return "date_invalid";
   if (!PICKUP_SLOT_HOURS.includes(hour)) return "slot_invalid";
   const start = slotStartMs(date, hour)!;
-  if (start < now.getTime() + PICKUP_LEAD_MINUTES * 60_000) return "too_soon";
+  if (start < now.getTime() + leadMinutes * 60_000) return "too_soon";
   // The last offered date is `PICKUP_MAX_DAYS_AHEAD` days after today (WIB).
   const last = slotStartMs(wibDate(new Date(now.getTime() + PICKUP_MAX_DAYS_AHEAD * 86_400_000)), 23)!;
   return start > last ? "too_far" : null;
@@ -111,9 +114,15 @@ export const VOLUME_LABEL: Record<PickupVolume, string> = {
 };
 
 // Bahasa field-error text for the draft validation and the confirmation check.
-export const PICKUP_ERROR_TEXT: Record<PickupSlotError, string> = {
+export const PICKUP_ERROR_TEXT: Record<Exclude<PickupSlotError, "too_soon">, string> = {
   date_invalid: "Pilih tanggal jemput.",
   slot_invalid: "Pilih jam jemput antara 09.00 dan 18.00 WIB.",
-  too_soon: `Jam jemput harus minimal ${PICKUP_LEAD_MINUTES} menit dari sekarang (WIB). Pilih jam yang lebih lambat.`,
   too_far: `Tanggal jemput maksimal ${PICKUP_MAX_DAYS_AHEAD} hari ke depan.`,
 };
+
+// The text for a refusal; "too soon" names the effective lead time.
+export function pickupErrorText(reason: PickupSlotError, leadMinutes: number = PICKUP_LEAD_MINUTES): string {
+  return reason === "too_soon"
+    ? `Jam jemput harus minimal ${leadMinutes} menit dari sekarang (WIB). Pilih jam yang lebih lambat.`
+    : PICKUP_ERROR_TEXT[reason];
+}

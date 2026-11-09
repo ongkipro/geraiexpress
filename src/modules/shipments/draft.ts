@@ -2,7 +2,7 @@
 // constraints remain the final authority.
 import { friendlyError } from "../../lib/errors";
 import { LIVE_RECIPIENT_ADDRESS_MAX, LIVE_RECIPIENT_NAME_MAX, providerPhone } from "../../lib/mengantar/public-api";
-import { DEFAULT_PICKUP_VOLUME, isPickupVolume, PICKUP_ERROR_TEXT, pickupSlotError } from "../../lib/mengantar/pickup";
+import { DEFAULT_PICKUP_VOLUME, isPickupVolume, PICKUP_ERROR_TEXT, PICKUP_LEAD_MINUTES, pickupErrorText, pickupSlotError } from "../../lib/mengantar/pickup";
 
 export const DRAFT_FIELDS = [
   "sender_name", "sender_phone", "recipient_name", "recipient_phone", "recipient_address",
@@ -37,7 +37,7 @@ function int(raw: string, min: number, max: number): number | null | "invalid" {
   return n >= min && n <= max ? n : "invalid";
 }
 
-export function parseDraft(form: FormData, live = false, now: Date = new Date()): { values: DraftValues; update: DraftUpdate; errors: Partial<Record<DraftField, string>> } {
+export function parseDraft(form: FormData, live = false, now: Date = new Date(), pickupLeadMinutes: number = PICKUP_LEAD_MINUTES): { values: DraftValues; update: DraftUpdate; errors: Partial<Record<DraftField, string>> } {
   const values = Object.fromEntries(DRAFT_FIELDS.map((f) => [f, String(form.get(f) ?? "").trim()])) as DraftValues;
   const errors: Partial<Record<DraftField, string>> = {};
   const update: DraftUpdate = {};
@@ -98,7 +98,7 @@ export function parseDraft(form: FormData, live = false, now: Date = new Date())
   if (isCod && typeof update.goods_value_idr === "number" && update.goods_value_idr < 1000) {
     errors.goods_value_idr = "Untuk pengiriman COD, nilai barang minimal Rp1.000.";
   }
-  Object.assign(errors, parseHandover(values, update, now));
+  Object.assign(errors, parseHandover(values, update, now, pickupLeadMinutes));
   if (live) Object.assign(errors, liveRecipientErrors(update));
   return { values, update, errors };
 }
@@ -106,7 +106,7 @@ export function parseDraft(form: FormData, live = false, now: Date = new Date())
 // T-043: the handover choice. Drop-off carries no pickup data (the database requires it to be
 // empty); pickup needs a date and a start hour that `pickupSlotError` accepts at `now` (a client
 // hint is never trusted: this runs on the server for every save).
-function parseHandover(values: DraftValues, update: DraftUpdate, now: Date): Partial<Record<DraftField, string>> {
+function parseHandover(values: DraftValues, update: DraftUpdate, now: Date, leadMinutes: number): Partial<Record<DraftField, string>> {
   const errors: Partial<Record<DraftField, string>> = {};
   const pickup = values.handover === "pickup";
   values.handover = pickup ? "pickup" : "dropoff";
@@ -118,7 +118,7 @@ function parseHandover(values: DraftValues, update: DraftUpdate, now: Date): Par
     }
     return errors;
   }
-  Object.assign(errors, pickupFieldErrors(values, now));
+  Object.assign(errors, pickupFieldErrors(values, now, leadMinutes));
   if (values.pickup_volume === "") values.pickup_volume = DEFAULT_PICKUP_VOLUME;
   if (!isPickupVolume(values.pickup_volume)) errors.pickup_volume = "Pilih perkiraan kendaraan penjemput.";
   if (values.pickup_note.length > 200) errors.pickup_note = "Catatan maksimal 200 karakter.";
@@ -131,14 +131,14 @@ function parseHandover(values: DraftValues, update: DraftUpdate, now: Date): Par
 
 // Bahasa field errors for a pickup date and start hour at `now`; empty when it can be reserved.
 // Shared with the confirmation check, which reads the stored draft.
-export function pickupFieldErrors(fields: { pickup_date: string; pickup_slot_hour: string }, now: Date): Partial<Record<DraftField, string>> {
+export function pickupFieldErrors(fields: { pickup_date: string; pickup_slot_hour: string }, now: Date, leadMinutes: number = PICKUP_LEAD_MINUTES): Partial<Record<DraftField, string>> {
   if (!fields.pickup_date) return { pickup_date: PICKUP_ERROR_TEXT.date_invalid };
   if (!/^[0-9]{1,2}$/.test(fields.pickup_slot_hour)) return { pickup_slot_hour: "Pilih jam jemput." };
-  const reason = pickupSlotError(fields.pickup_date, Number(fields.pickup_slot_hour), now);
+  const reason = pickupSlotError(fields.pickup_date, Number(fields.pickup_slot_hour), now, leadMinutes);
   if (reason === null) return {};
   return reason === "date_invalid" || reason === "too_far"
-    ? { pickup_date: PICKUP_ERROR_TEXT[reason] }
-    : { pickup_slot_hour: PICKUP_ERROR_TEXT[reason] };
+    ? { pickup_date: pickupErrorText(reason, leadMinutes) }
+    : { pickup_slot_hour: pickupErrorText(reason, leadMinutes) };
 }
 
 // Partial saves keep the broader draft contract; quoting/confirming a real shipment cannot

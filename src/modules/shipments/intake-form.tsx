@@ -74,6 +74,8 @@ type Props = {
   idempotencyKey: string;
   // A connected real gerai: recipient area comes from Mengantar and quotes are live (T-023).
   live: boolean;
+  // T-043: the effective minimum pickup lead time in minutes (the setting the server checks use).
+  pickupLeadMinutes: number;
   // SUP-24: the page loads at most CONTACT_PICKER_LIMIT contacts for the pickers. When the list
   // was cut short it says so (`contactsTruncated`), and the search box narrows it on the server
   // through the `kontak` query parameter (`contactQuery` is the value currently applied).
@@ -404,7 +406,8 @@ export function IntakeForm(props: Props) {
                   <span className="text-muted-foreground"> · {outletPlace || "Alamat pickup belum diatur"}. Alamat pickup gerai tetap menjadi asal penjemputan, terpisah dari identitas pengirim.</span>
                 </span>
               </p>
-              <PickupFields values={values} errors={err} onChange={set} courier={selected && !selected.is_simulated ? selected.courier : null} />
+              <PickupFields values={values} errors={err} onChange={set} courier={selected && !selected.is_simulated ? selected.courier : null}
+                leadMinutes={props.pickupLeadMinutes} />
 
               <Separator />
               <div className="flex flex-col gap-3 @md:flex-row @md:flex-wrap @md:items-center">
