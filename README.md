@@ -6,14 +6,15 @@ IPv4 address on Vultr under Coolify (DEC-022). Authentication is an application-
 CLI are no longer used by the code. Cloudflare Turnstile remains the CAPTCHA widget; Cloudflare is not the
 runtime.
 
-Status: DEL-1 stages 1–3 and the 2026-10-28 review features/fixes through waves E and F are
-implemented locally (uncommitted); T-050's key ring and T-053's shipment UI are merged. T-043 still
-needs the supervised sandbox capture. T-062 moved the runtime from Cloudflare Workers to the
-container described below, and T-066 (DEC-021) replaced Supabase in the code with plain PostgreSQL 17,
-PostgREST and the application-owned auth module; final counts and the final-build container e2e are
-recorded by the lead in STATUS.md. Production is not provisioned; the initial target is same-host PostgreSQL with persistent storage on Vultr + Coolify. Payment,
-regeneration and pickup have no supervised provider capture. Technical documentation is English;
-conversation and product UI are Bahasa Indonesia.
+Status (2026-11-09, branch `feat/counter-ops-2026-11`, everything committed and pushed): the counter product is
+implemented and verified locally through T-045 slice 2 (signed status webhook, hourly pull, public status; cancel and
+batch-delete library and SQL with no route or screen yet), pickup time-id ownership and the review fix migrations
+through `20261109100000`. Not done: T-037 (release record), T-043's courier cut-off amendment, T-045 routes/UI and live
+proof, and every supervised provider capture (T-048); payment, regeneration, pickup and cancel have no live capture.
+Production is not provisioned; the initial target is same-host PostgreSQL with persistent storage on Vultr + Coolify.
+Current counts and review evidence are in [STATUS.md](STATUS.md); the runtime is the self-hosted container described below
+(T-062) on PostgreSQL 17 + PostgREST with the application-owned auth module (T-066, DEC-021). Technical documentation is
+English; conversation and product UI are Bahasa Indonesia.
 
 ## Preview
 
@@ -24,6 +25,8 @@ and its Supabase project) still exists remotely until the owner deletes it and r
 
 ## Start here
 
+- [One-screen navigation map](docs/SYSTEM-MAP.md): repository layout, hosts, data and provider paths, which
+  document owns what.
 - [System map and current architecture](ARCHITECTURE.md): what is implemented and proved,
   with runtime, code, data and flow diagrams.
 - [Specification index](docs/spec/README.md): canonical product, technical, data,
@@ -150,7 +153,7 @@ with the agent variables unset (see BUILD-LOG.md) or revert the injected block.
 ### Host topology and configuration names (names only, no values)
 
 Each host serves one audience (apex public site, `app.` gerai application, `owner.` Super Admin,
-`hooks.` reserved cookie-less webhook host, with no route today; `src/lib/hosts.ts`). Locally, a bare `127.0.0.1` or `localhost` serves every
+`hooks.` cookie-less webhook host, which serves only `POST /api/webhooks/mengantar/[endpoint]` and `/healthz`; `src/lib/hosts.ts`). Locally, a bare `127.0.0.1` or `localhost` serves every
 audience (the default for `next dev`, Playwright and, with `HOST_SHARED_MODE=1`, the local
 container), and `site.localhost`, `app.localhost`, `owner.localhost` and `hooks.localhost` pick one
 audience each. A fifth name, `internal.geraiexpress.local`, serves only `/healthz` and the scheduler's
@@ -271,11 +274,11 @@ geraiexpress/
 ├── src/
 │   ├── app/                      # Next.js routes: /, fitur, simulasi, cara-kerja, hubungi-kami, lacak/[token], sitemap, robots,
 │   │   │                         # masuk, akses, pilih-gerai, daftar, undangan, verifikasi-2fa,
-│   │   │                         # admin (akses, audit, pengajuan, pantau-pengajuan, pelanggan, integrasi, diskon, konfigurasi, tenant), api/internal/cron, api/mengantar/area, healthz
+│   │   │                         # admin (akses, audit, pengajuan, pantau-pengajuan, pelanggan, integrasi, diskon, konfigurasi, tenant), api/internal/cron, api/mengantar/area, api/webhooks/mengantar, healthz
 │   │   └── (workspace)/          # pengiriman (+ label, invoice, struk, cetak, export.csv), kasus, kas (+ laporan, export.csv), kontak, pengaturan, anggota (membership required)
 │   ├── components/               # app shell and header, status badge, auth, label, invoice, marketing; ui/ = shadcn (radix, UI-2 tokens)
 │   ├── lib/                      # db/ (PostgREST client, session, cookies, refresh), auth/ (service, jwt, password, otp, totp, turnstile), workspace scope, hosts, CSP, platform/registration,
-│   │   └── mengantar/            # Partner & Public API clients, account dispatcher, scheduled tasks, live quotes/orders, key rotation, pickup
+│   │   └── mengantar/            # Partner & Public API clients, account dispatcher, scheduled tasks, live quotes/orders, key rotation, pickup, webhook ingest, status pull, cancel library (no caller)
 │   ├── modules/                  # cases/, contacts/, credentials/, dashboard/, exports/, invoices/, labels/, members/, mengantar/, payments/, pricing/, shell/, shipments/, tenants/, tracking/
 │   └── proxy.ts                  # host → audience 404, session cookie rotation (Node runtime), private no-store responses, security headers
 ├── db/
@@ -286,9 +289,9 @@ geraiexpress/
 │   └── local-fixture.sql         # optional local review data (pnpm db:fixture)
 ├── data/mengantar/               # Mengantar area catalogue snapshot loaded by `pnpm db:areas`
 ├── design/                       # public-site design direction, references, renders and the open visual review (T-076)
-├── tests/                        # unit/, db/ (PostgREST/RPC), contract/ (live Mengantar, opt-in), e2e/ (Playwright, 3 viewports), preview/ (`pnpm smoke:preview`)
+├── tests/                        # unit/ (109 files), db/ (52, PostgREST/RPC), contract/ (opt-in live Mengantar), e2e/ (35 specs, Playwright, 3 viewports), preview/ (`pnpm smoke:preview`)
 ├── scripts/                      # bundle scan, environment guard, docker wrappers, container smoke, db stack/migrate/verify/backup, isolated backend and Coolify proxy tests, TOTP seed/reseal, local fixture, UI screenshots, size report, dev env
-├── docs/                         # canonical spec pack, research, ADRs, dated reviews (history), promotion manifest
+├── docs/                         # SYSTEM-MAP.md, canonical spec pack, research, ADRs, runbooks (staging-alpha), dated reviews (history), promotion manifest
 ├── .delivery/                    # delivery-ledger runs (execution evidence)
 └── AGENTS.md · STATUS.md · TASKS.md · DECISIONS.md · ARCHITECTURE.md · BUILD-LOG.md · RELEASE.md · OBSERVABILITY.md
 ```
