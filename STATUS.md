@@ -1,6 +1,6 @@
 # GeraiExpress — Status
 
-Updated: 2026-11-09
+Updated: 2026-11-10
 Status: Active
 State: INTEGRATING
 Review-Risk: R4
@@ -9,6 +9,36 @@ Independent-Review: PASS
 Independent-Review-Detail: M4: T-045 R4 GPT-6.1 Sol 68b3b525 -> c14f0e6d -> 3844489b APPROVE; T-063 R3 1f30518c -> c1137370 APPROVE; T-059 R2 no code change; each also recorded as review-boundary in its ledger run
 Independent-Reviewer: reviewer (cx/gpt-6.1-sol, high), separate subagent per task; implementer pi-parent-01a1a300 (cc/claude-opus-5-5)
 Independent-Review-Head: c9c7164
+
+## M8 CLOSED (2026-11-10) — T-043 amendment: courier cut-off warning and the 120-minute lead as a setting
+
+- INT-M8 `RUN-20261109T164048Z-0a73292a` on head `f609b65`. Declared before launch: typecheck, unit, db, upgrade, e2e
+  (three viewports). Executed, ledger-recorded PASS: typecheck; unit 112 files / 1607 tests; db 52 / 660; upgrade 52 / 660;
+  e2e 738 passed / 0 failed / 27 skipped (390, 768, 1280); diff-hygiene; boundary PASS R2; finished PASS.
+  Evidence: `/data/tmp/geraiexpress/int-m8/run-1/`. `delivery-ledger verify` exit 0. The runner treated a gate as passed
+  only when the ledger printed `RECORDED <gate>=PASS`.
+- Content: per-courier same-day cut-offs as configuration (Mengantar help 5502313, article updated 2026-11-04, verified
+  2026-11-09) shown as an advisory intake warning only; the pickup lead is a setting, default 120 minutes
+  (`private.settings` `pickup_min_lead_minutes`), read by the database (draft save, confirmation) and by the application
+  (draft validation, confirm pre-check, Worker re-check, intake hint) through `public.pickup_lead_minutes()`; migrations
+  `20261109200000` and `20261109210000`. The docs-only commit `f609b65` after the reviewed code head `2909948` changes no
+  runtime code.
+- Independent review: GPT-6.1 Sol REJECT `ec9ed02` (the setting did not control TypeScript or dispatch; a stale clock in
+  the warning; a midnight race in a DB test), then APPROVE WITH NOTES on the fix wave; its three notes (read the lead
+  before the clock, pin the clock effect cleanup, correct a test comment) fixed in `2909948`. Runtime proof of the lead
+  function on 15 setting values (throwaway database) before and after moving its guards into a `CASE`.
+- Known gaps, not hidden: (1) the Worker's pre-provider check has no SQL backstop, so with a setting raised above 120 and
+  an unreadable setting it can let through a slot the stricter lead would refuse (not a double order); (2) no e2e for the
+  warning (the clock is real) and no mounted-component test (no jsdom), only a source-contract test of the effect;
+  (3) no editor for the lead setting; (4) drafts saved with a slot 90 to 119 minutes ahead now fail confirmation;
+  (5) what `POST /time` enforces after a cut-off or under the lead is still unverified (T-048 item 6).
+- T-037 status: `smoke:worker` no longer exists (DEC-020). `pnpm smoke:container` was run on `72bbe95` and failed before any
+  probe because the shared local database `gxdb` was at migration `20261107090000` while the image expects the newest
+  version, so `/healthz` answered not ready (the designed `schema_behind` behaviour); `gxdb` is shared with other worktrees
+  and was not migrated. Readiness of the production image is shown by the container-readiness step of the e2e harness in
+  every INT run. `production-gate` stays BLOCKED on `release_manifest`, `release_environment` and `rollback` until a server is
+  deployed; T-037 stays open for that reason.
+  Remaining open tasks: T-037, T-043 (supervised sandbox capture), T-045, T-048, T-076, T-080, T-088, T-114.
 
 ## M7 CLOSED (2026-11-09) — T-045 slice 2, pickup/reconcile fixes, Argon review fix waves; T-037 doc corrections
 

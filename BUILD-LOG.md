@@ -1448,3 +1448,11 @@ server/DNS, SMTP and backup-target inputs.
 `257cc84`: the stale "uncommitted" wording was removed, the cancel/batch-delete/refund seams are marked library and SQL only
 (no route, screen or caller), the webhook route, status pull and `machine_operation_key` entered the diagrams, and
 `docs/SYSTEM-MAP.md` was added as a one-screen navigation map. No code, test or migration changed.
+
+## 2026-11-10 — M8: T-043 amendment
+
+- INT-M8 PASS on `f609b65` (738 e2e, 1607 unit, 660 db and upgrade). Migrations `20261109200000`, `20261109210000`.
+- Lessons: a setting that only the database reads is not a setting (the first version left the TypeScript validation and
+  the Worker at a fixed 120; the review caught it); an argument list reads the clock before it awaits a later argument;
+  `WHERE a AND b` has no evaluation order, so guards go in a `CASE`; a clock hook without a component test needs its
+  cleanup line pinned by a source-contract test.
