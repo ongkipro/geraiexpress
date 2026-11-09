@@ -38,7 +38,7 @@ describe("per-courier same-day pickup cut-offs (Mengantar help article, verified
     expect(PICKUP_CUTOFF_SOURCE.verifiedOn).toBe("2026-11-09");
   });
 
-  it.each(VERIFIED)("%s: cut-off %i.00 WIB, warns from the cut-off minute and not before", (code, name, hour) => {
+  it.each(VERIFIED)("%s (%s): cut-off %i.00 WIB, warns from the cut-off minute and not before", (code, name, hour) => {
     expect(PICKUP_CUTOFFS[code]).toMatchObject({ hour, minute: 0 });
     expect(cutoffLabel(PICKUP_CUTOFFS[code])).toBe(`${String(hour).padStart(2, "0")}.00`);
     expect(pickupCutoffWarning(code, TODAY, at(hour - 1, 59, 59))).toBeNull();

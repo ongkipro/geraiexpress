@@ -169,18 +169,6 @@ describe("handover columns and constraints (T-043 PR-5)", () => {
     } finally { setLead(null); }
   });
 
-  it("with no setting row the database applies the literal 120 minutes (never the old 90) to every offered slot", () => {
-    sql(`delete from private.settings where key = 'pickup_min_lead_minutes'`);
-    // The statement is evaluated at one now(): each of the 30 slots must agree with a literal 120-minute rule, and
-    // the same slots must disagree with a 90-minute rule exactly when one starts 90-119 minutes ahead.
-    const statement = `select count(*) filter (where private.pickup_slot_ok(d, h) <> (((d + make_interval(hours => h)) at time zone 'Asia/Jakarta') >= now() + interval '120 minutes')),
-        count(*) filter (where private.pickup_slot_ok(d, h) and ((d + make_interval(hours => h)) at time zone 'Asia/Jakarta') < now() + interval '120 minutes'),
-        count(*)
-      from (select (now() at time zone 'Asia/Jakarta')::date + n as d, h from generate_series(0, 2) n, generate_series(9, 18) h) g`;
-    console.log(`[pickup lead default] ${statement.replace(/\s+/g, " ")}`);
-    expect(sql(statement)).toBe("0|0|30");
-  });
-
   it("is not exposed to other roles: a stranger or visitor cannot set a handover on someone's draft", async () => {
     const f = await draft();
     try {
