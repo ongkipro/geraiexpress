@@ -1441,3 +1441,10 @@ server/DNS, SMTP and backup-target inputs.
   rejected by the new ownership index. Migrations `20261106120000`, `20261108200000`, `20261109100000`.
 - Lessons: a runner must read the gate result, not the exit of the recording command; worktree workers that share one test
   lock starve each other (two timed out at 30 minutes); a seed that reuses a unique id is a test defect once the index exists.
+
+## 2026-11-09 — Documentation tidy (docs only)
+
+`ARCHITECTURE.md` header, system map, route map and residuals and `README.md` status/layout were checked against disk at
+`257cc84`: the stale "uncommitted" wording was removed, the cancel/batch-delete/refund seams are marked library and SQL only
+(no route, screen or caller), the webhook route, status pull and `machine_operation_key` entered the diagrams, and
+`docs/SYSTEM-MAP.md` was added as a one-screen navigation map. No code, test or migration changed.
