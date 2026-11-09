@@ -211,6 +211,22 @@ describe("createAuth configuration", () => {
     expect(() => createAuth({ ...base, captcha: OPEN })).not.toThrow();
   });
 
+  it("refuses a hostname with a scheme, port or path (siteverify returns a bare hostname) and never echoes it", () => {
+    const { store } = createFakeStore();
+    const base = { store, jwtSecret: JWT_SECRET, authSecret: AUTH_SECRET };
+    for (const bad of ["https://app.geraiexpress.com", "app.geraiexpress.com:443", "app.geraiexpress.com/masuk"]) {
+      let message = "";
+      try {
+        createAuth({ ...base, captcha: { secret: "s", hostnames: [CAPTCHA_HOST, bad] } });
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toMatch(/TURNSTILE_HOSTNAMES/);
+      expect(message).not.toContain(bad);
+    }
+    expect(() => createAuth({ ...base, captcha: { secret: "s", hostnames: ["App.GeraiExpress.com"] } })).not.toThrow();
+  });
+
   it("refuses a Turnstile secret without at least one allowed hostname", () => {
     const { store } = createFakeStore();
     const base = { store, jwtSecret: JWT_SECRET, authSecret: AUTH_SECRET };

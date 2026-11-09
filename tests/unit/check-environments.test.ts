@@ -120,6 +120,13 @@ describe("env files", () => {
         'staging: TURNSTILE_HOSTNAMES entry "https://owner-staging.geraiexpress.com" is not a bare hostname (no scheme, port or path)',
       ]));
     }
+    // A staging file copied from the production template must not keep the production hosts: every token would fail.
+    const copied = staging();
+    copied.vars.TURNSTILE_HOSTNAMES = "app.geraiexpress.com,owner.geraiexpress.com";
+    expect(checkEnvFiles({ staging: copied, production: production() })).toEqual(expect.arrayContaining([
+      "staging: TURNSTILE_HOSTNAMES includes the production host app.geraiexpress.com",
+      "staging: TURNSTILE_HOSTNAMES includes the production host owner.geraiexpress.com",
+    ]));
     const local = { vars: { CRON_SECRET: "local-cron-secret-0123456789abcdef", TURNSTILE_HOSTNAMES: "localhost" } };
     expect(checkEnvFiles({ local }).filter((p: string) => p.includes("TURNSTILE_HOSTNAMES"))).toEqual([]);
   });

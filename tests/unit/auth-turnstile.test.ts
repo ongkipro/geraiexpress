@@ -113,6 +113,7 @@ describe("verifyTurnstile", () => {
   it("is false with an empty hostname allowlist (fails closed)", async () => {
     const fetchImpl = fetchReturning(() => json(solved()));
     await expect(verify({ secret: "s", token: "t", fetchImpl, allowedHostnames: new Set() })).resolves.toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("is false when action or hostname is missing or not a string", async () => {

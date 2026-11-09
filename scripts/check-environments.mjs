@@ -128,6 +128,7 @@ export function checkEnvFiles(envs) {
     if (turnstileHosts.length === 0) problems.push(`${name}: TURNSTILE_HOSTNAMES is not set (the public hosts serving the Turnstile widget)`);
     for (const host of turnstileHosts) {
       if (LOCAL_HOSTS.includes(host) || host === "::1" || host.endsWith(".localhost")) problems.push(`${name}: TURNSTILE_HOSTNAMES must not include the local host ${host}`);
+      else if (name === "staging" && PRODUCTION_HOSTS.includes(host)) problems.push(`staging: TURNSTILE_HOSTNAMES includes the production host ${host}`);
       else if (!/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(host)) problems.push(`${name}: TURNSTILE_HOSTNAMES entry "${host}" is not a bare hostname (no scheme, port or path)`);
     }
     const postgrestHost = hostOf(vars.POSTGREST_URL ?? "");

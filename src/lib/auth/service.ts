@@ -131,6 +131,9 @@ function lifetime(audience: Audience | undefined) {
 
 const userAgentHash = (userAgent: string | undefined): string | null => (userAgent ? sha256Hex(userAgent) : null);
 
+// The same rule as scripts/check-environments.mjs: what Cloudflare siteverify returns as `hostname`.
+const BARE_HOSTNAME = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
+
 export function createAuth(config: AuthConfig): Auth {
   const { store, captcha } = config;
   const jwtSecret = assertSecret("AUTH_JWT_SECRET", config.jwtSecret);
@@ -146,6 +149,10 @@ export function createAuth(config: AuthConfig): Auth {
   );
   if (captcha !== "disabled" && captchaHostnames.size === 0) {
     throw new Error("captcha hostnames must name at least one host serving the Turnstile widget");
+  }
+  // siteverify returns a bare hostname; a scheme, port or path would make every token fail. Never echo the value.
+  if ([...captchaHostnames].some((h) => !BARE_HOSTNAME.test(h))) {
+    throw new Error("TURNSTILE_HOSTNAMES must list bare hostnames only (no scheme, port or path)");
   }
   const clock = config.now ?? Date.now;
   const nowSeconds = () => Math.floor(clock() / 1000);

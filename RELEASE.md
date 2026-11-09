@@ -448,8 +448,9 @@ Not provisioned. Before a real gerai issues orders in production:
 1. Container configuration (see the container gates above; public names in `.env.example`; every name in
    `infra/env/production.env.example`): `POSTGREST_URL` (the compose `postgrest` service by default),
    `MENGANTAR_ENV=production`; the auth values `AUTH_JWT_SECRET` and `AUTH_SECRET` (the machine identity of
-   DEC-010 is a service_role JWT signed with `AUTH_JWT_SECRET`), `TURNSTILE_SITE_KEY` and
-   `TURNSTILE_SECRET_KEY`, `MAIL_FROM` (`no-reply@geraiexpress.com`); code mail: `MAIL_TRANSPORT` stays unset
+   DEC-010 is a service_role JWT signed with `AUTH_JWT_SECRET`), `TURNSTILE_SITE_KEY`,
+   `TURNSTILE_SECRET_KEY` and `TURNSTILE_HOSTNAMES` (production `app.geraiexpress.com,owner.geraiexpress.com`, staging the
+   `-staging` hosts; bare hostnames only, never localhost: without it the container refuses to start), `MAIL_FROM` (`no-reply@geraiexpress.com`); code mail: `MAIL_TRANSPORT` stays unset
    (fails closed) until the SMTP provider account exists and geraiexpress.com publishes SPF/DKIM/DMARC; then
    `MAIL_TRANSPORT=smtp` with `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY` (tls|starttls), `SMTP_USERNAME`,
    `SMTP_PASSWORD` (secret) and one controlled delivery to an owner address before opening registration (T-063); scheduler secret `CRON_SECRET`; encryption values `CREDENTIAL_KEYS` and

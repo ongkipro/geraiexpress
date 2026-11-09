@@ -1466,7 +1466,11 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
   sent (DEC-009 intent, now enforced without a hook). Real environment: create a Turnstile
   widget, put its secret in `TURNSTILE_SECRET_KEY` and its site key in the
   `TURNSTILE_SITE_KEY` environment value (the app verifies tokens itself and refuses to start the auth module
-  with neither the secret nor `AUTH_CAPTCHA_DISABLED=true`). The enforced
+  with neither the secret nor `AUTH_CAPTCHA_DISABLED=true`). Each protected form renders the widget with its own
+  action (`signin`, `demo`, `code_request`, `code_verify`; `src/lib/turnstile-actions.ts`), and the auth service accepts a
+  token only when siteverify returns `success: true`, that form's action and a hostname in `TURNSTILE_HOSTNAMES`
+  (bare hostnames, compared lowercased; a secret without hostnames refuses to start), so a token solved on one form or
+  host cannot be replayed on another. The enforced
   CSP allows `challenges.cloudflare.com` for the Turnstile script and frame.
 - Code mail (T-017 superseded by T-066): there is no Send Email Hook, hook secret or relay any more.
   Transports (T-063): `mailpit` (local hosts only) and `smtp` (`src/lib/mail-smtp.ts`: provider-neutral SMTP
