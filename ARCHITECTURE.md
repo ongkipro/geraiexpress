@@ -399,7 +399,8 @@ flowchart LR
 ## System map
 
 The diagrams below describe implemented components; executed evidence is recorded in STATUS.md.
-Dashed edges are target components from ARCH-1/ARCH-4 that do not exist yet.
+Dashed edges and dashed nodes are library-only seams: the code and SQL exist, but no route, screen or Server Action
+calls them yet (cancel, batch delete, refund record); they are not shipped product behavior.
 
 ### Runtime and trust boundaries (implemented)
 
@@ -424,6 +425,10 @@ flowchart LR
         TrackingShare["modules/tracking · member share<br/>SITE_ORIGIN + HMAC(secret, link_id)<br/>admin-only audited revoke"]
         Health["/healthz (no-store)"]
         Hosts["lib/hosts.ts<br/>host table, route-family matrix, per-environment origins"]
+        CronRoute["POST /api/internal/cron/dispatch and /cleanup<br/>internal host only · CRON_SECRET bearer<br/>cleanup also runs status_pull and webhook_secret_rewrap hourly"]
+        WebhookRoute["POST /api/webhooks/mengantar/[endpoint]<br/>hooks host only · cookie-less · webhook-ingest.ts<br/>HMAC over timestamp and raw body · 204/401/4xx, no body"]
+        StatusPull["lib/mengantar/status-pull.ts<br/>issued non-final shipments · 2 h stale · max 200 per run<br/>GET /order with each seller's own key"]
+        CancelLib["lib/mengantar/cancel.ts · deleteBatch in public-api.ts<br/>DELETE /order then always GET /order read-back<br/>library only: no route or screen yet"]
         AuthMod["lib/auth/**<br/>scrypt · emailed code · refresh rotation · TOTP · Turnstile<br/>signs HS256 access tokens"]
     end
     subgraph Postgres["PostgreSQL 17 behind PostgREST (db/foundation + db/migrations)"]
@@ -433,6 +438,8 @@ flowchart LR
         CashRPC["close_cash_period / reopen_cash_period<br/>period row lock · active cash aggregate<br/>cash_period_events: RLS, append-only, RPC writes"]
         PilotRPC["pilot_report(tenant, from, to) · record_export('pilot_report')<br/>tenant admin · ≤92 WIB days · derived measures only<br/>earnings via private.quote_gerai_cost"]
         CaseRPC["open_shipment_case / update_shipment_case / close_shipment_case<br/>case_attention · claim_window_rules<br/>shipment_cases + append-only shipment_case_events<br/>deadline from private.claim_window_rules"]
+        StatusRPC["ingest_provider_status · machine_status_pull_candidates<br/>private.webhook_endpoints · private.provider_status_kind<br/>events appended, state moves forward in provider time only"]
+        CancelRPC["cancel_begin / cancel_record · record_batch_delete<br/>machine_operation_key (original create_order credential)<br/>private.provider_batch_deletions: no API role can read it"]
         Hardening["T-104: shipment lock before memberships · member recheck after FOR UPDATE<br/>T-109: service_role has no public-table privilege (rewrap via machine_rewrap_candidates)<br/>bounded auth_purge_expired(p_limit)"]
         AreaRPC["search_mengantar_areas(query, limit)<br/>authenticated · active membership · max 30"]
         Areas["PostgreSQL: public.mengantar_areas<br/>shared provider reference data · no tenant ownership · RLS · no API table grants"]
@@ -444,7 +451,8 @@ flowchart LR
     end
     Sim["Simulated provider<br/>(SQL, demo tenants only)"]
     Mengantar["Mengantar Partner/Public API"]
-    Dispatcher["Account dispatcher (dispatcher.ts, partner-key-rotation.ts, pickup.ts)<br/>machine identity, service_role-only RPCs"]
+    Dispatcher["Account dispatcher (dispatcher.ts, partner-key-rotation.ts, pickup.ts)<br/>machine identity, service_role-only RPCs<br/>pickup reconcile reads GET /time strictly and never repeats POST /time"]
+    Scheduler["scheduler container<br/>5-minute dispatch · hourly cleanup"]
 
     AreaLoader["scripts/load-mengantar-areas.mjs<br/>versioned data/mengantar/*.json.gz<br/>owner-only gx_psql · upsert, never delete"]
 
@@ -487,9 +495,29 @@ flowchart LR
     Dispatcher -->|"dispatch_claim / dispatch_record<br/>service_role only"| DB
     Dispatcher -->|seller key opened in the app server| Mengantar
     Actions --> Dispatcher
+    Scheduler -->|"Bearer CRON_SECRET"| CronRoute
+    CronRoute --> Dispatcher
+    CronRoute --> StatusPull
+    StatusPull -->|"machine RPCs"| StatusRPC --> DB
+    StatusPull -->|"GET /order, read-only"| Mengantar
+    Mengantar -->|"signed status webhook (hooks host)"| WebhookRoute
+    WebhookRoute -->|"machine RPC: ingest_provider_status"| StatusRPC
+    CancelLib -.->|"no caller yet"| CancelRPC
+    CancelLib -.->|"DELETE /order · DELETE /batch (never run live)"| Mengantar
+    CancelRPC --> DB
 
     classDef target stroke-dasharray: 5 5,color:#7a7a7a
+    class CancelLib,CancelRPC target
 ```
+
+Provider-facing additions since T-045 (detail: "Provider status ingestion"): the signed webhook
+(`/api/webhooks/mengantar/[endpoint]`, hooks host, no cookies) and the hourly `status_pull` step of the cleanup task both
+end in the machine-only `ingest_provider_status`; neither takes a user session. The dashed `CancelLib`/`CancelRPC` nodes are
+**library and SQL only, with no route or screen yet**: nothing in `src/app` or `src/modules` imports `cancelShipment` or
+`deleteBatch`, so no cancel, batch delete or refund can happen from the product. `private.provider_batch_deletions` is
+readable by no application role. Pickup reconciliation reads `GET /time` strictly (an unreadable row concludes nothing) and
+`POST /time` is never repeated; a pickup time id is owned by one operation per tenant and provider environment
+(`20261108200000`).
 
 Every user-driven read and write runs with the signed-in user's JWT, so every statement meets the same RLS and
 RPC checks whichever caller issues it (TEN-1); PostgREST is not published, so a browser cannot reach it directly.
@@ -1005,6 +1033,8 @@ flowchart TB
         adp["admin/pengajuan (review queue)"]
         adi["admin/integrasi (Partner ID, secret readiness, seller bindings)"]
         add["admin/diskon · admin/diskon/[tenant] (gerai discount terms)"]
+        hook["api/webhooks/mengantar/[endpoint] (hooks host, cookie-less)"]
+        cron["api/internal/cron/[task] · healthz"]
     end
     subgraph modules["src/modules"]
         shipA["shipments/actions.ts"]
@@ -1031,7 +1061,7 @@ flowchart TB
         hostsL["hosts.ts · csp.ts · auth-errors.ts · db/cookies.ts · db/session.ts · db/refresh.ts"]
         authM["auth/ (service · jwt · password · otp · totp · turnstile · store · instance)"]
         logoRead["gerai-logo-server.ts · tenant_logo RPC for new previews"]
-        mn["mengantar/: dispatcher · public-api · partner-api · partner-onboarding · partner-key-rotation · pickup"]
+        mn["mengantar/: dispatcher · public-api · partner-api · partner-onboarding · partner-key-rotation · pickup · scheduled · status-pull · webhook · webhook-ingest · cancel (no caller)"]
     end
     ui["src/components (+ ui/ shadcn radix-rhea, UI-2 tokens)"]
 
@@ -1064,6 +1094,8 @@ flowchart TB
     sb -->|set_tenant_logo RPC| logoStore
     set & adi --> credR --> sb
     shipA --> mn
+    hook --> mn
+    cron --> mn
     app --> hostsL
     app --> ui
 ```
@@ -1161,6 +1193,10 @@ and for an unknown host; a shared all-audiences scope exists only as described u
 2026-10-28". Mutations are Server Actions (POST to the page); the route handlers are listed under
 API.
 
+Counted on disk at `257cc84`: 41 `page.tsx` files and 6 `route.ts` handlers under `src/app` (`/api/internal/cron/[task]`,
+`/api/mengantar/area`, `/api/webhooks/mengantar/[endpoint]`, `/healthz`, `/kas/laporan/export.csv`,
+`/pengiriman/export.csv`); `robots.ts` and `sitemap.ts` are metadata routes. Every one appears in the table below.
+
 | Audience (host) | Routes served | Access |
 |---|---|---|
 | Public (apex `geraiexpress.com`, `staging.`) | `/lacak/[token]` (non-marketing, anonymous fixed projection, noindex), `/` (marketing, without session resolution), `/fitur`, `/simulasi`, `/cara-kerja`, `/hubungi-kami`, `/robots.txt`, `/sitemap.xml`, `/healthz` | No session; the proxy resolves no session on this host |
@@ -1170,7 +1206,7 @@ API.
 | Shared (loopback in a non-production build, or `HOST_SHARED_MODE=1`, e.g. the local container behind the local proxy profile) | Every route above on one origin (not the internal cron routes) | As the route's own audience |
 | Internal (`internal.geraiexpress.local`, never routed by the proxy) | `POST /api/internal/cron/dispatch`, `POST /api/internal/cron/cleanup`, `/healthz` | `CRON_SECRET` bearer (constant-time compare); 404 while the secret is unset; no cookie reaches the route |
 | API route handlers | `GET /api/mengantar/area` (member-only local catalogue search, including demo; 401 without a workspace; live fallback only on a connected non-demo catalogue miss), `GET /pengiriman/export.csv` (tenant-admin CSV; 403 operator and demo, 404 anonymous), `GET /kas/laporan/export.csv` (tenant-admin pilot report CSV of a real gerai), `GET /healthz` (anonymous SQL-backed readiness, not provider/mail readiness), and the internal `POST /api/internal/cron/*` routes above | Workspace, tenant admin, none, `CRON_SECRET` respectively |
-| Not present | any cancel route or call, refunds on batch delete and re-weigh (later T-045 slices); proof of a live webhook delivery or live status events (the webhook route and status ingestion exist locally since T-045 Slice 1); responsibility acceptance at activation | |
+| Not present | any route, screen or Server Action that calls the cancel or batch-delete library (`cancelShipment`, `deleteBatch`; the library and SQL exist since T-045 slice 2); any operator view of a refund (the refund is stored only in `private.provider_batch_deletions`, readable by no application role, and `DELETE /order` returns none); re-weigh display; proof of a live webhook delivery or live status events (the webhook route and status ingestion exist locally since T-045 slice 1); responsibility acceptance at activation | |
 
 `src/app/robots.ts` reads the request host: the production apex allows only the five public pages
 and disallows `/api`, `/admin` and `/masuk`; every other host answers a disallow-all `robots.txt`.
@@ -1191,9 +1227,13 @@ Bahasa Indonesia.
 | Tenant slug | `tenants.slug` immutable and unique, `tenants.shipment_prefix` immutable (unique across non-demo tenants), both set by the `tenants_identity` trigger at insert | Built per CTX-41 item 11; DATA-8, PR-37 |
 | Handover | Drop-off or pickup per shipment frozen at confirmation; pickup reserves a provider time slot before create (`src/lib/mengantar/pickup.ts`); response shapes unverified, no live call | Supervised sandbox capture (T-048); TD-12, TASKS T-043 |
 | Label | Local masked label from an immutable snapshot, 10x15 cm and 10x10 cm, Code128 AWB barcode, masking switch, print history (`src/modules/labels`, `src/components/label`); Mengantar app label stays a fallback; courier acceptance unproven | Decision (DEC-017): courier test and counsel wording before masking is announced; TD-13, DATA-10, TASKS T-044, T-048 |
-| Webhook and cancel | Webhook: signed route and status ingestion implemented locally (T-045 Slice 1), no real Mengantar delivery received. Cancel: no cancel call | Live webhook proof (T-048) and the order cancel, refund and re-weigh slices; SEC-6, TASKS T-045 |
+| Webhook and cancel | Webhook: signed route and status ingestion implemented locally (T-045 slice 1), no real Mengantar delivery received. Cancel and batch delete: slice 2 library (`src/lib/mengantar/cancel.ts`, `deleteBatch`) and SQL (`cancel_begin`, `cancel_record`, `record_batch_delete`, migration `20261106120000`) exist and are tested, but no route, screen or Server Action calls them | Cancel route/UI, refund display, re-weigh and live proof (T-048); SEC-6, TASKS T-045 |
 
 ## Verified counts and gates (2026-10-28)
+
+**Current counts are in STATUS.md, not here.** M7 (2026-11-09, INT-M7 `RUN-20261108T202925Z-822d665d`, head `d83cf2d`): unit 109 files /
+1564 tests, db 52 files / 658 tests (upgrade path 658), e2e 738 passed / 0 failed / 27 skipped on three viewports, INT-M7 PASS.
+Everything below this line is dated 2026-10-28 history and is kept unchanged.
 
 Observed on disk: wave E migrations `20261028230000_environment_scope_key_ring.sql` and
 `20261028240000_discount_recording_and_ui.sql`, followed by F1
@@ -1274,6 +1314,10 @@ separate release gate.
 | Demo references | Demo references repeat across tenants; any support lookup by reference must be scoped by tenant | T-049 Result |
 | Wilayah | Local Mengantar area catalogue built (T-100: `mengantar_areas`, `search_mengantar_areas`, `npm run db:areas`); coverage is the 2026-10-30 harvest (~435 Kepmendagri districts unmatched), so live search stays the fallback. Loading into a retained or production database and any refresh need owner approval | T-100 (owner request 2026-11-05) |
 | Provider shapes | `POST /order/pay-unpaid` success, Partner regenerate, `POST /time` and `GET /time` shapes are documentation-derived fixtures, not captures; courier acceptance of the local label is unproven | T-048 |
+| Unknown-charge refusal | The refusal of `compute_unpaid_batch` for an unknown quote charge is checked by reading the function text, not by a row, because quote charges are NOT NULL (STATUS.md M7 gap 1) | T-045 review notes |
+| Gerai-discount e2e | `tests/e2e/gerai-discount.spec.ts` matches `Versi \d+`, so it does not prove the version advanced on the second and third viewport (STATUS.md M7 gap 2) | T-053 |
+| Seams without a caller | The cancel, batch-delete and refund library and SQL (T-045 slice 2) have no route, screen or Server Action; no operator sees a refund; `DELETE /order` and `DELETE /batch` shapes are documentation-derived (STATUS.md M7 gap 3) | T-045, T-048 |
+| Courier cut-off amendment | T-043's 2026-11-02 amendment (configurable courier cut-offs, 120-minute default lead, cut-off warning at intake) is not implemented | T-043 |
 | Release record | STATUS.md now holds the final counts; the release record (ledger gates, `.env.example` audit, rollback artifact) is still not updated | T-037 |
 
 ## Client JavaScript baseline and budget (T-074, measured 2026-10-29)
@@ -1315,6 +1359,8 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
 | Demo cleanup, quotas & staging | Bounded demo cleanup through the scheduler container's hourly `POST /api/internal/cron/cleanup` (and a pg_cron job only where that extension exists); demo caps by triggers; the staging environment is the template `infra/env/staging.env.example`, whose own database and signing secrets must differ from production and local (`check:environments`) | demo-quota/cleanup DB, `tests/unit/cron.test.ts`, `tests/unit/check-environments.test.ts` |
 | CAPTCHA | Turnstile is verified by the app (`src/lib/auth/turnstile.ts`) before password sign-in, demo entry, code request and code verification, failing closed; account-plus-visitor limits precede the auth call, password account-wide limits follow its CAPTCHA step. Code verification still has no server-bound email state | `tests/unit/auth-turnstile.test.ts`, captcha/auth-account-lockout tests; T-058 |
 | Auth email | The code mail is rendered by `renderCodeMail` (`src/lib/auth-mail.ts`) and sent by `src/lib/mail-transport.ts` after SQL decided a code may exist (registration gate, anonymous requester refused, throttles, 30-second spacing); only the local Mailpit transport exists, fail-closed otherwise (`auth_mail_failed`); the Send Email Hook route and its secret were removed by T-066 (DEC-021) | `tests/unit/auth-mail.test.ts`; `tests/e2e/auth-mail.spec.ts` |
+| Provider status and cancel seams (T-045) | Slice 1: webhook route on the hooks host, `ingest_provider_status`, hourly `status_pull` and `webhook_secret_rewrap` steps, public status label (`20261106100000`). Slice 2: `cancelShipment`, `deleteBatch`, `cancel_begin`/`cancel_record`, `record_batch_delete`, `private.provider_batch_deletions`, `machine_operation_key`, provider weight and hub city seam (`20261106120000`), cancel fence fixes (`20261109100000`); no caller | `tests/unit/mengantar-webhook.test.ts`, `mengantar-status-pull.test.ts`, `mengantar-cancel.test.ts`; `tests/db/provider-status.test.ts`, `cancel-refund-weight.test.ts`, `review-fixes-backend.test.ts` |
+| Pickup ownership and reconcile | A pickup time id is held by one operation per tenant and provider environment (partial unique index; `time_id_held`); reconciliation reads `GET /time` with `strict: true` and never repeats `POST /time` (`20261108200000`) | `tests/db/pickup-time-ownership.test.ts`, `tests/db/lock-order-reconcile.test.ts`, `tests/unit/mengantar-pickup.test.ts` |
 | Preview | Withdrawn as the deployment target by DEC-020; the old Worker and its Supabase project still exist remotely (the OLD deployment) until the owner deletes them and rotates their secrets (RELEASE.md); the archived Supabase preview settings file was removed from the repository | `pnpm smoke:preview` requires an explicitly named `PREVIEW_URL` |
 | Abuse limits | Per-visitor sign-in/demo/MFA/OTP and account-plus-visitor limits; password account-wide budget after CAPTCHA, OTP account-wide budget at verification; 10/60 s account/refresh limits in an in-process fixed-window limiter (one instance; see "Self-hosted container runtime"). Local refresh refusal is 503 + Retry-After 60 and retains session; there is no Auth IP forwarding | `tests/unit/auth-account-lockout.test.ts`, `rate-limit.test.ts`, `limiter.test.ts`, `client-address.test.ts`, `proxy.test.ts`, `db-refresh.test.ts`, `auth-errors.test.ts` |
 | Readiness | `/pengaturan` shows per-capability state and Partner/BYOK connection status | e2e settings tests |
@@ -1336,7 +1382,7 @@ Budget (first load, gzip): marketing and account entry at most 205 KB; gerai and
 | Overview, finance | Later accepted requirements; CSV export and invoices are built (T-047); the local wilayah catalogue is built locally by T-100, its load into a retained or production database awaits owner approval |
 | Production database and server deployment | Explicit release approval and the owner's server (provider, region, fixed IPv4, DNS); where the database runs (same server or managed PostgreSQL), backups and point-in-time recovery are owner decisions and gates (T-067); nothing is provisioned |
 | Host split in production (owner., app., apex, hooks) | Built in code (T-042) and in `infra/proxy/Caddyfile` (T-062); live only after the owner provisions the server and DNS and sets the `*_ORIGIN` values (TD-14); the hooks host serves only the webhook route (T-045 Slice 1, implemented locally, not proven live) |
-| Order cancel and signed webhook | Signed webhook and status ingestion: implemented locally (T-045 Slice 1), not proven live. Order cancel, batch-delete refunds and re-weigh: outstanding (T-045 later slices). Pickup (T-043) and the masked label (T-044) are built, the label announcement waits for the courier test (T-048) |
+| Order cancel, batch-delete refunds, re-weigh | Signed webhook and status ingestion: implemented locally (T-045 slice 1), not proven live. Cancel, batch delete and the private refund record exist as library and SQL only (slice 2, no route, screen or caller); nothing shows a refund or re-weigh to an operator. Pickup (T-043) and the masked label (T-044) are built, the label announcement waits for the courier test (T-048) |
 | Hybrid hosting (Vultr gateway under Coolify) | The separate egress gateway was withdrawn by DEC-020 (T-052 cancelled); DEC-022 later re-selected Vultr + Coolify to run the application itself (`compose.coolify.yaml`), not a gateway |
 
 ## Open production gates found during implementation
