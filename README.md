@@ -27,6 +27,7 @@ and its Supabase project) still exists remotely until the owner deletes it and r
 
 - [One-screen navigation map](docs/SYSTEM-MAP.md): repository layout, hosts, data and provider paths, which
   document owns what.
+- [Working agreement](docs/WORKFLOW.md): how to change, verify, review and publish here, from any device or agent.
 - [System map and current architecture](ARCHITECTURE.md): what is implemented and proved,
   with runtime, code, data and flow diagrams.
 - [Specification index](docs/spec/README.md): canonical product, technical, data,

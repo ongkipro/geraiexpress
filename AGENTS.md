@@ -36,6 +36,11 @@ Delivery metrics are optional immutable sidecars under `.delivery/metrics/`. Use
 Inspect the repository's actual configuration before adding stack-specific rules. Disk and executable behavior override stale documentation. Production readiness must be proven by the repository gates; never infer it from prose alone. `production-gate` also requires `delivery-ledger verify` to pass before a release is production-ready.
 
 
+## Working agreement
+
+How to change, verify, review, run parallel workers and publish in this repository is in `docs/WORKFLOW.md`
+(device-independent). Read it before a milestone run, a migration or a parallel fix wave.
+
 ## GeraiExpress boundaries
 
 - `docs/spec/` and `docs/research/` are canonical. Documents staging copies are

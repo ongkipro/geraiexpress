@@ -13,7 +13,7 @@ duplicate [ARCHITECTURE.md](../ARCHITECTURE.md) (what the code does, with diagra
 | `tests/` | `unit` (109 files), `db` (52), `e2e` (35 specs), `contract` (2, opt-in live), `preview` (1) |
 | `infra/`, `compose*.yaml`, `Dockerfile` | Caddy configs, scheduler sidecar, env templates; 4 Compose files (app/prod, Coolify, local, local db) |
 | `scripts/`, `data/mengantar/` | db, docker, check and test harness scripts; the area catalogue snapshot |
-| `docs/` | `spec/` canonical target, `adr/` (3), `research/`, `review/` (dated history), `runbooks/staging-alpha.md`, this page |
+| `docs/` | `spec/` canonical target, `adr/` (3), `research/`, `review/` (dated history), `runbooks/staging-alpha.md`, `WORKFLOW.md`, this page |
 | `.delivery/` | delivery-ledger runs, releases and reviews (evidence; never edited by hand) |
 
 ## Runtime hosts and audiences
@@ -67,6 +67,7 @@ write provider results. See ARCHITECTURE "System map" and "Data map".
 | `BUILD-LOG.md` | durable, append-only implementation notes |
 | `.delivery/` | execution evidence and resume projection (never overrides STATUS.md) |
 | `docs/research/`, `docs/review/` | provider and market studies; dated reviews (evidence, not requirements) |
+| `docs/WORKFLOW.md` | the device-independent working agreement: change discipline, verification ladder, integrated run, review, parallel work, publishing |
 | `docs/runbooks/staging-alpha.md` | alpha staging execution checklist (T-114; not deployed) |
 
 ## Migration and test conventions
