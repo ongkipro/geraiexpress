@@ -162,10 +162,13 @@ describe("handover columns and constraints (T-043 PR-5)", () => {
       expect(ok()).toBe(true);
       setLead(String(ahead + 1)); expect(ok()).toBe(false);
       // Unusable values fall back to 120 rather than disabling the check.
-      for (const bad of ['"abc"', "0", "-5", "1.5", "null", "true"]) {
+      // 525601 (over a year), 1000000 (more than six digits) and the string "90" are unusable too; 1e3 is a valid
+      // JSON number worth 1000 whole minutes. The guards live in a CASE: a WHERE may be evaluated in any order.
+      for (const bad of ['"abc"', "0", "-5", "1.5", "null", "true", "525601", "1000000", '"90"', "[]"]) {
         setLead(bad);
         expect(sql(`select private.pickup_lead_minutes()`)).toBe("120");
       }
+      setLead("525600"); expect(sql(`select private.pickup_lead_minutes()`)).toBe("525600");
     } finally { setLead(null); }
   });
 

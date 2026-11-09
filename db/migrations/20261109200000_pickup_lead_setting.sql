@@ -3,16 +3,23 @@
 -- The provider documentation says a slot must be at least 90 minutes ahead; the Mengantar web UI asks
 -- for 2 hours, which is the stricter value used here. The number now lives in private.settings under
 -- 'pickup_min_lead_minutes' (a JSON number of whole minutes) and falls back to 120 when the row is
--- absent or not a positive whole number. The application default is PICKUP_LEAD_MINUTES in
+-- absent or not a whole number of minutes between 1 and 525600. The application default is PICKUP_LEAD_MINUTES in
 -- src/lib/mengantar/pickup.ts; tests/db/pickup-orders.test.ts keeps the two defaults equal.
 -- There is no editor for the setting (Super Admin tooling is out of scope).
 create function private.pickup_lead_minutes()
 returns integer language sql stable security definer set search_path = ''
 as $$
+  -- The guards sit in a CASE on purpose: PostgreSQL may evaluate the predicates of a WHERE in any order, so an
+  -- integer cast beside them could run on a value that is not a number. A CASE evaluates its branches in order.
+  -- Usable: a JSON number, whole minutes, 1 to 525600 (one year). Anything else falls back to 120.
   select coalesce(
-    (select (s.value #>> '{}')::integer from private.settings s
-      where s.key = 'pickup_min_lead_minutes'
-        and jsonb_typeof(s.value) = 'number' and (s.value #>> '{}') ~ '^[0-9]{1,6}$' and (s.value #>> '{}')::integer > 0),
+    (select case
+              when jsonb_typeof(s.value) = 'number'
+               and (s.value #>> '{}') ~ '^[0-9]{1,6}$'
+               and ((s.value #>> '{}')::numeric) between 1 and 525600
+              then (s.value #>> '{}')::integer
+            end
+       from private.settings s where s.key = 'pickup_min_lead_minutes'),
     120);
 $$;
 revoke all on function private.pickup_lead_minutes() from public, anon, authenticated;
