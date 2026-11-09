@@ -450,7 +450,18 @@ describe("dispatchOperation: pickup with time reservation (TD-12)", () => {
     expect(await dispatchOperation("op-1", { ...strict.deps, ...ahead150, rpc: strictRpc })).toEqual({ status: "recorded", outcome: "rejected" });
     expect(strict.recorded()).toEqual([{ p_operation: "op-1", p_attempt: 3, p_outcome: "rejected", p_code: "PICKUP_TIME_INVALID" }]);
     expect(strict.timeline.filter((t) => t.includes("/time") || t.includes("POST") || t.includes("pickup_"))).toEqual([]);
-    // A lead the database cannot answer falls back to the default 120 (the database re-checks under lock anyway).
+    // The clock is read AFTER the lead read finishes: a slow read must not validate against a stale time. The slot is
+    // 121 minutes ahead when the check starts and 119 when the (slow) read returns, so it must be refused.
+    const slow = scenario(await pickupPayload());
+    let clock = slotStartMs(DATE, HOUR)! - 121 * 60_000;
+    const slowRpc = (fn: string, args: Record<string, unknown>) => {
+      if (fn !== "pickup_lead_minutes") return slow.deps.rpc(fn, args);
+      clock = slotStartMs(DATE, HOUR)! - 119 * 60_000; // two minutes pass while the setting is read
+      return Promise.resolve({ data: 120, error: null });
+    };
+    expect(await dispatchOperation("op-1", { ...slow.deps, now: () => new Date(clock), rpc: slowRpc })).toEqual({ status: "recorded", outcome: "rejected" });
+    // A lead the database cannot answer falls back to the default 120. The Worker's pre-provider check has no SQL backstop,
+    // so after a raised setting this fallback can let through a slot the stricter lead would refuse (documented in pickup-lead.ts).
     const unreadable = scenario(await pickupPayload());
     const unreadableRpc = (fn: string, args: Record<string, unknown>) => setting(null, { message: "boom" })(fn, args, unreadable.deps.rpc);
     expect(await dispatchOperation("op-1", { ...unreadable.deps, ...ahead150, rpc: unreadableRpc })).toEqual({ status: "recorded", outcome: "issued" });

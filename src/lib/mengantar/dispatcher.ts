@@ -149,7 +149,10 @@ async function preparePickup(p: Payload, request: CreateOrderRequest, client: Me
   if (!date || hour === null || !volume || !isPickupVolume(volume)) return record("rejected", { p_code: "INPUT_INCOMPLETE" });
   // A queued order can wait past its slot's lead time: refuse locally, before any provider call. The lead is the
   // setting the database enforces (read with this machine client; the documented default if it cannot be read).
-  const lead = pickupSlotError(date, hour, (deps.now ?? (() => new Date()))(), await pickupLeadMinutes(() => deps.rpc("pickup_lead_minutes", {})));
+  // The lead is awaited BEFORE the clock is read: an argument list evaluates the clock first, so a slow read would
+  // otherwise validate against a time that is already stale (the Worker has no SQL backstop at this step).
+  const leadMinutes = await pickupLeadMinutes(() => deps.rpc("pickup_lead_minutes", {}));
+  const lead = pickupSlotError(date, hour, (deps.now ?? (() => new Date()))(), leadMinutes);
   if (lead !== null && lead !== "too_far") return record("rejected", { p_code: "PICKUP_TIME_INVALID" });
 
   let timeId = p.pickup_time_id ?? null;
