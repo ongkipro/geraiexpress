@@ -9,7 +9,7 @@ duplicate [ARCHITECTURE.md](../ARCHITECTURE.md) (what the code does, with diagra
 |---|---|
 | `src/app` | Next.js App Router: 41 pages and 6 route handlers (route table: ARCHITECTURE "Runtime route map") |
 | `src/lib`, `src/modules`, `src/components`, `src/proxy.ts` | server libraries (`db/`, `auth/`, `mengantar/`, hosts, CSP), feature modules, UI (`ui/` = shadcn), host/session proxy |
-| `db/foundation`, `db/migrations`, `db/*.sql` | plain-PostgreSQL prerequisites; 69 forward-only migrations; `seed.sql` and optional local fixtures |
+| `db/foundation`, `db/migrations`, `db/*.sql` | plain-PostgreSQL prerequisites; 71 forward-only migrations; `seed.sql` and optional local fixtures |
 | `tests/` | `unit` (109 files), `db` (52), `e2e` (35 specs), `contract` (2, opt-in live), `preview` (1) |
 | `infra/`, `compose*.yaml`, `Dockerfile` | Caddy configs, scheduler sidecar, env templates; 4 Compose files (app/prod, Coolify, local, local db) |
 | `scripts/`, `data/mengantar/` | db, docker, check and test harness scripts; the area catalogue snapshot |
@@ -73,7 +73,7 @@ write provider results. See ARCHITECTURE "System map" and "Data map".
 ## Migration and test conventions
 
 - Migrations: `db/migrations/<yyyymmddhhmmss>_<slug>.sql`, forward-only and immutable once applied; `pnpm db:migrate`
-  applies new ones and refuses changed history. Latest: `20261109100000_review_fixes_backend.sql` (69 files).
+  applies new ones and refuses changed history. Latest: `20261109210000_pickup_lead_reader.sql` (71 files).
 - Every new SQL function must be added to the allowlists in `tests/db/privileges.test.ts` in the same change.
 - Tests: `*.test.ts` under `tests/unit`, `tests/db`, `tests/contract`; `*.spec.ts` under `tests/e2e` and `tests/preview`.
   DB suites run one at a time on one database (`pnpm db:verify`, or disposable `node scripts/test-backend-isolated.mjs`).

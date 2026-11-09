@@ -9,7 +9,7 @@ runtime.
 Status (2026-11-09, branch `feat/counter-ops-2026-11`, everything committed and pushed): the counter product is
 implemented and verified locally through T-045 slice 2 (signed status webhook, hourly pull, public status; cancel and
 batch-delete library and SQL with no route or screen yet), pickup time-id ownership and the review fix migrations
-through `20261109100000`. Not done: T-037 (release record), T-043's courier cut-off amendment, T-045 routes/UI and live
+through `20261109210000`. Not done: T-037 (release record), T-043's supervised sandbox capture, T-045 routes/UI and live
 proof, and every supervised provider capture (T-048); payment, regeneration, pickup and cancel have no live capture.
 Production is not provisioned; the initial target is same-host PostgreSQL with persistent storage on Vultr + Coolify.
 Current counts and review evidence are in [STATUS.md](STATUS.md); the runtime is the self-hosted container described below

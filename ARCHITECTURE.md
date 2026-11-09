@@ -20,10 +20,10 @@ State, as disk shows it:
   locally, never proven against a real Mengantar delivery.
 - **T-045 slice 2:** `DELETE /order` cancel with unknown-outcome read-back, private batch-delete refund record, provider
   weight and hub city. **Library and SQL only: no route, screen or Server Action calls them.**
-- **Review fix migrations** through `20261109100000_review_fixes_backend.sql` (69 forward migrations on disk).
+- **Migrations** through `20261109210000_pickup_lead_reader.sql` (71 forward migrations on disk; the review fixes are `20261109100000`, the T-043 amendment `20261109200000` and `20261109210000`).
 
-Still open: T-037 (release record and gates); T-043 sandbox capture (T-048 item 6) and its 2026-11-02 amendment
-(configurable courier cut-offs, 120-minute default lead time, cut-off warning at intake), which is not implemented;
+Still open: T-037 (release record and gates); T-043's supervised sandbox capture (T-048 item 6; its 2026-11-02 amendment is
+implemented, see "Pickup (T-043)");
 T-045 routes, UI and callers for cancel, batch delete, refunds and re-weigh, and every live proof; T-048 supervised
 captures (batch payment, Partner key regeneration, pickup, `DELETE /order`, `DELETE /batch`). T-040 was design only and
 T-052 (egress gateway) is cancelled by DEC-020. Target design (webhook and provisioned environment separation) lives in
@@ -762,6 +762,21 @@ observed. Counts and executed checks are under "Verified counts and gates".
   through `dispatch_pickup_known_time_ids(uuid)` and accepts exactly one match; several matches are `reservation_ambiguous` and none records `not_created` after the usual waiting period;
   one date per row is used (UTC date if its UTC clock equals `time`,
   otherwise WIB). Lost creates reconcile by reference; started reservation/create is never resent.
+  **Lead time and cut-offs (2026-11-09 amendment).** The minimum lead is 120 minutes by default (the Mengantar web UI asks
+  for 2 hours; the API documents 90), held as a setting: `private.settings` key `pickup_min_lead_minutes`, read by
+  `private.pickup_lead_minutes()` (a JSON whole number of minutes from 1 to 525600, anything else falls back to 120; the
+  guards sit in a `CASE` because a `WHERE` has no evaluation order). The database enforces it on a draft save and on a
+  confirmation (`private.pickup_slot_ok`). The application reads the same value through `public.pickup_lead_minutes()`
+  (authenticated and `service_role` only) with `src/lib/mengantar/pickup-lead.ts`, passes it into draft validation, the
+  confirm pre-check, the Worker's pre-provider re-check and the intake hint, and falls back to 120 if the read fails. The
+  Worker's re-check has no SQL backstop, so with a setting raised above 120 and a failing read it can let a slot through
+  that the stricter lead would refuse; that is not a double order. There is no editor for the setting. Per-courier
+  same-day cut-offs (`src/lib/mengantar/pickup-cutoffs.ts`: JNE 15:00, SiCepat 12:00, SAP 15:00, iDexpress 11:00, J&T
+  12:00, Lion Parcel 15:00, Anteraja 15:00 pickup only, Pos Indonesia 16:00, SPX 15:00 WIB; source Mengantar help article
+  5502313, verified 2026-11-09) produce an **advisory warning only** at intake when today's slot is chosen after the
+  courier's cut-off (the article says the cut-off is for order input to be picked up the same day, not that a later slot
+  is refused); an unknown courier gets no warning. A draft saved with a slot 90 to 119 minutes ahead now fails
+  confirmation under the 120 rule. Migrations `20261109200000`, `20261109210000`.
   Final operation states take precedence over pickup phases in detail copy. Distinct
   `pickup_reservation_not_recorded`/`pickup_create_not_recorded` reasons describe write-ahead failures.
   An oversized `GET /time` body proves reachability for the pre-check only; read-back fails closed.
@@ -1317,7 +1332,7 @@ separate release gate.
 | Unknown-charge refusal | The refusal of `compute_unpaid_batch` for an unknown quote charge is checked by reading the function text, not by a row, because quote charges are NOT NULL (STATUS.md M7 gap 1) | T-045 review notes |
 | Gerai-discount e2e | `tests/e2e/gerai-discount.spec.ts` matches `Versi \d+`, so it does not prove the version advanced on the second and third viewport (STATUS.md M7 gap 2) | T-053 |
 | Seams without a caller | The cancel, batch-delete and refund library and SQL (T-045 slice 2) have no route, screen or Server Action; no operator sees a refund; `DELETE /order` and `DELETE /batch` shapes are documentation-derived (STATUS.md M7 gap 3) | T-045, T-048 |
-| Courier cut-off amendment | T-043's 2026-11-02 amendment (configurable courier cut-offs, 120-minute default lead, cut-off warning at intake) is not implemented | T-043 |
+| Courier cut-off amendment | Built 2026-11-09: advisory per-courier warning, 120-minute lead as a setting (see "Pickup (T-043)"); what the API enforces at `POST /time` after a cut-off or under the lead is still unverified | T-048 item 6 |
 | Release record | STATUS.md now holds the final counts; the release record (ledger gates, `.env.example` audit, rollback artifact) is still not updated | T-037 |
 
 ## Client JavaScript baseline and budget (T-074, measured 2026-10-29)
