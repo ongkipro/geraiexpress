@@ -5,15 +5,21 @@
 // (Observed in the provider documentation, nothing here comes from a sandbox capture):
 //  * POST /time takes `address_id`, `date` ("mm-dd-yyyy") and `time` (one of 9:00 ... 18:00);
 //  * the pickup schedule must be at least 90 minutes from the current time ("invalid pickup time");
+//    the web UI's own wording is 2 hours, which is the stricter default used here (PICKUP_LEAD_MINUTES);
 //  * Create Order `pickup.type` is `scheduledPickup` or `dropOff`; `scheduledPickup` needs
 //    `pickup.time_id` and `pickup.volume` (volumeTruck | volumeMobil | volumeMotor).
 // Unknown (documentation silent): the time zone the date, time and the 90 minutes are measured in
 // (WIB is assumed: the counter works in WIB), the slot length (the start hours are hourly; a
-// one-hour slot is shown), the farthest date ahead, per-courier cut-offs, Sunday handling.
+// one-hour slot is shown), the farthest date ahead, Sunday handling. Per-courier same-day cut-offs are
+// documented by the help centre and live in ./pickup-cutoffs.ts (a warning, not a refusal).
 
 export const PICKUP_FIRST_HOUR = 9;
 export const PICKUP_LAST_HOUR = 18;
-export const PICKUP_LEAD_MINUTES = 90;
+// The minimum lead time is a setting. This is its default; the database reads the setting
+// private.settings 'pickup_min_lead_minutes' and falls back to the same 120 in private.pickup_slot_ok
+// (migration 20261109200000). A row there overrides the database check; the application hints and the
+// Worker's own re-check keep this default (tests/db/pickup-orders.test.ts keeps the two defaults equal).
+export const PICKUP_LEAD_MINUTES = 120;
 // Local policy, not a provider rule (the documentation states no maximum): keeps typos out.
 export const PICKUP_MAX_DAYS_AHEAD = 14;
 
@@ -108,6 +114,6 @@ export const VOLUME_LABEL: Record<PickupVolume, string> = {
 export const PICKUP_ERROR_TEXT: Record<PickupSlotError, string> = {
   date_invalid: "Pilih tanggal jemput.",
   slot_invalid: "Pilih jam jemput antara 09.00 dan 18.00 WIB.",
-  too_soon: "Jam jemput harus minimal 90 menit dari sekarang (WIB). Pilih jam yang lebih lambat.",
+  too_soon: `Jam jemput harus minimal ${PICKUP_LEAD_MINUTES} menit dari sekarang (WIB). Pilih jam yang lebih lambat.`,
   too_far: `Tanggal jemput maksimal ${PICKUP_MAX_DAYS_AHEAD} hari ke depan.`,
 };

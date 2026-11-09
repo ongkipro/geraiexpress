@@ -8,12 +8,14 @@
 // mount, so the server render never depends on it. Rendered inside the "Paket & serah" step, so it
 // draws no frame of its own.
 import { useEffect, useState } from "react";
-import { Info, Store, Truck } from "lucide-react";
+import { AlertTriangle, Info, Store, Truck } from "lucide-react";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import {
   dateLabel, PICKUP_LEAD_MINUTES, PICKUP_SLOT_HOURS, pickupDates, pickupSlotError, PICKUP_VOLUMES, slotLabel, VOLUME_LABEL, isPickupVolume,
 } from "@/lib/mengantar/pickup";
+import { pickupCutoffWarning } from "@/lib/mengantar/pickup-cutoffs";
 import type { DraftField, DraftValues } from "./draft";
 import { FieldMessage } from "./intake-step";
 import { ChoiceSelect } from "./choice-select";
@@ -22,6 +24,8 @@ type Props = {
   values: DraftValues;
   errors: Partial<Record<DraftField, string>>;
   onChange: (field: DraftField, value: string) => void;
+  // The courier code of the selected live quote, or null (none selected, or a simulated quote).
+  courier?: string | null;
 };
 
 // One line for the confirmation review: how the parcel reaches the courier.
@@ -36,13 +40,15 @@ const OPTIONS = [
   ["pickup", "Jemput kurir", "Kurir menjemput di alamat pickup gerai pada jadwal yang dipilih.", Truck],
 ] as const;
 
-export function PickupFields({ values, errors, onChange }: Props) {
+export function PickupFields({ values, errors, onChange, courier = null }: Props) {
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => setNow(new Date()), []);
 
   const pickup = values.handover === "pickup";
   const dates = now ? pickupDates(now) : values.pickup_date ? [values.pickup_date] : [];
   const dateOptions = values.pickup_date && !dates.includes(values.pickup_date) ? [values.pickup_date, ...dates] : dates;
+  // Warning only (the courier cut-off decides when an order entered now is collected; it never blocks).
+  const cutoffWarning = now && values.pickup_date ? pickupCutoffWarning(courier, values.pickup_date, now) : null;
   const err = (name: DraftField, id: string) => (errors[name] ? <FieldMessage id={`${id}-err`}>{errors[name]}</FieldMessage> : null);
   const invalid = (name: DraftField) => (errors[name] ? true : undefined);
 
@@ -97,6 +103,12 @@ export function PickupFields({ values, errors, onChange }: Props) {
               {err("pickup_slot_hour", "f-pickup_slot_hour")}
             </Field>
           </div>
+          {cutoffWarning ? (
+            <Alert role="status" variant="warning" data-testid="pickup-cutoff-warning">
+              <AlertTriangle aria-hidden="true" />
+              <AlertTitle>{cutoffWarning}</AlertTitle>
+            </Alert>
+          ) : null}
           <Field data-invalid={invalid("pickup_volume")}>
             <FieldLabel htmlFor="f-pickup_volume">Perkiraan kendaraan penjemput</FieldLabel>
             <ChoiceSelect id="f-pickup_volume" name="pickup_volume" value={isPickupVolume(values.pickup_volume) ? values.pickup_volume : "volumeMotor"}

@@ -6,8 +6,9 @@ import { describe, expect, it } from "vitest";
 import { credentialAad, sealCredential } from "../../src/lib/credential-crypto";
 import { dispatchOperation, reconcileOperation, type Rpc } from "../../src/lib/mengantar/dispatcher";
 import {
-  PICKUP_LEAD_MINUTES, pickupDates, pickupSlotError, providerTimeFields, slotLabel, slotStartMs, wibDate,
+  PICKUP_ERROR_TEXT, PICKUP_LEAD_MINUTES, pickupDates, pickupSlotError, providerTimeFields, slotLabel, slotStartMs, wibDate,
 } from "../../src/lib/mengantar/pickup";
+import { cutoffLabel, PICKUP_CUTOFF_SOURCE, PICKUP_CUTOFFS, pickupCutoffWarning } from "../../src/lib/mengantar/pickup-cutoffs";
 import { createMengantarPublicClient, InvalidOrderRequest, MengantarError } from "../../src/lib/mengantar/public-api";
 
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`fixtures/mengantar/${name}`, import.meta.url), "utf8"));
@@ -23,8 +24,62 @@ const DATE = "2026-02-03";
 const HOUR = 13;
 const NOW = new Date("2026-02-02T03:00:00Z"); // 10:00 WIB the day before: plenty of lead time
 
-describe("pickup rules (documented: start hours 9:00-18:00, at least 90 minutes ahead)", () => {
-  it("accepts a slot exactly 90 minutes ahead and refuses one minute less", () => {
+describe("per-courier same-day pickup cut-offs (Mengantar help article, verified 2026-11-09)", () => {
+  // WIB wall clock on 2026-02-03 as an instant.
+  const at = (hh: number, mm: number, ss = 0) => new Date(Date.UTC(2026, 1, 3, hh - 7, mm, ss));
+  const TODAY = "2026-02-03";
+  const VERIFIED: [string, string, number][] = [
+    ["JNE", "JNE", 15], ["SiCepat", "SiCepat", 12], ["Sap", "SAP Express", 15], ["iDexpress", "ID Express", 11], ["JT", "J&T Express", 12],
+    ["lion", "Lion Parcel", 15], ["anteraja", "AnterAja", 15], ["pos", "Pos Indonesia", 16], ["spx", "SPX Express", 15],
+  ];
+
+  it("records the source and the date it was verified", () => {
+    expect(PICKUP_CUTOFF_SOURCE.url).toBe("https://help.mengantar.com/id/articles/5502313-jne-sicepat-sap-idexpress-jandt-lion-parcel-anteraja-pos-ind-dan-spx");
+    expect(PICKUP_CUTOFF_SOURCE.verifiedOn).toBe("2026-11-09");
+  });
+
+  it.each(VERIFIED)("%s: cut-off %i.00 WIB, warns from the cut-off minute and not before", (code, name, hour) => {
+    expect(PICKUP_CUTOFFS[code]).toMatchObject({ hour, minute: 0 });
+    expect(cutoffLabel(PICKUP_CUTOFFS[code])).toBe(`${String(hour).padStart(2, "0")}.00`);
+    expect(pickupCutoffWarning(code, TODAY, at(hour - 1, 59, 59))).toBeNull();
+    const warning = pickupCutoffWarning(code, TODAY, at(hour, 0));
+    expect(warning).toBe(`Kurir ${name} menjemput di hari yang sama untuk pesanan yang diinput sebelum ${String(hour).padStart(2, "0")}.00 WIB. Pesanan ini kemungkinan dijemput besok.`);
+    expect(pickupCutoffWarning(code, TODAY, at(hour, 1))).toBe(warning);
+  });
+
+  it("lists exactly the nine verified couriers, with only AnterAja marked pickup-only", () => {
+    expect(Object.keys(PICKUP_CUTOFFS).sort()).toEqual(VERIFIED.map(([c]) => c).sort());
+    expect(Object.entries(PICKUP_CUTOFFS).filter(([, c]) => c.pickupOnly).map(([k]) => k)).toEqual(["anteraja"]);
+  });
+
+  it("gives no warning for an unknown courier, a missing courier or an inherited property name", () => {
+    for (const code of ["UNKNOWN", "", null, undefined, "toString", "constructor"]) expect(pickupCutoffWarning(code, TODAY, at(23, 0))).toBeNull();
+  });
+
+  it("gives no warning for a slot on a later or earlier date than today (WIB)", () => {
+    expect(pickupCutoffWarning("JNE", "2026-02-04", at(23, 59))).toBeNull();
+    expect(pickupCutoffWarning("JNE", "2026-02-02", at(23, 59))).toBeNull();
+  });
+
+  it("decides 'today' and the minute in WIB: 17:30 UTC is already the next WIB day", () => {
+    const lateUtc = new Date("2026-02-02T17:30:00Z"); // 00:30 WIB on the 3rd: before every cut-off
+    expect(pickupCutoffWarning("JNE", "2026-02-03", lateUtc)).toBeNull();
+    expect(pickupCutoffWarning("JNE", "2026-02-02", lateUtc)).toBeNull();
+    expect(pickupCutoffWarning("JNE", "2026-02-02", new Date("2026-02-02T08:00:00Z"))).not.toBeNull(); // 15:00 WIB on the 2nd
+  });
+});
+
+describe("pickup rules (documented: start hours 9:00-18:00; lead time: documented 90 minutes, web UI 2 hours)", () => {
+  it("the minimum lead time defaults to 120 minutes (the web UI's 2 hours, stricter than the API's 90)", () => {
+    expect(PICKUP_LEAD_MINUTES).toBe(120);
+    expect(PICKUP_ERROR_TEXT.too_soon).toContain("minimal 120 menit");
+    const start = slotStartMs("2026-02-03", 9)!;
+    // 119 minutes ahead is refused (it would have passed under the old 90); 120 is accepted.
+    expect(pickupSlotError("2026-02-03", 9, new Date(start - 119 * 60_000))).toBe("too_soon");
+    expect(pickupSlotError("2026-02-03", 9, new Date(start - 120 * 60_000))).toBeNull();
+  });
+
+  it("accepts a slot exactly at the lead time and refuses one millisecond less", () => {
     const start = slotStartMs("2026-02-03", 9)!;
     expect(pickupSlotError("2026-02-03", 9, new Date(start - PICKUP_LEAD_MINUTES * 60_000))).toBeNull();
     expect(pickupSlotError("2026-02-03", 9, new Date(start - PICKUP_LEAD_MINUTES * 60_000 + 1))).toBe("too_soon");

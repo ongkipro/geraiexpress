@@ -9,6 +9,7 @@ import { BatchPayControl } from "./batch-actions";
 import { IssuedActions, IssuedResult } from "./detail-issued";
 import type { BatchReview, OperationRecord, ShipmentRecord } from "./detail-types";
 import { PaymentUnresolvedPanel, unresolvedPaymentState } from "./payment-state";
+import { PICKUP_LEAD_MINUTES } from "@/lib/mengantar/pickup";
 import { pickupFailureReason, type PickupPhase } from "./pickup-status";
 
 // Mirrors private.definitely_not_created (20261014180000_issuance.sql): nothing was created at
@@ -18,7 +19,7 @@ const REOPENABLE = ["PROVIDER_REJECTED", "NOT_ALLOWED", "INPUT_INVALID", "INPUT_
 // T-043: result codes of the pickup flow, kept beside the shared table.
 const FAILURE_REASON: Record<string, string> = {
   ...BASE_FAILURE_REASON,
-  PICKUP_TIME_INVALID: "Jam jemput tidak memenuhi syarat Mengantar (minimal 90 menit dari sekarang).",
+  PICKUP_TIME_INVALID: `Jam jemput tidak memenuhi syarat Mengantar (minimal ${PICKUP_LEAD_MINUTES} menit dari sekarang).`,
   PICKUP_SLOT_UNAVAILABLE: "Mengantar menolak slot jemput yang dipilih. Tidak ada slot yang dipesan dan tidak ada pesanan yang dibuat.",
 };
 

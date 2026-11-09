@@ -129,10 +129,10 @@ describe("handover choice (pickup)", () => {
     expect(update.pickup_volume).toBe("volumeMotor");
   });
 
-  it("refuses a pickup in the past or inside the 90-minute lead time with Bahasa field errors", () => {
-    expect(parseDraft(pickup({ pickup_date: "2026-02-01" }), false, NOW).errors.pickup_slot_hour).toContain("90 menit");
+  it("refuses a pickup in the past or inside the lead time (120 minutes by default; was 90 before the amendment) with Bahasa field errors", () => {
+    expect(parseDraft(pickup({ pickup_date: "2026-02-01" }), false, NOW).errors.pickup_slot_hour).toContain("120 menit");
     // 10:00 now -> 11:30 is the earliest start, so the 11:00 hour is too soon and 12:00 is fine.
-    expect(parseDraft(pickup({ pickup_date: "2026-02-02", pickup_slot_hour: "11" }), false, NOW).errors.pickup_slot_hour).toContain("90 menit");
+    expect(parseDraft(pickup({ pickup_date: "2026-02-02", pickup_slot_hour: "11" }), false, NOW).errors.pickup_slot_hour).toContain("120 menit");
     expect(parseDraft(pickup({ pickup_date: "2026-02-02", pickup_slot_hour: "12" }), false, NOW).errors).toEqual({});
   });
 

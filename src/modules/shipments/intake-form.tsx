@@ -404,7 +404,7 @@ export function IntakeForm(props: Props) {
                   <span className="text-muted-foreground"> · {outletPlace || "Alamat pickup belum diatur"}. Alamat pickup gerai tetap menjadi asal penjemputan, terpisah dari identitas pengirim.</span>
                 </span>
               </p>
-              <PickupFields values={values} errors={err} onChange={set} />
+              <PickupFields values={values} errors={err} onChange={set} courier={selected && !selected.is_simulated ? selected.courier : null} />
 
               <Separator />
               <div className="flex flex-col gap-3 @md:flex-row @md:flex-wrap @md:items-center">

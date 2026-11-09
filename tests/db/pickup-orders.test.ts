@@ -132,8 +132,53 @@ describe("handover columns and constraints (T-043 PR-5)", () => {
       }
       expect(sql(`select private.pickup_slot_ok('${wibDay(1)}', 8)`)).toBe("f");
       expect(sql(`select private.pickup_slot_ok(null, 12)`)).toBe("f");
-      expect(PICKUP_LEAD_MINUTES).toBe(90);
+      // T-043 amendment: the lead time default is 120 (was 90); the database and the application agree.
+      expect(PICKUP_LEAD_MINUTES).toBe(120);
+      expect(sql(`select private.pickup_lead_minutes()`)).toBe(String(PICKUP_LEAD_MINUTES));
     } finally { f.cleanup(); }
+  });
+
+  // The lead time is a setting (private.settings 'pickup_min_lead_minutes', default 120). The clock is real, so the
+  // boundary is built from the actual distance to tomorrow 12:00 WIB: whole minutes `ahead`, then lead = ahead - 1
+  // (accepted) and ahead + 1 (refused).
+  it("reads the lead time from the setting, default 120: a slot closer than the lead is refused, farther is accepted", () => {
+    const slot = `((('${wibDay(1)}'::date + make_interval(hours => 12)) at time zone 'Asia/Jakarta'))`;
+    const ahead = Number(sql(`select floor(extract(epoch from ${slot} - now()) / 60)::integer`));
+    const setLead = (value: string | null) => {
+      const statement = value === null
+        ? `delete from private.settings where key = 'pickup_min_lead_minutes'`
+        : `insert into private.settings (key, value) values ('pickup_min_lead_minutes', '${value}'::jsonb)
+           on conflict (key) do update set value = excluded.value, updated_at = now()`;
+      console.log(`[pickup lead setting] ${statement.replace(/\s+/g, " ")}`);
+      sql(statement);
+    };
+    const ok = () => sql(`select private.pickup_slot_ok('${wibDay(1)}', 12)`) === "t";
+    try {
+      setLead(null);
+      expect(sql(`select private.pickup_lead_minutes()`)).toBe("120");
+      // Absent row: the default 120 decides exactly like the application rule (ahead is ~1440 minutes here).
+      expect(ok()).toBe(ahead - 1 >= 120);
+      setLead(String(ahead - 1)); expect(sql(`select private.pickup_lead_minutes()`)).toBe(String(ahead - 1));
+      expect(ok()).toBe(true);
+      setLead(String(ahead + 1)); expect(ok()).toBe(false);
+      // Unusable values fall back to 120 rather than disabling the check.
+      for (const bad of ['"abc"', "0", "-5", "1.5", "null", "true"]) {
+        setLead(bad);
+        expect(sql(`select private.pickup_lead_minutes()`)).toBe("120");
+      }
+    } finally { setLead(null); }
+  });
+
+  it("with no setting row the database applies the literal 120 minutes (never the old 90) to every offered slot", () => {
+    sql(`delete from private.settings where key = 'pickup_min_lead_minutes'`);
+    // The statement is evaluated at one now(): each of the 30 slots must agree with a literal 120-minute rule, and
+    // the same slots must disagree with a 90-minute rule exactly when one starts 90-119 minutes ahead.
+    const statement = `select count(*) filter (where private.pickup_slot_ok(d, h) <> (((d + make_interval(hours => h)) at time zone 'Asia/Jakarta') >= now() + interval '120 minutes')),
+        count(*) filter (where private.pickup_slot_ok(d, h) and ((d + make_interval(hours => h)) at time zone 'Asia/Jakarta') < now() + interval '120 minutes'),
+        count(*)
+      from (select (now() at time zone 'Asia/Jakarta')::date + n as d, h from generate_series(0, 2) n, generate_series(9, 18) h) g`;
+    console.log(`[pickup lead default] ${statement.replace(/\s+/g, " ")}`);
+    expect(sql(statement)).toBe("0|0|30");
   });
 
   it("is not exposed to other roles: a stranger or visitor cannot set a handover on someone's draft", async () => {
