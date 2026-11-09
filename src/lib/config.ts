@@ -19,8 +19,9 @@ export type ConfigName =
   | "MENGANTAR_ENV" | "MENGANTAR_PARTNER_SECRET" | "GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET" | "PARTNER_ID"
   | "PARTNER_TERMS_VERSION" | "PARTNER_PRIVACY_VERSION" | "PARTNER_TERMS_URL" | "PARTNER_PRIVACY_URL"
   // Cloudflare Turnstile: the site key is public configuration, the secret verifies tokens server-side.
+  // TURNSTILE_HOSTNAMES (comma-separated) are the hosts a token may have been solved on.
   // AUTH_CAPTCHA_DISABLED=true is the explicit opt-out for stacks without a widget.
-  | "TURNSTILE_SITE_KEY" | "TURNSTILE_SECRET_KEY" | "AUTH_CAPTCHA_DISABLED"
+  | "TURNSTILE_SITE_KEY" | "TURNSTILE_SECRET_KEY" | "TURNSTILE_HOSTNAMES" | "AUTH_CAPTCHA_DISABLED"
   // Mail transport for the emailed sign-in code, and the reverse proxy trust switch.
   | "MAIL_TRANSPORT" | "MAILPIT_URL" | "MAIL_FROM" | "TRUSTED_PROXY"
   // SMTP submission for MAIL_TRANSPORT=smtp (T-063). SMTP_PASSWORD is a secret.

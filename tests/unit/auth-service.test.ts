@@ -156,7 +156,12 @@ function setup(over: Partial<Pick<AuthConfig, "captcha" | "now">> = {}) {
   return { fake, auth };
 }
 
-const turnstile = (success: boolean) => vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ success }), { status: 200 }));
+const CAPTCHA_HOST = "app.geraiexpress.com";
+// A siteverify double that answers for the action the widget was rendered with (the request carries none:
+// Cloudflare reads it from the token, so the double is told which action its tokens were solved for).
+const turnstile = (success: boolean, action?: string) =>
+  vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ success, action, hostname: CAPTCHA_HOST }), { status: 200 }));
+const captchaWith = (fetchImpl: typeof fetch) => ({ secret: CAPTCHA_SECRET, hostnames: [CAPTCHA_HOST], fetchImpl });
 const scryptCalls = () => vi.mocked(scrypt).mock.calls.length;
 const fn = (fake: Fake, name: string) => fake.calls.filter((c) => c.fn === name);
 const leaves = (value: unknown): string[] =>
@@ -201,9 +206,19 @@ describe("createAuth configuration", () => {
     const { store } = createFakeStore();
     const base = { store, jwtSecret: JWT_SECRET, authSecret: AUTH_SECRET };
     expect(() => createAuth(base as never)).toThrow(/captcha/);
-    expect(() => createAuth({ ...base, captcha: { secret: "" } })).toThrow(/captcha/);
+    expect(() => createAuth({ ...base, captcha: { secret: "", hostnames: [CAPTCHA_HOST] } })).toThrow(/captcha/);
     expect(() => createAuth({ ...base, captcha: "off" as never })).toThrow(/captcha/);
     expect(() => createAuth({ ...base, captcha: OPEN })).not.toThrow();
+  });
+
+  it("refuses a Turnstile secret without at least one allowed hostname", () => {
+    const { store } = createFakeStore();
+    const base = { store, jwtSecret: JWT_SECRET, authSecret: AUTH_SECRET };
+    for (const hostnames of [[], [""], ["  "]]) {
+      expect(() => createAuth({ ...base, captcha: { secret: CAPTCHA_SECRET, hostnames } }), JSON.stringify(hostnames)).toThrow(/hostnames/);
+    }
+    expect(() => createAuth({ ...base, captcha: { secret: CAPTCHA_SECRET } as never })).toThrow(/hostnames/);
+    expect(() => createAuth({ ...base, captcha: { secret: CAPTCHA_SECRET, hostnames: [CAPTCHA_HOST] } })).not.toThrow();
   });
 });
 
@@ -218,7 +233,7 @@ describe("CAPTCHA first", () => {
   it("a failed or missing Turnstile token touches no store call and no scrypt", async () => {
     for (const token of [undefined, "", "tok-bad"]) {
       const fetchImpl = turnstile(false);
-      const { fake, auth } = setup({ captcha: { secret: CAPTCHA_SECRET, fetchImpl } });
+      const { fake, auth } = setup({ captcha: captchaWith(fetchImpl) });
       for (const [name, run] of Object.entries(entryPoints(auth, token))) {
         expect(await run(), name).toEqual(name === "requestEmailCode" ? { status: "captcha_failed" } : { ok: false, reason: "captcha_failed" });
       }
@@ -235,15 +250,15 @@ describe("CAPTCHA first", () => {
       vi.fn<typeof fetch>(async () => new Response("{}", { status: 500 })),
       vi.fn<typeof fetch>(async () => new Response("not json", { status: 200 })),
     ]) {
-      const { fake, auth } = setup({ captcha: { secret: CAPTCHA_SECRET, fetchImpl } });
+      const { fake, auth } = setup({ captcha: captchaWith(fetchImpl) });
       expect(await auth.signInAnonymous({ captchaToken: "tok" })).toEqual({ ok: false, reason: "captcha_failed" });
       expect(fake.calls).toEqual([]);
     }
   });
 
   it("an empty token never reaches Cloudflare; a good token proceeds, with the client address forwarded", async () => {
-    const fetchImpl = turnstile(true);
-    const { fake, auth } = setup({ captcha: { secret: CAPTCHA_SECRET, fetchImpl } });
+    const fetchImpl = turnstile(true, "demo");
+    const { fake, auth } = setup({ captcha: captchaWith(fetchImpl) });
     expect(await auth.signInAnonymous({ captchaToken: "" })).toEqual({ ok: false, reason: "captcha_failed" });
     expect(fetchImpl).not.toHaveBeenCalled();
     expect((await auth.signInAnonymous({ captchaToken: "tok-ok", remoteIp: "203.0.113.7" })).ok).toBe(true);
@@ -251,6 +266,19 @@ describe("CAPTCHA first", () => {
     expect(form.get("secret")).toBe(CAPTCHA_SECRET);
     expect(form.get("remoteip")).toBe("203.0.113.7");
     expect(fn(fake, "auth_sign_in_anonymous")).toHaveLength(1);
+  });
+
+  it("refuses a solved token minted for another surface's action, touching no store call", async () => {
+    // A token solved on the demo button cannot sign in with a password, and vice versa.
+    const demoToken = setup({ captcha: captchaWith(turnstile(true, "demo")) });
+    expect(await demoToken.auth.signInWithPassword({ email: "x@example.com", password: "correct horse battery", captchaToken: "tok" })).toEqual({ ok: false, reason: "captcha_failed" });
+    expect(await demoToken.auth.requestEmailCode({ email: "x@example.com", captchaToken: "tok" })).toEqual({ status: "captcha_failed" });
+    expect(await demoToken.auth.verifyEmailCode({ email: "x@example.com", code: "123456", captchaToken: "tok" })).toEqual({ ok: false, reason: "captcha_failed" });
+    expect(demoToken.fake.calls).toEqual([]);
+    expect(scryptCalls()).toBe(0);
+    const signinToken = setup({ captcha: captchaWith(turnstile(true, "signin")) });
+    expect(await signinToken.auth.signInAnonymous({ captchaToken: "tok" })).toEqual({ ok: false, reason: "captcha_failed" });
+    expect(signinToken.fake.calls).toEqual([]);
   });
 
   it('"disabled" lets calls through without a token, and only when configured explicitly', async () => {

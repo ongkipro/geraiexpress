@@ -7,6 +7,7 @@ import { Turnstile, useCaptchaGate } from "@/components/turnstile";
 import { SubmitButton } from "@/components/submit-button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { TURNSTILE_ACTIONS } from "@/lib/turnstile-actions";
 import { signInAction, startDemoAction, type DemoState, type SignInState } from "@/lib/auth-actions";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +44,7 @@ export function SignInForm({ siteKey, codeEntry }: { siteKey: string | undefined
       {hint}
       {/* Below the button: while verifying, the widget's frame can overflow its box and would
           otherwise cover the button and swallow the click. */}
-      <Turnstile siteKey={siteKey} resetSignal={state} onToken={onToken} />
+      <Turnstile siteKey={siteKey} action={TURNSTILE_ACTIONS.signin} resetSignal={state} onToken={onToken} />
     </form>
   );
 }
@@ -55,7 +56,7 @@ export function DemoEntry({ siteKey }: { siteKey: string | undefined }) {
     <form action={action} className="flex flex-col gap-3">
       <SubmitButton variant="outline" pendingLabel="Menyiapkan gerai contoh…" {...guard} className={cn("w-full bg-card", guard.className)}>Coba demo</SubmitButton>
       {hint}
-      <Turnstile siteKey={siteKey} resetSignal={state} onToken={onToken} />
+      <Turnstile siteKey={siteKey} action={TURNSTILE_ACTIONS.demo} resetSignal={state} onToken={onToken} />
       {state.error ? <StatusAlert variant="destructive">{state.error}</StatusAlert> : null}
     </form>
   );

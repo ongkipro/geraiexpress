@@ -6,6 +6,7 @@ import { AuthHeading, InlineError, StatusAlert } from "@/components/auth/auth-sh
 import { CodeInput, useResetKey } from "@/components/auth/code-input";
 import { RegistrationSteps } from "@/components/auth/registration-steps";
 import { Turnstile, useCaptchaGate } from "@/components/turnstile";
+import { TURNSTILE_ACTIONS } from "@/lib/turnstile-actions";
 import { SubmitButton } from "@/components/submit-button";
 import { Button } from "@/components/ui/button";
 import {
@@ -136,7 +137,7 @@ function VerifyForm({ siteKey, state, action, notice, error, email }: {
       />
       <SubmitButton pendingLabel="Memeriksa…" {...guard} className={cn("w-full", guard.className)}>Verifikasi</SubmitButton>
       {hint}
-      <Turnstile siteKey={siteKey} resetSignal={state} onToken={onToken} />
+      <Turnstile siteKey={siteKey} action={TURNSTILE_ACTIONS.codeVerify} resetSignal={state} onToken={onToken} />
     </form>
   );
 }
@@ -156,7 +157,7 @@ function EmailStep({ siteKey, state, action }: {
       </Field>
       <SubmitButton pendingLabel="Mengirim kode…" {...guard} className={cn("w-full", guard.className)}>Kirim kode</SubmitButton>
       {hint}
-      <Turnstile siteKey={siteKey} resetSignal={state} onToken={onToken} />
+      <Turnstile siteKey={siteKey} action={TURNSTILE_ACTIONS.codeRequest} resetSignal={state} onToken={onToken} />
     </form>
   );
 }
@@ -179,7 +180,7 @@ function ResendForm({ siteKey, email, children }: { siteKey: string | undefined;
         {children}
       </div>
       {hint}
-      <Turnstile siteKey={siteKey} resetSignal={state} onToken={onToken} />
+      <Turnstile siteKey={siteKey} action={TURNSTILE_ACTIONS.codeRequest} resetSignal={state} onToken={onToken} />
     </form>
   );
 }

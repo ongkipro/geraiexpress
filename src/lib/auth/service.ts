@@ -7,6 +7,7 @@ import { generateOtpCode, hashOtp } from "./otp";
 import { hashPassword, passwordProblem, verifyDummyPassword, verifyPassword } from "./password";
 import { AuthUnavailableError, type AuthStore, type AuthStoreReply } from "./store";
 import { generateTotpSecret, otpauthUri, sealTotpSecret, unsealTotpSecret, verifyTotp as checkTotp } from "./totp";
+import { TURNSTILE_ACTIONS, type TurnstileAction } from "../turnstile-actions";
 import { verifyTurnstile } from "./turnstile";
 
 export type AuthConfig = {
@@ -15,8 +16,11 @@ export type AuthConfig = {
   jwtSecret: string;
   /** Root of the OTP and TOTP-sealing keys (AUTH_SECRET); must differ from `jwtSecret`. */
   authSecret: string;
-  /** Turnstile verification, or the explicit opt-out for local stacks. A configured captcha fails closed. */
-  captcha: { secret: string; fetchImpl?: typeof fetch } | "disabled";
+  /**
+   * Turnstile verification, or the explicit opt-out for local stacks. A configured captcha fails closed and
+   * accepts a token only for the surface's action and one of `hostnames` (the public hosts serving the widget).
+   */
+  captcha: { secret: string; hostnames: string[]; fetchImpl?: typeof fetch } | "disabled";
   /** Epoch milliseconds; defaults to Date.now. */
   now?: () => number;
 };
@@ -133,7 +137,15 @@ export function createAuth(config: AuthConfig): Auth {
   const authSecret = assertSecret("AUTH_SECRET", config.authSecret);
   if (jwtSecret === authSecret) throw new Error("AUTH_JWT_SECRET and AUTH_SECRET must be different values");
   if (captcha !== "disabled" && !(isRow(captcha) && typeof captcha.secret === "string" && captcha.secret.length > 0)) {
-    throw new Error('captcha must be { secret } or the explicit "disabled"');
+    throw new Error('captcha must be { secret, hostnames } or the explicit "disabled"');
+  }
+  const captchaHostnames = new Set(
+    captcha === "disabled" || !Array.isArray(captcha.hostnames)
+      ? []
+      : captcha.hostnames.filter((h): h is string => typeof h === "string").map((h) => h.trim().toLowerCase()).filter(Boolean),
+  );
+  if (captcha !== "disabled" && captchaHostnames.size === 0) {
+    throw new Error("captcha hostnames must name at least one host serving the Turnstile widget");
   }
   const clock = config.now ?? Date.now;
   const nowSeconds = () => Math.floor(clock() / 1000);
@@ -223,14 +235,21 @@ export function createAuth(config: AuthConfig): Auth {
 
   const amrFor = (method: string): Amr => [{ method, timestamp: nowSeconds() }];
 
-  async function captchaPasses(token: string | undefined, remoteIp: string | undefined): Promise<boolean> {
+  async function captchaPasses(token: string | undefined, remoteIp: string | undefined, action: TurnstileAction): Promise<boolean> {
     if (captcha === "disabled") return true;
-    return verifyTurnstile({ secret: captcha.secret, token, remoteIp, fetchImpl: captcha.fetchImpl });
+    return verifyTurnstile({
+      secret: captcha.secret,
+      token,
+      expectedAction: action,
+      allowedHostnames: captchaHostnames,
+      remoteIp,
+      fetchImpl: captcha.fetchImpl,
+    });
   }
 
   return {
     async requestEmailCode(input: RequestCodeInput): Promise<RequestCodeResult> {
-      if (!(await captchaPasses(input.captchaToken, input.remoteIp))) return { status: "captcha_failed" };
+      if (!(await captchaPasses(input.captchaToken, input.remoteIp, TURNSTILE_ACTIONS.codeRequest))) return { status: "captcha_failed" };
       const email = normalizeEmail(input.email);
       if (email === "" || (input.requesterId !== undefined && !isUuid(input.requesterId))) return { status: "withheld" };
       const code = generateOtpCode();
@@ -247,7 +266,7 @@ export function createAuth(config: AuthConfig): Auth {
     },
 
     async verifyEmailCode(input: VerifyCodeInput): Promise<CodeSignInResult> {
-      if (!(await captchaPasses(input.captchaToken, input.remoteIp))) return { ok: false, reason: "captcha_failed" };
+      if (!(await captchaPasses(input.captchaToken, input.remoteIp, TURNSTILE_ACTIONS.codeVerify))) return { ok: false, reason: "captcha_failed" };
       const email = normalizeEmail(input.email);
       if (email === "" || typeof input.code !== "string" || !OTP_CODE.test(input.code)) return { ok: false, reason: "invalid" };
       const refreshToken = randomToken(32);
@@ -266,7 +285,7 @@ export function createAuth(config: AuthConfig): Auth {
     },
 
     async signInWithPassword(input: PasswordSignInInput): Promise<SignInResult> {
-      if (!(await captchaPasses(input.captchaToken, input.remoteIp))) return { ok: false, reason: "captcha_failed" };
+      if (!(await captchaPasses(input.captchaToken, input.remoteIp, TURNSTILE_ACTIONS.signin))) return { ok: false, reason: "captcha_failed" };
       const email = normalizeEmail(input.email);
       const password = typeof input.password === "string" ? input.password : "";
       const credential = email === "" ? null : await rpcOptionalRow("auth_password_credential", { p_email: email });
@@ -289,7 +308,7 @@ export function createAuth(config: AuthConfig): Auth {
     },
 
     async signInAnonymous(input: AnonymousSignInInput): Promise<SignInResult> {
-      if (!(await captchaPasses(input.captchaToken, input.remoteIp))) return { ok: false, reason: "captcha_failed" };
+      if (!(await captchaPasses(input.captchaToken, input.remoteIp, TURNSTILE_ACTIONS.demo))) return { ok: false, reason: "captcha_failed" };
       const refreshToken = randomToken(32);
       const fn = "auth_sign_in_anonymous";
       const row = await rpcRow(fn, {

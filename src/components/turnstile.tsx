@@ -3,6 +3,7 @@
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StatusAlert } from "@/components/auth/auth-shell";
+import type { TurnstileAction } from "@/lib/turnstile-actions";
 
 type TurnstileApi = {
   render: (el: HTMLElement, options: Record<string, unknown>) => string;
@@ -17,8 +18,10 @@ declare global {
 // adds a hidden `cf-turnstile-response` field to the enclosing form; the server action passes it to
 // the auth service, which verifies it. Tokens are single-use, so the widget resets whenever
 // `resetSignal` changes (each completed attempt). `onToken(null)` while no valid token exists.
-export function Turnstile({ siteKey, resetSignal, onToken }: {
+// `action` names the surface; the server refuses a token whose siteverify action differs.
+export function Turnstile({ siteKey, action, resetSignal, onToken }: {
   siteKey: string | undefined;
+  action: TurnstileAction;
   resetSignal?: unknown;
   onToken: (token: string | null) => void;
 }) {
@@ -32,6 +35,7 @@ export function Turnstile({ siteKey, resetSignal, onToken }: {
       if (cancelled || !box.current || widget.current || !window.turnstile) return false;
       widget.current = window.turnstile.render(box.current, {
         sitekey: siteKey,
+        action,
         language: "id",
         // Shown only when Cloudflare needs the person to interact; otherwise it stays invisible.
         appearance: "interaction-only",
@@ -49,7 +53,7 @@ export function Turnstile({ siteKey, resetSignal, onToken }: {
       if (widget.current && window.turnstile) window.turnstile.remove(widget.current);
       widget.current = null;
     };
-  }, [siteKey, onToken]);
+  }, [siteKey, action, onToken]);
 
   useEffect(() => {
     if (widget.current && window.turnstile) {

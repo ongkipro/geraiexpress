@@ -14,6 +14,10 @@ export function postgrestUrl(): string {
   return url;
 }
 
+export function turnstileHostnames(value: string | undefined): string[] {
+  return (value ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+}
+
 let instance: Auth | null = null;
 let keys: Promise<{ anon: string; service: string }> | null = null;
 
@@ -24,8 +28,12 @@ export function getAuth(): Auth {
   if (!jwtSecret || !authSecret) throw new Error("AUTH_JWT_SECRET and AUTH_SECRET must be set");
   // Turnstile is enforced whenever its secret is configured. Without one, the stack must opt out
   // explicitly (local development, a preview without a widget); production never gets there by accident.
+  // TURNSTILE_HOSTNAMES lists the public hosts serving the widget (comma-separated); a token solved elsewhere
+  // is refused, and a secret without hostnames refuses to start rather than run a weaker check.
   const turnstile = config("TURNSTILE_SECRET_KEY");
-  const captcha = turnstile ? { secret: turnstile } : config("AUTH_CAPTCHA_DISABLED") === "true" ? ("disabled" as const) : null;
+  const hostnames = turnstileHostnames(config("TURNSTILE_HOSTNAMES"));
+  if (turnstile && hostnames.length === 0) throw new Error("TURNSTILE_SECRET_KEY is set but TURNSTILE_HOSTNAMES is empty");
+  const captcha = turnstile ? { secret: turnstile, hostnames } : config("AUTH_CAPTCHA_DISABLED") === "true" ? ("disabled" as const) : null;
   if (!captcha) throw new Error("Set TURNSTILE_SECRET_KEY, or AUTH_CAPTCHA_DISABLED=true for a stack without CAPTCHA");
   const store: AuthStore = {
     rpc: async (fn, args) => (await serviceClient()).rpc(fn, args) as ReturnType<AuthStore["rpc"]>,

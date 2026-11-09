@@ -23,6 +23,7 @@ const VALID = {
   AUTH_JWT_SECRET: "startup-test-jwt-secret-0123456789abcdef",
   AUTH_SECRET: "startup-test-auth-secret-0123456789abcdef",
   TURNSTILE_SECRET_KEY: "startup-test-turnstile-secret",
+  TURNSTILE_HOSTNAMES: "app.geraiexpress.test, Owner.GeraiExpress.test",
   TRACKING_TOKEN_SECRET: "startup-test-tracking-secret-0123456789",
 };
 const stub = (env: Record<string, string>) => { for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v); };
@@ -63,6 +64,7 @@ describe("runtime configuration validation", () => {
     ["AUTH_SECRET", { AUTH_SECRET: "short-but-secret-value" }],
     ["AUTH_JWT_SECRET", { AUTH_JWT_SECRET: "" }],
     ["TURNSTILE_SECRET_KEY", { TURNSTILE_SECRET_KEY: "" }],
+    ["TURNSTILE_HOSTNAMES", { TURNSTILE_HOSTNAMES: " , " }],
     ["TRACKING_TOKEN_SECRET", { TRACKING_TOKEN_SECRET: "short-but-secret-value" }],
   ])("names %s and never a value", async (name, broken) => {
     stub({ ...VALID, ...broken });
