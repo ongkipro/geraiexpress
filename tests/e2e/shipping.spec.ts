@@ -155,7 +155,7 @@ test("choosing 'Jemput kurir' saves the slot with the draft and the review shows
   await page.getByRole("radio", { name: /Jemput kurir/ }).check();
   await expect(page.getByTestId("pickup-details")).toBeVisible();
   await expect(page.getByText(/Data berubah sejak ongkir dicek/)).toBeVisible();
-  // Tomorrow noon WIB is always inside the options (the second date) and always at least 90 minutes ahead.
+  // Tomorrow noon WIB is always inside the options (the second date) and always at least 120 minutes ahead (the default lead time).
   await chooseOption(page, "Tanggal jemput", { index: 1 });
   const dateText = (await page.getByLabel("Tanggal jemput").textContent())!.trim();
   await chooseOption(page, "Jam jemput (WIB)", "12.00–13.00 WIB");
