@@ -6,9 +6,8 @@
 // documented default (120). The database enforces the setting on a draft save and on a confirmation
 // (private.pickup_slot_ok under lock). The Worker's re-check before a provider call is TypeScript only, so if the
 // setting is raised above 120 and this read fails at that moment, the Worker uses 120 and may let a slot through that
-// the stricter setting would have refused. The read uses the same client as the dispatch itself, so a failure here
-// usually fails the dispatch too; the residual risk is a slot that is still valid at the provider (documented
-// minimum 90 minutes), not a double order.
+// the stricter setting would have refused. That residual case is a slot closer than the configured lead but still
+// beyond the provider's documented minimum (90 minutes); it is not a double order and not an unreserved slot.
 import { PICKUP_LEAD_MINUTES } from "./pickup";
 
 type ReadResult = PromiseLike<{ data: unknown; error: unknown }>;
