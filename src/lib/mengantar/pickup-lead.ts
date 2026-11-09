@@ -3,8 +3,12 @@
 // Server-side only. The caller passes a function that performs the RPC with ITS OWN client (the member's
 // session for a save or a confirmation, the machine client for the Worker), so no new privilege is used.
 // Any failure (error result, thrown error, a value that is not a positive whole number) falls back to the
-// documented default: the database re-checks every confirmation and reservation under lock, so a fallback can
-// never accept a slot the database refuses.
+// documented default (120). The database enforces the setting on a draft save and on a confirmation
+// (private.pickup_slot_ok under lock). The Worker's re-check before a provider call is TypeScript only, so if the
+// setting is raised above 120 and this read fails at that moment, the Worker uses 120 and may let a slot through that
+// the stricter setting would have refused. The read uses the same client as the dispatch itself, so a failure here
+// usually fails the dispatch too; the residual risk is a slot that is still valid at the provider (documented
+// minimum 90 minutes), not a double order.
 import { PICKUP_LEAD_MINUTES } from "./pickup";
 
 type ReadResult = PromiseLike<{ data: unknown; error: unknown }>;
