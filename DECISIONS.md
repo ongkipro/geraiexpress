@@ -1,6 +1,6 @@
 # GeraiExpress — Accepted Decision Index
 
-Updated: 2026-11-03
+Updated: 2026-11-06
 
 The linked context records retain detailed provenance. This index contains only
 explicit owner selections; recommendations remain in their canonical design.
