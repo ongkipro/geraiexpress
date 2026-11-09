@@ -11,6 +11,7 @@ const PGRST_URI_QUERY_ALLOWED = ["sslmode", "sslrootcert", "connect_timeout", "a
 //     secret at least 32 characters and never a placeholder; Turnstile is never disabled outside `local`;
 //   * no production value in staging or local: MENGANTAR_ENV is "production" only in `production`; staging
 //     origins are never the production hosts;
+//   * TURNSTILE_HOSTNAMES (the hosts a Turnstile token may be solved on) is set to bare hostnames, never a local one;
 //   * staging and production never set HOST_SHARED_MODE=1, never use the Mailpit transport, never point
 //     POSTGREST_URL at a local address, and name https origins;
 //   * a committed `*.example` template carries NO secret value.
@@ -121,6 +122,14 @@ export function checkEnvFiles(envs) {
       }
     }
     if (vars.AUTH_CAPTCHA_DISABLED?.trim().toLowerCase() === "true") problems.push(`${name}: AUTH_CAPTCHA_DISABLED=true is for local use only`);
+    // The server accepts a Turnstile token only when siteverify names one of these hosts (src/lib/auth/instance.ts
+    // parses it the same way); a deployed environment never accepts a token solved on a local page.
+    const turnstileHosts = (vars.TURNSTILE_HOSTNAMES ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+    if (turnstileHosts.length === 0) problems.push(`${name}: TURNSTILE_HOSTNAMES is not set (the public hosts serving the Turnstile widget)`);
+    for (const host of turnstileHosts) {
+      if (LOCAL_HOSTS.includes(host) || host === "::1" || host.endsWith(".localhost")) problems.push(`${name}: TURNSTILE_HOSTNAMES must not include the local host ${host}`);
+      else if (!/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(host)) problems.push(`${name}: TURNSTILE_HOSTNAMES entry "${host}" is not a bare hostname (no scheme, port or path)`);
+    }
     const postgrestHost = hostOf(vars.POSTGREST_URL ?? "");
     if (vars.POSTGREST_URL && !postgrestHost) problems.push(`${name}: POSTGREST_URL is not a valid URL`);
     if (postgrestHost && LOCAL_HOSTS.includes(postgrestHost)) problems.push(`${name}: POSTGREST_URL is a local address`);

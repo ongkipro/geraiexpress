@@ -103,6 +103,27 @@ describe("env files", () => {
     ]));
   });
 
+  it("fail when TURNSTILE_HOSTNAMES is unset, local or not a bare hostname, in real files and templates", () => {
+    for (const template of [false, true]) {
+      for (const value of [undefined, "", " , "]) {
+        const s = { ...staging(), template };
+        if (value === undefined) delete s.vars.TURNSTILE_HOSTNAMES;
+        else s.vars.TURNSTILE_HOSTNAMES = value;
+        expect(checkEnvFiles({ staging: s })).toContain("staging: TURNSTILE_HOSTNAMES is not set (the public hosts serving the Turnstile widget)");
+      }
+      const s = { ...staging(), template };
+      s.vars.TURNSTILE_HOSTNAMES = "app-staging.geraiexpress.com, LocalHost,127.0.0.1,gx.localhost,https://owner-staging.geraiexpress.com";
+      expect(checkEnvFiles({ staging: s })).toEqual(expect.arrayContaining([
+        "staging: TURNSTILE_HOSTNAMES must not include the local host localhost",
+        "staging: TURNSTILE_HOSTNAMES must not include the local host 127.0.0.1",
+        "staging: TURNSTILE_HOSTNAMES must not include the local host gx.localhost",
+        'staging: TURNSTILE_HOSTNAMES entry "https://owner-staging.geraiexpress.com" is not a bare hostname (no scheme, port or path)',
+      ]));
+    }
+    const local = { vars: { CRON_SECRET: "local-cron-secret-0123456789abcdef", TURNSTILE_HOSTNAMES: "localhost" } };
+    expect(checkEnvFiles({ local }).filter((p: string) => p.includes("TURNSTILE_HOSTNAMES"))).toEqual([]);
+  });
+
   it("fail when the two auth secrets are the same value", () => {
     const s = staging();
     s.vars.AUTH_SECRET = s.vars.AUTH_JWT_SECRET;
@@ -240,7 +261,7 @@ describe("env files", () => {
     const read = (name: string) => ({ vars: parseEnv(readFileSync(new URL(`../../infra/env/${name}.env.example`, import.meta.url), "utf8")), template: true });
     expect(checkEnvFiles({ staging: read("staging"), production: read("production") })).toEqual([]);
     for (const template of [read("staging"), read("production")]) {
-      for (const name of ["POSTGREST_URL", "AUTH_JWT_SECRET", "AUTH_SECRET", "TRACKING_TOKEN_SECRET", "TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY", "PGRST_DB_URI"]) {
+      for (const name of ["POSTGREST_URL", "AUTH_JWT_SECRET", "AUTH_SECRET", "TRACKING_TOKEN_SECRET", "TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY", "TURNSTILE_HOSTNAMES", "PGRST_DB_URI"]) {
         expect(Object.keys(template.vars), name).toContain(name);
       }
       expect(Object.keys(template.vars).filter((name) => /SUPABASE|SEND_EMAIL_HOOK|AUTH_FORWARD/.test(name))).toEqual([]);
