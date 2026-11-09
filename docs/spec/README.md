@@ -1,8 +1,8 @@
 # GeraiExpress — Specification Pack Index
 
-- Status: Reviewed specification pack. Requirements are Proposed or Accepted per their own Status line; owner decisions are indexed in `DECISIONS.md` (DEC-001 to DEC-023 as of 2026-11-02). The application is implemented locally on the self-hosted Node.js container + PostgreSQL 17 + PostgREST + application-owned auth stack (T-062, T-064..T-066; T-067 security review open); `ARCHITECTURE.md` records what exists and `04-SYSTEM-ARCHITECTURE.md` owns the target.
+- Status: Reviewed specification pack. Requirements are Proposed or Accepted per their own Status line; owner decisions are indexed in `DECISIONS.md` (DEC-001 to DEC-029 as of 2026-11-09). The application is implemented locally on the self-hosted Node.js container + PostgreSQL 17 + PostgREST + application-owned auth stack (T-062, T-064..T-066; T-067 security review open); `ARCHITECTURE.md` records what exists and `04-SYSTEM-ARCHITECTURE.md` owns the target.
 - Owner: Paduka Ongki
-- Updated: 2026-11-02
+- Updated: 2026-11-09
 - Location: Canonical repository specification at `docs/spec/`; promoted on 2026-10-13. Original staging is a retained non-authoritative snapshot.
 
 GeraiExpress is a multi-tenant shipping-counter product for offline gerai and
@@ -19,7 +19,7 @@ What is built and proved is recorded in the root `ARCHITECTURE.md`.
 When documents disagree, use this order (Decision, repository rules in `AGENTS.md`,
 2026-10-28): repository disk and executed checks, then `ARCHITECTURE.md` (what is built),
 then `DECISIONS.md` and the context record (owner decisions; CTX-39 to CTX-43 and
-DEC-011 to DEC-023 were added from 2026-10-28 to 2026-11-02), then the older prose in this pack. The sole
+DEC-011 to DEC-029 were added from 2026-10-28 to 2026-11-06), then the older prose in this pack. The sole
 work queue is `TASKS.md`; `STATUS.md` owns workflow state; documents under `docs/review/`
 are review evidence, not requirements. A statement about the target is a Decision or a
 Proposal, and a statement about the code is Observed with a file pointer; an
@@ -29,7 +29,7 @@ unanswered question is Unknown. A decision recorded after this pack was first wr
 
 | Document | Canonical responsibility |
 |---|---|
-| [Decision index](../../DECISIONS.md) | Accepted owner decisions DEC-001 to DEC-023; the canonical index for decisions |
+| [Decision index](../../DECISIONS.md) | Accepted owner decisions DEC-001 to DEC-029; the canonical index for decisions |
 | [Context record](CONTEXT-RECORD.md) | User intent, evidence, owner-held decisions, applicability, and verification history; CTX-44 (official Mengantar sub-partner, development first, DEC-023) is the newest |
 | [Implemented architecture](../../ARCHITECTURE.md) | What the code on disk does and which checks proved it; never the target |
 | [Product requirements](02-PRD.md) | Product direction, intended users, gerai operating needs, goals, scope ordering, requirements and open policies |
