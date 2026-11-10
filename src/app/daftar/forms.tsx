@@ -256,7 +256,7 @@ export function ApplicationForm({ application }: { application: Application | nu
       <FieldSet className="gap-4">
         <FieldLegend className={legendClass}>Identitas usaha</FieldLegend>
         <FieldGroup className="gap-5">
-          <TextField name="business_name" label="Nama bisnis / gerai" state={state} defaultValue={a?.business_name} />
+          <TextField name="business_name" label="Nama bisnis/gerai" state={state} defaultValue={a?.business_name} />
           <TextField name="outlet_name" label="Nama cabang pertama" state={state} defaultValue={a?.outlet_name} hint="Contoh: Cabang Dago. Cabang lain bisa ditambah setelah disetujui." />
         </FieldGroup>
       </FieldSet>
@@ -268,7 +268,7 @@ export function ApplicationForm({ application }: { application: Application | nu
         <FieldLegend className={legendClass}>Alamat</FieldLegend>
         <FieldGroup className="gap-5">
           <TextField name="pickup_address" label="Alamat pickup gerai" textarea state={state} defaultValue={a?.pickup_address} />
-          <TextField name="pickup_area" label="Kecamatan / kota" state={state} defaultValue={a?.pickup_area} />
+          <TextField name="pickup_area" label="Kecamatan/kota" state={state} defaultValue={a?.pickup_area} />
         </FieldGroup>
       </FieldSet>
       {/* One submit area; on small screens it stays at the bottom of the viewport while the form scrolls. */}
@@ -306,7 +306,7 @@ export function WithdrawForm({ id, revision, name }: { id: string; revision: num
             <input type="hidden" name="id" value={id} />
             <input type="hidden" name="revision" value={revision} />
             <DialogFooter>
-              <DialogClose asChild><Button type="button" variant="ghost">Kembali</Button></DialogClose>
+              <DialogClose asChild><Button type="button" variant="ghost">Batal</Button></DialogClose>
               <SubmitButton variant="destructive" pendingLabel="Membatalkan…">Ya, batalkan pengajuan</SubmitButton>
             </DialogFooter>
           </form>

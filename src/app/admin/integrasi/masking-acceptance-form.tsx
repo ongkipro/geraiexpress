@@ -34,7 +34,7 @@ export function MaskingAcceptanceForm({ courier, courierLabel, state, evidenceRe
   return (
     <div className="flex flex-col items-start gap-1">
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)} aria-haspopup="dialog">
-        <span>Ubah status<span className="sr-only"> {courierLabel}</span>…</span>
+        <span>Ubah status<span className="sr-only"> {courierLabel}</span></span>
       </Button>
       {result.ok && !open ? <p role="status" className="text-sm text-success">{result.ok}</p> : null}
       <Dialog open={open} onOpenChange={setOpen}>

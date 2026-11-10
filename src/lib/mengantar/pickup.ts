@@ -123,6 +123,6 @@ export const PICKUP_ERROR_TEXT: Record<Exclude<PickupSlotError, "too_soon">, str
 // The text for a refusal; "too soon" names the effective lead time.
 export function pickupErrorText(reason: PickupSlotError, leadMinutes: number = PICKUP_LEAD_MINUTES): string {
   return reason === "too_soon"
-    ? `Jam pickup harus minimal ${leadMinutes} menit dari sekarang (WIB). Pilih jam yang lebih lambat.`
+    ? `Jam pickup harus minimal ${leadMinutes} menit dari sekarang (WIB). Pilih jam pickup berikutnya.`
     : PICKUP_ERROR_TEXT[reason];
 }

@@ -73,7 +73,7 @@ test("operator opens and updates a case with an entered anchor; admin closes it 
   await expect(dialog).toHaveCount(0);
   await expect(panel.getByTestId("case-state")).toHaveText("Diajukan ke Mengantar");
   await expect(panel.getByTestId("case-deadline-value")).toContainText("16 Nov 2026");
-  await expect(panel.getByTestId("case-anchor")).toContainText("dimasukkan petugas: Anda");
+  await expect(panel.getByTestId("case-anchor")).toContainText("dimasukkan staf: Anda");
   expect(localSql(`select to_char(deadline_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI') from public.shipment_cases where shipment_id = '${s.id}'`)).toBe("2026-11-16 03:00");
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("case-detail-operator.png"), fullPage: true });

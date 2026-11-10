@@ -47,7 +47,7 @@ test.describe("gerai WhatsApp (PR-34)", () => {
 
     await field.fill("12345");
     await page.getByRole("button", { name: "Simpan nomor" }).click();
-    const message = "Nomor WhatsApp gerai tidak valid. Gunakan nomor Indonesia berawalan 0, misalnya 081234567890.";
+    const message = "Nomor WhatsApp gerai tidak valid. Gunakan nomor Indonesia (misalnya 081234567890).";
     await expect(page.getByText(message)).toBeVisible();
     await expect(field).toHaveAttribute("aria-invalid", "true");
     await expect(field).toHaveAccessibleDescription(new RegExp(message.slice(0, 30)));

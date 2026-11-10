@@ -106,7 +106,7 @@ test("F10: 'Kirim sekarang' asks for confirmation naming the reference and sends
     await expect(dialog).toContainText(ref);
     await expect(dialog).toContainText("Tidak ada pesanan baru yang dibuat");
     await expectNoHorizontalOverflow(page);
-    await dialog.getByRole("button", { name: "Kembali" }).click();
+    await dialog.getByRole("button", { name: "Batal" }).click();
     await expect(dialog).toHaveCount(0);
     expect(posted).toBe(0);
     expect(localSql(`select state from public.provider_operations where id = '${op}'`)).toBe("queued");

@@ -12,7 +12,7 @@ import { calendarDaysBetween, deadlineStatus, workingDaysBetween, type ClaimRule
 import type { CaseEvent, CaseRecord } from "./types";
 
 const SOURCE_DATE = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-const who = (id: string | null, viewer: string) => (id === viewer ? "Anda" : id ? "petugas lain" : "tidak diketahui");
+const who = (id: string | null, viewer: string) => (id === viewer ? "Anda" : id ? "staf lain" : "tidak diketahui");
 
 // UX-20 item 3: the filing deadline with source and date, its age and the 80% warning; every unknown
 // says which input is missing. The stored deadline_at (computed in SQL) is authoritative.

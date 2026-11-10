@@ -80,7 +80,7 @@ export async function saveDraftAction(_: DraftState, form: FormData): Promise<Dr
     const hasStreet = Boolean(update.sender_address), hasArea = Boolean(update.sender_area);
     if (hasStreet !== hasArea || (update.sender_postal_code && !(hasStreet && hasArea))) {
       if (!hasStreet && !errors.sender_address) errors.sender_address = "Isi alamat pengirim, atau kosongkan semua alamat pengirim, untuk menyimpan kontak.";
-      if (!hasArea && !errors.sender_area) errors.sender_area = "Isi kecamatan / kota pengirim, atau kosongkan semua alamat pengirim, untuk menyimpan kontak.";
+      if (!hasArea && !errors.sender_area) errors.sender_area = "Isi kecamatan/kota pengirim, atau kosongkan semua alamat pengirim, untuk menyimpan kontak.";
     }
   }
   if (Object.keys(errors).length) {

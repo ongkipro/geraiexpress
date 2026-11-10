@@ -48,11 +48,11 @@ export default async function PlatformConfigurationPage() {
       {declarations ? (
         <section aria-labelledby="decl-heading" className="flex flex-col gap-4">
           <SectionHeader id="decl-heading" title="Teks pernyataan isi paket"
-            description="Dicentang operator saat konfirmasi. Versi yang dicentang tersimpan di setiap kiriman." />
+            description="Dicentang operator saat konfirmasi. Versi yang dicentang tersimpan di setiap pengiriman." />
           {decl.error ? (
             <LoadError href="/admin/konfigurasi">Teks pernyataan belum bisa dimuat.</LoadError>
           ) : !current ? (
-            <EmptyState icon={FileText} title="Belum ada teks pernyataan yang berlaku" description="Konfirmasi kiriman ditolak sampai ada versi yang berlaku." />
+            <EmptyState icon={FileText} title="Belum ada teks pernyataan yang berlaku" description="Konfirmasi pengiriman ditolak sampai ada versi yang berlaku." />
           ) : (
             <div className="flex flex-col gap-3 rounded-lg bg-card p-5 ring-1 ring-border" data-testid="declaration-current">
               <div className="flex flex-wrap items-center gap-2">

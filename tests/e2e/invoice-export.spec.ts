@@ -392,7 +392,7 @@ test.describe("masking acceptance on the Resi + invoice view (PR-46)", () => {
     await page.goto(`/pengiriman/${id}/label`);
     if (masked) {
       await page.getByRole("switch", { name: /Gunakan masking pengirim/ }).check();
-      await page.getByLabel("Kecamatan / kota pengirim").fill("Bandung");
+      await page.getByLabel("Kecamatan/kota pengirim").fill("Bandung");
       if (await ackBox(page).count()) await ackBox(page).check();
     }
     await page.getByRole("button", { name: /^(Cetak label|Cetak ulang label)$/ }).click();

@@ -61,13 +61,13 @@ export default async function PlatformTenantPage({ params }: { params: Promise<{
     ["Masking pengirim", summary.masking_allowed ? "Diizinkan" : "Dinonaktifkan"],
   ];
   const activity: [string, string][] = [
-    ["Kiriman hari ini (WIB)", String(a.today)],
+    ["Pengiriman hari ini (WIB)", String(a.today)],
     ["7 hari terakhir", String(a.last_7_days)],
     ["30 hari terakhir", String(a.last_30_days)],
     ["Resi terbit 30 hari", String(a.issued_30_days)],
     ["COD 30 hari", String(a.cod_30_days)],
     ["Ongkir pelanggan terbit 30 hari", a.charge_30_days_idr === null ? "belum diketahui" : formatIdr(a.charge_30_days_idr)],
-    ["Kiriman terakhir", a.last_shipment_at ? formatWib(a.last_shipment_at) : "Belum ada"],
+    ["Pengiriman terakhir", a.last_shipment_at ? formatWib(a.last_shipment_at) : "Belum ada"],
   ];
 
   return (
@@ -91,7 +91,7 @@ export default async function PlatformTenantPage({ params }: { params: Promise<{
         </dl>
         <div className="flex flex-col gap-2 rounded-lg bg-card p-4 ring-1 ring-border" data-testid="tenant-states">
           <p className={problems > 0 ? "font-semibold text-warning" : "font-semibold"}>
-            {problems > 0 ? `${problems} kiriman perlu perhatian gerai` : "Tidak ada kiriman bermasalah"}
+            {problems > 0 ? `${problems} pengiriman perlu perhatian gerai` : "Tidak ada pengiriman bermasalah"}
           </p>
           <ul className="flex flex-wrap gap-2 text-sm">
             {Object.entries(summary.by_state).sort().map(([state, n]) => (
@@ -160,7 +160,7 @@ export default async function PlatformTenantPage({ params }: { params: Promise<{
         <section aria-labelledby="customers-heading" className="flex flex-col gap-4 rounded-lg bg-card p-5 ring-1 ring-border md:p-6">
           <h2 id="customers-heading" className="text-xl font-semibold tracking-tight">Data pelanggan gerai ini</h2>
           <p className="text-sm text-muted-foreground">
-            Nama, nomor dan alamat pengirim/penerima per kiriman. Data pribadi: setiap halaman yang dibuka tercatat di audit dengan alasan Anda.
+            Nama, nomor dan alamat pengirim/penerima per pengiriman. Data pribadi: setiap halaman yang dibuka tercatat di audit dengan alasan Anda.
           </p>
           <TenantCustomersPanel tenantId={id} />
         </section>

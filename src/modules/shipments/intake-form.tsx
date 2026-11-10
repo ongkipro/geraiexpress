@@ -314,7 +314,7 @@ export function IntakeForm(props: Props) {
               {/* T-094: optional; printed on a masked label, never sent to Mengantar (the pickup stays the outlet's). */}
               {field("sender_address", "Alamat pengirim (opsional)", { max: SENDER_ADDRESS_MAX, hint: "Jalan dan nomor; dicetak di label bermasking" })}
               <div className="grid gap-4 @md:grid-cols-[minmax(0,1fr)_160px]">
-                {field("sender_area", "Kecamatan / kota pengirim", { max: SENDER_AREA_MAX })}
+                {field("sender_area", "Kecamatan/kota pengirim", { max: SENDER_AREA_MAX })}
                 {field("sender_postal_code", "Kode pos pengirim", { inputMode: "numeric" })}
               </div>
               {!senderContact ? (
@@ -356,7 +356,7 @@ export function IntakeForm(props: Props) {
                 </>
               ) : (
                 <div className="grid gap-4 @md:grid-cols-[minmax(0,1fr)_160px]">
-                  {field("recipient_area", "Kecamatan / kota penerima", { hint: "Simulasi: wilayah ditulis bebas", max: 160 })}
+                  {field("recipient_area", "Kecamatan/kota penerima", { hint: "Simulasi: wilayah ditulis bebas", max: 160 })}
                   {field("recipient_postal_code", "Kode pos penerima", { inputMode: "numeric" })}
                 </div>
               )}
@@ -378,8 +378,8 @@ export function IntakeForm(props: Props) {
                 {field("height_cm", "Tinggi (cm)", { inputMode: "numeric", describedBy: "dims-note" })}
               </div>
               <p id="dims-note" className="-mt-2 text-sm text-muted-foreground">
-                Ukuran opsional. Berat ditagih mengikuti aturan tiap kurir. Kurir dapat menimbang ulang;
-                selisih ongkir didebit atau dikreditkan ke saldo Mengantar penjual. Besarnya selisih ditentukan kurir.
+                Berat ditagih mengikuti aturan tiap kurir (ukuran opsional). Kurir dapat menimbang ulang;
+                selisih ongkir didebit atau dikreditkan ke saldo Mengantar penjual sesuai ketetapan kurir.
               </p>
               {field("item_description", "Isi paket")}
               <input type="hidden" name="is_cod" value={values.is_cod === "true" ? "true" : "false"} />
@@ -402,7 +402,7 @@ export function IntakeForm(props: Props) {
               <p className="flex items-start gap-2 text-sm">
                 <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span>
-                  <span className="font-semibold">Asal kiriman: {props.outlet.name}</span>
+                  <span className="font-semibold">Asal pengiriman: {props.outlet.name}</span>
                   <span className="text-muted-foreground"> · {outletPlace || "Alamat pickup belum diatur"}. Alamat pickup gerai tetap menjadi asal penjemputan, terpisah dari identitas pengirim.</span>
                 </span>
               </p>
@@ -575,7 +575,7 @@ function ConfirmDialog(props: Props & { quote: QuoteOption; values: DraftValues 
           <input type="hidden" name="idempotency_key" value={props.idempotencyKey} />
           <ContentDeclaration declaration={props.declaration ?? null} itemDescription={v.item_description} />
           <DialogFooter className="gap-3">
-            <DialogClose asChild><Button type="button" variant="outline">Kembali</Button></DialogClose>
+            <DialogClose asChild><Button type="button" variant="outline">Batal</Button></DialogClose>
             <SubmitButton pendingLabel="Menerbitkan…" disabled={!props.declaration}
               aria-describedby={props.declaration ? undefined : "content-declaration-missing"}>Konfirmasi & terbitkan resi</SubmitButton>
           </DialogFooter>

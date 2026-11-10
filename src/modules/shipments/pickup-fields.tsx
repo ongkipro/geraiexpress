@@ -131,9 +131,8 @@ export function PickupFields({ values, errors, onChange, courier = null, leadMin
           <p className="flex items-start gap-2 text-sm text-muted-foreground" data-testid="pickup-note">
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <span>
-              Jadwal pickup dipesan di Mengantar saat Anda mengonfirmasi, sebelum pesanan dibuat. Alamat pickup tetap memakai alamat pickup gerai
-              ({"\u201C"}alamat asli{"\u201D"} di detail pengiriman), bukan alamat pengirim pelanggan. Jika konfirmasi tertunda atau hasilnya
-              belum pasti, sistem memeriksa pesanan yang sama; slot tidak dipesan dua kali.
+              Jadwal pickup dipesan di Mengantar di alamat pickup gerai (bukan alamat pengirim) saat konfirmasi. Jika hasil konfirmasi
+              belum pasti, sistem memeriksa pesanan yang sama tanpa memesan slot dua kali.
             </span>
           </p>
         </div>

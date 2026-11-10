@@ -52,7 +52,7 @@ test("a new administrator enrols an authenticator before entering", async ({ pag
 test("suspending a gerai needs a reason, blocks its members and is audited", async ({ page, browser }) => {
   await signInAdmin(page);
   const row = page.getByTestId("platform-tenant").filter({ hasText: "Gerai Uji C" });
-  await row.getByText("Bekukan Gerai Uji C…").click();
+  await row.getByText("Bekukan Gerai Uji C").click();
   // The reason and the confirm button live in a confirmation dialog (UI-4 redesign), not inline in the row.
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "Bekukan" }).click();
@@ -82,7 +82,7 @@ test("suspending a gerai needs a reason, blocks its members and is audited", asy
   await expect(page.getByTestId("audit-event").filter({ hasText: "Uji e2e pembekuan" })).toHaveCount(0);
   await page.goto("/admin");
   const again = page.getByTestId("platform-tenant").filter({ hasText: "Gerai Uji C" });
-  await again.getByText("Aktifkan kembali Gerai Uji C…").click();
+  await again.getByText("Aktifkan kembali Gerai Uji C").click();
   await page.getByRole("dialog").getByLabel("Alasan (dicatat di audit)").fill("Uji e2e selesai");
   await page.getByRole("dialog").getByRole("button", { name: "Aktifkan kembali" }).click();
   await expect(again.getByText("Aktif", { exact: true })).toBeVisible();

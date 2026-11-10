@@ -32,8 +32,8 @@ test("the intake keeps a tidy sender address and saves it on the sender contact"
   await expect(street).toHaveAttribute("maxlength", "120");
   await street.fill("Jl. Kenanga No. 3");
   await expect(page.locator("#f-sender_address-hint")).toContainText("17/120 karakter");
-  await expect(page.getByLabel("Kecamatan / kota pengirim")).toHaveAttribute("maxlength", "40");
-  await page.getByLabel("Kecamatan / kota pengirim").fill("Kec. Coblong, Bandung");
+  await expect(page.getByLabel("Kecamatan/kota pengirim")).toHaveAttribute("maxlength", "40");
+  await page.getByLabel("Kecamatan/kota pengirim").fill("Kec. Coblong, Bandung");
   await page.getByLabel("Kode pos pengirim").fill("40132");
   await page.getByRole("checkbox", { name: "Simpan sebagai kontak pengirim" }).click();
   await page.getByRole("button", { name: "Simpan draf" }).click();
@@ -49,7 +49,7 @@ test("the intake keeps a tidy sender address and saves it on the sender contact"
   await expect(page.getByTestId("contact-search-status")).toBeVisible();
   await chooseOption(page, "Pilih pengirim tersimpan", `${name} · 081277770001`);
   await expect(page.getByLabel("Alamat pengirim (opsional)")).toHaveValue("Jl. Kenanga No. 3");
-  await expect(page.getByLabel("Kecamatan / kota pengirim")).toHaveValue("Kec. Coblong, Bandung");
+  await expect(page.getByLabel("Kecamatan/kota pengirim")).toHaveValue("Kec. Coblong, Bandung");
   await expect(page.getByLabel("Kode pos pengirim")).toHaveValue("40132");
 });
 
@@ -73,7 +73,7 @@ test("switching to a sender contact without an address clears the previous sende
   await chooseOption(page, "Pilih pengirim tersimpan", `Pengirim Tanpa Alamat ${tag} · 081277770102`);
   await expect(page.getByLabel("Nama pengirim")).toHaveValue(`Pengirim Tanpa Alamat ${tag}`);
   await expect(page.getByLabel("Alamat pengirim (opsional)")).toHaveValue("");
-  await expect(page.getByLabel("Kecamatan / kota pengirim")).toHaveValue("");
+  await expect(page.getByLabel("Kecamatan/kota pengirim")).toHaveValue("");
   await expect(page.getByLabel("Kode pos pengirim")).toHaveValue("");
 });
 
@@ -88,8 +88,8 @@ test("saving a sender contact with a half-entered address names the missing fiel
   await page.getByRole("checkbox", { name: "Simpan sebagai kontak pengirim" }).click();
   await page.getByRole("button", { name: "Simpan draf" }).click();
   await expect(page.getByText("Periksa isian yang ditandai.")).toBeVisible();
-  await expect(page.getByLabel("Kecamatan / kota pengirim")).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByText(/Isi kecamatan \/ kota pengirim, atau kosongkan semua alamat pengirim/)).toBeVisible();
+  await expect(page.getByLabel("Kecamatan/kota pengirim")).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText(/Isi kecamatan\/kota pengirim, atau kosongkan semua alamat pengirim/)).toBeVisible();
   // The entered street is kept on screen and no contact was created.
   await expect(page.getByLabel("Alamat pengirim (opsional)")).toHaveValue("Jl. Kenanga No. 3");
   expect(localSql(`select count(*) from public.contacts where name = '${name}'`)).toBe("0");
@@ -123,7 +123,7 @@ test("a masked label starts from the shipment's sender, prints its address, and 
   await expect(page.getByLabel("Nama pengirim")).toHaveValue("Toko Pelanggan");
   await expect(page.getByLabel("No. HP pengirim")).toHaveValue("081311112222");
   await expect(page.getByLabel("Alamat pengirim (opsional)")).toHaveValue("Jl. Kenanga No. 3");
-  await expect(page.getByLabel("Kecamatan / kota pengirim")).toHaveValue("Kec. Coblong, Bandung");
+  await expect(page.getByLabel("Kecamatan/kota pengirim")).toHaveValue("Kec. Coblong, Bandung");
   await expect(page.getByTestId("label-sender-place")).toHaveText("Jl. Kenanga No. 3, Kec. Coblong, Bandung");
   // The printed sender never falls back to the gerai pickup address.
   await expect(page.getByTestId("label-sender")).not.toContainText("Jl. Pickup Nyata No. 5");

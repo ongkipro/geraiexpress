@@ -61,7 +61,7 @@ export async function requestCodeAction(_: CodeState, form: FormData): Promise<C
   // Readiness is deployment-wide, never address-dependent. No code is issued without a transport.
   if (!mailTransportReady()) {
     await issueVerifyState(email);
-    return { step: "email", email, error: "Pengiriman kode sedang bermasalah. Coba lagi beberapa saat lagi." };
+    return { step: "email", email, error: "Pengiriman kode sedang bermasalah. Tunggu beberapa saat lalu coba lagi." };
   }
   // M1: pre-CAPTCHA budgets are visitor-only; refusals have the same reply AND cookie as a sent code.
   if (!(await withinLimit("OTP_LIMITER")) || !(await withinAccountVisitorLimit("OTP_ACCOUNT_LIMITER", email))) {

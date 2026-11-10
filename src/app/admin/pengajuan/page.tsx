@@ -140,7 +140,7 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
               <Facts title="Cabang pertama" rows={[
                 ["Nama cabang", shown.outlet_name],
                 ["Alamat pickup", shown.pickup_address],
-                ["Kecamatan / kota", shown.pickup_area],
+                ["Kecamatan/kota", shown.pickup_area],
               ]} />
               {shown.review_reason ? (
                 <Facts title="Catatan peninjau" rows={[["Alasan terakhir", shown.review_reason]]} />

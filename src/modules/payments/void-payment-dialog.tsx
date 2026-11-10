@@ -46,7 +46,7 @@ export function VoidPaymentDialog({ shipmentId, paymentId, reference, amountIdr,
             {state.fieldErrors?.reason ? <FieldError id="void-reason-error">{state.fieldErrors.reason}</FieldError> : null}
           </Field>
           <DialogFooter className="gap-3">
-            <DialogClose asChild><Button type="button" variant="outline">Kembali</Button></DialogClose>
+            <DialogClose asChild><Button type="button" variant="outline">Batal</Button></DialogClose>
             {state.reconcile ? <Button asChild><a href={`/pengiriman/${shipmentId}`}>Muat ulang</a></Button> : (
               <SubmitButton pendingLabel="Membatalkan…" variant="destructive" data-testid="void-save">Batalkan catatan</SubmitButton>
             )}

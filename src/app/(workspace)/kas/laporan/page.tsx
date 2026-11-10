@@ -80,7 +80,7 @@ export default async function PilotReportPage({ searchParams }: { searchParams: 
               <caption className="sr-only">Laporan pilot per cabang dan hari WIB, dengan total</caption>
               <thead className="bg-muted/50 text-left">
                 <tr>
-                  <th scope="col" className="px-3 py-2">Cabang / hari</th>
+                  <th scope="col" className="px-3 py-2">Cabang/hari</th>
                   <th scope="col" className="px-3 py-2 text-right">Resi terbit</th>
                   <th scope="col" className="px-3 py-2 text-right">Median draf ke resi</th>
                   <th scope="col" className="px-3 py-2">Cara bayar (jumlah · nilai)</th>
