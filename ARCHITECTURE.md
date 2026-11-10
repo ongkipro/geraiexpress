@@ -50,8 +50,9 @@ docs/spec; its hybrid-hosting part is superseded by DEC-020.
 ## Current backend audit and hosting amendment (T-068, DEC-022)
 
 The current hosting direction is **Vultr + Coolify**, superseding the hosting exclusion in
-DEC-020. `compose.coolify.yaml` inherits the Node app, scheduler, PostgREST and optional
-same-host PostgreSQL service. Coolify owns TLS/public ports; the Caddy gateway listens on
+DEC-020. `compose.coolify.yaml` is a flat mirror of compose.yaml's Node app, scheduler, PostgREST and
+same-host PostgreSQL services (no `extends` or YAML tags, which Coolify's parser refuses; drift is a
+`check:environments` failure). Coolify owns TLS/public ports; the Caddy gateway listens on
 8080 internally and trusts only the explicitly verified edge `/32` or `/128`, parsing
 X-Forwarded-For right-to-left. All four domains route to that gateway. The app, data API and
 SQL port remain unpublished. Standalone `compose.yaml --profile prod` is an alternate

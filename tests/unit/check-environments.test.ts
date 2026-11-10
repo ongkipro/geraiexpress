@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error plain ESM script, no type declarations
-import { checkCompose, checkEnvFiles, checkProxyConfig, parseEnv, validProxyPeer } from "../../scripts/check-environments.mjs";
+import { checkCompose, checkEnvFiles, checkProxyConfig, composeDrift, parseEnv, validProxyPeer } from "../../scripts/check-environments.mjs";
 
 // T-062: the environment guard validates env files, the Compose model and the proxy configuration.
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/environments/${name}`, import.meta.url), "utf8");
@@ -426,5 +426,46 @@ describe("proxy configuration (inspection of infra/proxy)", () => {
     expect(checkProxyConfig(caddy.replaceAll("header_up X-Real-IP {remote_host}", ""))).toContain("proxy: X-Real-IP is not overwritten with the peer address");
     expect(checkProxyConfig(caddy.replace("admin off", "admin off\n\tservers {\n\t\ttrusted_proxies static private_ranges\n\t}"))).toContain("proxy: the production proxy must not trust any client X-Forwarded-* (remove trusted_proxies)");
     expect(checkProxyConfig(caddy.replaceAll("handle @internal", "handle @nothing"))).toContain("proxy: /api/internal is not denied");
+  });
+});
+
+describe("compose.coolify.yaml stays a faithful flat mirror of compose.yaml", () => {
+  const base = () => ({ services: {
+    app: { image: "img", environment: { A: "1", B: "2" }, stop_grace_period: "5m0s", read_only: true },
+    proxy: { image: "caddy", ports: [{ target: 80 }], volumes: [{ source: "./infra/proxy/Caddyfile" }], environment: { SITE_HOST: "x" } },
+    postgres: { image: "pg", profiles: ["db"] },
+  } });
+  const flat = () => ({ services: {
+    app: { image: "img", environment: { A: "1", B: "2" }, stop_grace_period: "5m0s", read_only: true },
+    proxy: { image: "caddy", expose: ["8080"], volumes: [{ source: "./infra/proxy/Caddyfile.coolify" }], environment: { SITE_HOST: "x", COOLIFY_PROXY_CIDR: "192.0.2.1/32" } },
+    postgres: { image: "pg" },
+  } });
+
+  it("accepts the documented Coolify differences only", () => {
+    expect(composeDrift(base(), flat())).toEqual([]);
+  });
+
+  it("names the drifted path (never a value) for a missing variable, a changed field or a missing service", () => {
+    const f = flat();
+    delete (f.services.app.environment as Record<string, string>).B;
+    f.services.app.read_only = false;
+    delete (f.services as Record<string, unknown>).postgres;
+    const problems = composeDrift(base(), f);
+    expect(problems).toEqual(expect.arrayContaining([
+      "Coolify compose drifts from compose.yaml at services.app.environment.B",
+      "Coolify compose drifts from compose.yaml at services.app.read_only",
+      "Coolify compose drifts from compose.yaml at services.postgres.(service)",
+    ]));
+    expect(problems.join("\n")).not.toContain("192.0.2.1");
+  });
+
+  it("does not excuse a difference outside the documented list (proxy image, app ports)", () => {
+    const f = flat();
+    f.services.proxy.image = "caddy:other";
+    (f.services.app as Record<string, unknown>).ports = [{ target: 3000 }];
+    expect(composeDrift(base(), f)).toEqual(expect.arrayContaining([
+      "Coolify compose drifts from compose.yaml at services.proxy.image",
+      "Coolify compose drifts from compose.yaml at services.app.ports",
+    ]));
   });
 });

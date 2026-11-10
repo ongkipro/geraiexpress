@@ -303,14 +303,42 @@ export function checkProxyConfig(text, { local = false, coolify = false, name = 
   return problems;
 }
 
-function composeModel(envFile, template, coolify = false) {
+// compose.coolify.yaml is a flat, hand-kept mirror of compose.yaml (Coolify parses YAML without custom tags and does
+// not resolve `extends`). These are the only intended differences; anything else is drift.
+const COOLIFY_DIFFERENCES = {
+  proxy: ["ports", "expose", "volumes", "tmpfs", "environment.COOLIFY_PROXY_CIDR", "profiles"],
+  postgrest: ["profiles"],
+  postgres: ["profiles"],
+};
+
+// Rendered-model comparison: every service of compose.yaml (all profiles) must render identically in the Coolify
+// file except for the documented differences above. Returns problems naming paths, never values.
+export function composeDrift(standalone, coolify) {
+  const problems = [];
+  const skip = (svc, path) => (COOLIFY_DIFFERENCES[svc] ?? []).some((d) => path === d || path.startsWith(`${d}.`));
+  const walk = (svc, a, b, path) => {
+    if (skip(svc, path)) return;
+    const objects = a && b && typeof a === "object" && typeof b === "object" && !Array.isArray(a) && !Array.isArray(b);
+    if (objects) {
+      for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) walk(svc, a[key], b[key], path ? `${path}.${key}` : key);
+    } else if (JSON.stringify(a) !== JSON.stringify(b)) {
+      problems.push(`Coolify compose drifts from compose.yaml at services.${svc}.${path || "(service)"}`);
+    }
+  };
+  const names = new Set([...Object.keys(standalone.services ?? {}), ...Object.keys(coolify.services ?? {})]);
+  for (const svc of names) walk(svc, standalone.services?.[svc], coolify.services?.[svc], "");
+  return problems;
+}
+
+function composeModel(envFile, template, coolify = false, profiles = ["prod"]) {
   const env = { ...process.env, GX_ENV_FILE: envFile };
   // A template carries no secrets by design; Compose still wants a CRON_SECRET to render the scheduler.
   if (template) {
     env.CRON_SECRET = "check-environments-placeholder-32-chars";
     if (coolify) env.COOLIFY_PROXY_CIDR = "192.0.2.1/32";
   }
-  const out = execFileSync("docker", ["compose", "-p", "gxcheck", "--env-file", envFile, "-f", coolify ? "compose.coolify.yaml" : "compose.yaml", "--profile", "prod", "config", "--format", "json"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const profileArgs = profiles.flatMap((p) => ["--profile", p]);
+  const out = execFileSync("docker", ["compose", "-p", "gxcheck", "--env-file", envFile, "-f", coolify ? "compose.coolify.yaml" : "compose.yaml", ...profileArgs, "config", "--format", "json"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   return JSON.parse(out);
 }
 
@@ -334,8 +362,10 @@ function main() {
   if (!noCompose) {
     for (const [name, path] of targets) {
       try {
+        const template = path.endsWith(".example");
+        problems.push(...composeDrift(composeModel(path, template, false, ["prod", "db"]), composeModel(path, template, true)).map((p) => `${name}: ${p}`));
         for (const coolify of [false, true]) {
-          problems.push(...checkCompose(composeModel(path, path.endsWith(".example"), coolify), { name: `${name} ${coolify ? "Coolify" : "standalone"} compose`, coolify }));
+          problems.push(...checkCompose(composeModel(path, template, coolify), { name: `${name} ${coolify ? "Coolify" : "standalone"} compose`, coolify }));
         }
       } catch {
         // Compose diagnostics can include interpolated secret values; never relay them.

@@ -6,10 +6,14 @@ import { describe, expect, it } from "vitest";
 const text = readFileSync(new URL("../../compose.coolify.yaml", import.meta.url), "utf8");
 
 // Comments and quoted scalars blanked, so a `!`, `&`, `*` or `<<` inside them is not mistaken for YAML syntax.
-const code = text
-  .split("\n")
-  .map((line) => line.replace(/"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'/g, '""').replace(/(^|\s)#.*$/, ""))
-  .join("\n");
+// One pass, left to right: a quoted scalar is skipped as a whole, so a `#` or an apostrophe inside it cannot start a
+// comment, and a comment is removed only when it starts outside quotes.
+const stripComments = (line: string) =>
+  line.replace(/"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|(\s#.*$|^#.*$)/g, (match, comment) => (comment ? "" : match));
+// `code`: comments removed and quoted scalars blanked, for syntax checks (a `!`, `&`, `*` or `<<` inside a quoted value
+// is data, not YAML syntax). `keys`: comments removed but quotes kept, for key checks ("ports": is still a ports key).
+const keys = text.split("\n").map(stripComments).join("\n");
+const code = keys.replace(/"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'/g, '""');
 
 const serviceNames = ["app", "scheduler", "postgrest", "proxy", "postgres"] as const;
 
@@ -25,18 +29,20 @@ function serviceBlock(source: string, name: string): string {
 
 describe("compose.coolify.yaml stays parseable by Coolify", () => {
   it("uses no extends, YAML tags, anchors, aliases or merge keys", () => {
-    expect(code).not.toMatch(/^\s*extends\s*:/m);
-    expect(code).not.toMatch(/(^|\s)![a-zA-Z]/m);
+    expect(keys).not.toMatch(/(^|[\s{,])["']?extends["']?\s*:/m);
+    // Any YAML tag: !reset, !override, !!merge, !<tag:...>, also after a flow-collection delimiter.
+    expect(code).not.toMatch(/(^|[\s[{,:-])![!a-zA-Z<]/m);
     expect(code).not.toMatch(/(^|[\s[{,:-])&[A-Za-z0-9_-]+/m);
     expect(code).not.toMatch(/(^|[\s[{,:-])\*[A-Za-z0-9_-]+/m);
-    expect(code).not.toMatch(/<<\s*:/);
+    expect(keys).not.toMatch(/["']?<<["']?\s*:/);
   });
 
   it("starts all five services without profiles and publishes no ports", () => {
     for (const name of serviceNames) {
-      const block = serviceBlock(code, name);
-      expect(block, `${name} profiles`).not.toMatch(/^ {4}profiles\s*:/m);
-      expect(block, `${name} ports`).not.toMatch(/^ {4}ports\s*:/m);
+      // Any indentation, quoted or flow-style key (`"ports": [...]`, `{ports: [...]}`).
+      const block = serviceBlock(keys, name);
+      expect(block, `${name} profiles`).not.toMatch(/(^|[\s{,])["']?profiles["']?\s*:/m);
+      expect(block, `${name} ports`).not.toMatch(/(^|[\s{,])["']?ports["']?\s*:/m);
     }
   });
 

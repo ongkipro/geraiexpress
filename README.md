@@ -41,12 +41,12 @@ and its Supabase project) still exists remotely until the owner deletes it and r
 
 ## Vultr + Coolify
 
-Use `compose.coolify.yaml` as the Compose location. It inherits the hardened services from
-`compose.yaml`, exposes the internal Caddy gateway on port 8080, and publishes no host ports.
+Use `compose.coolify.yaml` as the Compose location. It is a flat mirror of the hardened services in
+`compose.yaml` (Coolify cannot parse `extends` or YAML tags; `pnpm check:environments` catches drift), exposes the internal Caddy gateway on port 8080, and publishes no host ports.
 Assign the four HTTPS domains to **proxy:8080** only; Coolify owns TLS and public 80/443.
 Set `COOLIFY_PROXY_CIDR` to the verified Coolify edge address (`/32` or `/128`) on the resource
 network. Never trust the whole Docker subnet. See [release instructions](RELEASE.md).
-The `db` profile adds PostgreSQL with a persistent volume. Do not enable the standalone `prod`
+It always starts PostgreSQL with a persistent volume (no profiles). Do not enable the standalone `prod`
 proxy or route public domains to app/PostgREST/PostgreSQL. One app replica only.
 
 Isolated verification without reading the existing development environment:

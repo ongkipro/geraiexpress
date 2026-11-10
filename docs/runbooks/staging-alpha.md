@@ -85,7 +85,7 @@ RPO 24 h / RTO 4 h for the pilot.
 - [ ] Run on the host: `pnpm check:environments staging=/etc/geraiexpress/staging.env production=<production file or the template>` → PASS (validates host/origin separation, secret length/uniqueness, local-only settings, Compose model).
 
 ## 4. Database and app up
-- [ ] `COMPOSE_PROFILES=db`, persistent `postgres_data`; migrations as the `postgres` owner via `scripts/db-migrate.sh`; never seed or reset (RELEASE Vultr+Coolify step 3).
+- [ ] Persistent `postgres_data` (the Coolify file always starts `postgres`; `COMPOSE_PROFILES` is not used); migrations as the `postgres` owner via `scripts/db-migrate.sh`; never seed or reset (RELEASE Vultr+Coolify step 3).
 - [ ] Registration closed: the Super Admin uses the registration switch (`platform_set_registration`, audited reason; `registration_open()` must answer false); staff join by owner invitation (alpha scope).
 - [ ] `/healthz` 200; 503 during an isolated data-path outage, then recovery (step 5). `docker compose logs app` shows no `startup_config_invalid`.
 - [ ] Host routing smoke (unauthenticated only; staging is never seeded and CAPTCHA stays on): from a workstation, run

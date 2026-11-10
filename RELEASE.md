@@ -15,8 +15,9 @@ Alpha staging (T-114): the ordered, placeholder-only execution checklist is `doc
 gates below remain the source of each step.
 
 This is the current deployment direction. Nothing has been deployed by this audit. Use
-`compose.coolify.yaml` as the Coolify Compose location; it references the checked-in base
-`compose.yaml`. Select an immutable `GX_IMAGE` built for the target `APP_ORIGIN`. Configure
+`compose.coolify.yaml` as the Coolify Compose location; it is a flat, self-contained mirror of
+`compose.yaml` (Coolify parses YAML without custom tags and does not resolve `extends`), and
+`pnpm check:environments` fails if the two drift apart beyond the documented proxy and profile differences. Select an immutable `GX_IMAGE` built for the target `APP_ORIGIN`. Configure
 all runtime values in Coolify; the app receives only its allowlisted variables, never
 `DATABASE_URL`, `PGRST_DB_URI`, `POSTGRES_PASSWORD` or `AUTHENTICATOR_PASSWORD`.
 Use managed Compose routing, not Raw Compose (this definition does not supply edge labels).
