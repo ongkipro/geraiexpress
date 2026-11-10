@@ -10,6 +10,19 @@ Independent-Review-Detail: M4: T-045 R4 GPT-6.1 Sol 68b3b525 -> c14f0e6d -> 3844
 Independent-Reviewer: reviewer (cx/gpt-6.1-sol, high), separate subagent per task; implementer pi-parent-01a1a300 (cc/claude-opus-5-5)
 Independent-Review-Head: c9c7164
 
+## M10 CLOSED (2026-11-10) — Coolify-compatible compose file
+
+- INT-M10 on head `109ac84`. Executed, ledger-recorded PASS: typecheck; unit 1624; db 661; upgrade; e2e 738 passed /
+  0 failed / 27 skipped (390, 768, 1280); diff-hygiene; boundary PASS R2. Evidence `/data/tmp/geraiexpress/int-m10/run-1/`.
+- Cause: the first real Coolify deploy refused `compose.coolify.yaml` ("Tags support is not enabled ... !reset"):
+  Coolify parses Compose with Symfony YAML (no custom tags) and does not resolve `extends`. `check:environments` passed
+  because it renders with `docker compose config`, which supports both. The file is now flat and self-contained; the
+  server's own parser accepts it (all five services). `postgres` always starts (no profiles).
+- Guards: `check:environments` compares the rendered models of compose.yaml (all profiles) and compose.coolify.yaml and
+  fails on any difference outside the documented proxy/profile ones (mutation-proved on the real files); a text test
+  refuses `extends`, any YAML tag, anchors, aliases, merge keys, `ports` and `profiles` (quoted, flow or any indentation).
+- Independent review: Argon APPROVE WITH NOTES (drift guard, brittle text guard, stale docs), all fixed.
+
 ## M9 CLOSED (2026-11-10) — Turnstile hardening: per-form action and hostname allowlist at siteverify
 
 - INT-M9 on head `7cfeb8f`. Executed, ledger-recorded PASS: typecheck; unit 1617; db 661; upgrade 661; e2e 738 passed /

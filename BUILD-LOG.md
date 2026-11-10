@@ -1462,3 +1462,8 @@ server/DNS, SMTP and backup-target inputs.
 - INT-M9 PASS on `7cfeb8f`. Review by Argon. Lesson: a configuration value that the provider compares literally
   (siteverify returns a bare hostname) must be validated in the same form at startup, or a plausible value such as
   `https://app.example.com` turns every sign-in into a silent failure.
+
+## 2026-11-10 — M10: Coolify cannot read Compose tags or extends
+
+- A green `docker compose config` does not prove a platform can load the file: Coolify parses YAML itself. Test against the
+  consumer's real parser (here: the server's Symfony YAML, run read-only) before calling a deploy file ready.
