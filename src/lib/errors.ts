@@ -78,7 +78,7 @@ const MESSAGES: Record<string, string> = {
   not_recoverable: "Tidak ada pendaftaran Mengantar dengan kunci tertunda yang dapat dipulihkan. Periksa status akun di Pengaturan.",
   live_recipient_name_invalid: "Nama penerima untuk Mengantar maksimal 100 karakter.",
   live_recipient_address_invalid: "Alamat penerima untuk Mengantar maksimal 300 karakter.",
-  live_recipient_phone_invalid: "Nomor HP penerima harus memakai awalan 0, 62, atau +62 dengan panjang 10–15 digit (format 08...).",
+  live_recipient_phone_invalid: "Nomor HP penerima harus berawalan 0, 62, atau +62 dan berisi 10–15 digit setelah diubah ke awalan 0.",
   immutable_partner_owner_consent: "Data pemilik dan persetujuan akun Mengantar yang sudah terdaftar tidak dapat diubah.",
   // T-028 Contact archive
   contact_already_archived: "Kontak ini sudah diarsipkan.",
@@ -90,7 +90,7 @@ const MESSAGES: Record<string, string> = {
   // T-041 Gerai discount terms
   discount_above_observed:
     "Diskon gerai melebihi diskon Mengantar yang teramati. GeraiExpress tidak menanggung selisihnya, sehingga nilai ini tidak dapat disimpan.",
-  observation_required: "Status \"Teramati dari Mengantar\" hanya bisa dipilih setelah ada cek ongkir nyata dari Mengantar.",
+  observation_required: "Status \"Teramati dari Mengantar\" butuh diskon Mengantar yang teramati dari cek ongkir nyata. Belum ada.",
   source_reference_required: "Isi referensi sumber (3–500 karakter).",
   verification_reference_required: "Terverifikasi Mengantar butuh referensi konfirmasi tertulis Mengantar (3–500 karakter).",
   verification_reference_unexpected: "Referensi konfirmasi hanya diisi untuk status Terverifikasi Mengantar.",

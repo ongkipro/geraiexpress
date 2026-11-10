@@ -81,7 +81,7 @@ export function NextStepCard({ s, op, hasLabel, isAdmin, batchReview }: {
         {unresolvedPayment ? (
           <p>Pesanan Mengantar sudah dibuat dan perintah bayar batch sudah pernah dikirim. Jangan buat pengiriman baru dan jangan bayar ulang untuk paket ini.</p>
         ) : isAdmin ? (
-          <p>Pesanan Mengantar sudah dibuat, tetapi saldo belum cukup sehingga resi belum terbit. Isi saldo lalu bayar batch dari sini (khusus admin) atau membayarnya di aplikasi Mengantar; jangan buat pengiriman baru untuk paket ini.</p>
+          <p>Pesanan Mengantar sudah dibuat, tetapi saldo Mengantar belum cukup sehingga resi belum terbit. Isi saldo, lalu bayar batch dari sini (khusus admin) atau di aplikasi Mengantar dan periksa pembayarannya. Jangan buat pengiriman baru untuk paket ini.</p>
         ) : (
           // Operators cannot see the batch's payment attempts, so an unresolved attempt cannot be
           // ruled out: no instruction to pay anywhere, only to escalate.

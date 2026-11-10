@@ -13,7 +13,7 @@ import { CLOSE_ERROR, DISPATCH_INFO as BASE_DISPATCH_INFO } from "@/lib/format";
 const DISPATCH_INFO: Record<string, string> = {
   ...BASE_DISPATCH_INFO,
   reservation_ambiguous: "Ada lebih dari satu jadwal pickup yang cocok di Mengantar. Tidak ada slot baru yang dipesan; hubungi admin GeraiExpress sebelum melanjutkan.",
-  requeue_failed: "Jadwal pickup ditemukan, tetapi pesanan belum bisa dijadwalkan ulang. Periksa lagi sebentar lagi.",
+  requeue_failed: "Jadwal pickup ditemukan, tetapi pesanan belum bisa dijadwalkan ulang. Tunggu sebentar lalu periksa lagi.",
   pickup_phase_unexpected: "Pesanan pickup ini sedang diperiksa. Jangan buat pengiriman baru; sistem akan memeriksanya.",
 };
 

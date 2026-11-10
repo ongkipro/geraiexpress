@@ -229,7 +229,7 @@ export function LabelWorkbench({
             />
           </label>
           <p id="mask-help" className="text-sm text-muted-foreground">
-            Nonaktif: label memakai nama, WhatsApp, dan alamat pickup gerai. Aktif: label memakai data pengirim pengiriman ini yang masih bisa Anda ubah khusus untuk label ini.
+            Nonaktif: label memakai nama, WhatsApp, dan alamat pickup gerai. Aktif: label memakai data pengirim paket ini (nama, nomor HP, alamat, kecamatan/kota), yang masih bisa Anda ubah khusus untuk label ini. Pilihan ini diingat selama tab terbuka.
           </p>
           {!maskingAllowed ? (
             <p id="mask-disabled" data-testid="mask-disabled-reason" className="rounded-md bg-muted p-3 text-sm">{MASKING_DISABLED}</p>
