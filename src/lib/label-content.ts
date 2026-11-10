@@ -59,9 +59,9 @@ export function senderErrors(input: SenderInput): SenderErrors {
   }
   if (!phone) errors.phone = "Isi nomor HP pengirim.";
   else if (!cleanSenderPhone(phone)) errors.phone = "Nomor HP pengirim tidak valid. Gunakan 8–15 digit, misalnya 081234567890.";
-  if (!city) errors.city = "Isi kecamatan / kota pengirim.";
+  if (!city) errors.city = "Isi kecamatan/kota pengirim.";
   else if (city.length < SENDER_LIMITS.cityMin || city.length > SENDER_LIMITS.cityMax || control.test(city)) {
-    errors.city = `Kecamatan / kota pengirim ${SENDER_LIMITS.cityMin}–${SENDER_LIMITS.cityMax} karakter.`;
+    errors.city = `Kecamatan/kota pengirim ${SENDER_LIMITS.cityMin}–${SENDER_LIMITS.cityMax} karakter.`;
   }
   const address = tidyAddress(input.address ?? "");
   if (address && (address.length < SENDER_LIMITS.addressMin || address.length > SENDER_LIMITS.addressMax || control.test(address))) {

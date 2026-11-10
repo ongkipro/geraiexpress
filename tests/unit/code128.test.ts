@@ -250,7 +250,7 @@ describe("label content (PR-34)", () => {
   it("previews a half-filled masked sender without throwing, and gates printing with field errors", () => {
     expect(buildLabelContent(facts, { mask: true, size: "10x15", sender: { name: "Toko", phone: "", city: "", address: "" } }).sender)
       .toEqual({ name: "Toko", phone: "", address: null, city: "" });
-    expect(senderErrors(EMPTY_SENDER)).toEqual({ name: "Isi nama pengirim.", phone: "Isi nomor HP pengirim.", city: "Isi kecamatan / kota pengirim." });
+    expect(senderErrors(EMPTY_SENDER)).toEqual({ name: "Isi nama pengirim.", phone: "Isi nomor HP pengirim.", city: "Isi kecamatan/kota pengirim." });
     expect(senderErrors({ name: "Toko Pelanggan", phone: "081311112222", city: "Bandung", address: "" })).toEqual({});
     expect(senderErrors({ name: "Toko Pelanggan", phone: "081311112222", city: "Bandung", address: "Jl. Pelanggan No. 7" })).toEqual({});
     expect(senderErrors({ name: "A", phone: "abc", city: "B", address: "Jl" })).toMatchObject({

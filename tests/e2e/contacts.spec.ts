@@ -13,7 +13,7 @@ test("create a contact with an address, find it, edit it", async ({ page }) => {
   await page.getByLabel("No. HP").fill("0812 7777 8888");
   await page.getByText("Tambahkan alamat (opsional)").click();
   await page.getByLabel("Alamat lengkap").fill("Jl. Uji Kontak No. 7");
-  await page.getByLabel("Kecamatan / kota").fill("Kec. Uji, Kota Uji");
+  await page.getByLabel("Kecamatan/kota").fill("Kec. Uji, Kota Uji");
   await page.getByRole("button", { name: "Simpan kontak" }).click();
   await expect(page.getByRole("heading", { name: "Dewi Lestari Uji" })).toBeVisible();
   await expect(page.getByText("Jl. Uji Kontak No. 7, Kec. Uji, Kota Uji")).toBeVisible();
@@ -79,7 +79,7 @@ test("add a second address, archive the primary, and a new primary remains", asy
   await page.getByRole("link", { name: /Budi Santoso/ }).click();
   await page.getByLabel("Label alamat").fill("Kantor");
   await page.getByLabel("Alamat lengkap").fill("Jl. Kantor Uji No. 3");
-  await page.getByLabel("Kecamatan / kota").fill("Kec. Kantor, Kota Uji");
+  await page.getByLabel("Kecamatan/kota").fill("Kec. Kantor, Kota Uji");
   await page.getByRole("button", { name: "Tambah alamat" }).click();
   await expect(page.getByText("Jl. Kantor Uji No. 3", { exact: false })).toBeVisible();
 
@@ -112,7 +112,7 @@ test("a tampered form aimed at another tenant's contact changes nothing", async 
 
   await page.locator('input[name="contact_id"]').last().evaluate((el, id) => ((el as HTMLInputElement).value = id), "00000000-0000-4000-d000-00000000000b");
   await page.getByLabel("Alamat lengkap").fill("Jl. Sisipan Asing 1");
-  await page.getByLabel("Kecamatan / kota").fill("Kota Asing");
+  await page.getByLabel("Kecamatan/kota").fill("Kota Asing");
   await page.getByRole("button", { name: "Tambah alamat" }).click();
   await expect(page.getByRole("alert").filter({ hasText: /⚠/ }).first()).toBeVisible();
 

@@ -81,7 +81,7 @@ export function NextStepCard({ s, op, hasLabel, isAdmin, batchReview }: {
         {unresolvedPayment ? (
           <p>Pesanan Mengantar sudah dibuat dan perintah bayar batch sudah pernah dikirim. Jangan buat pengiriman baru dan jangan bayar ulang untuk paket ini.</p>
         ) : isAdmin ? (
-          <p>Pesanan Mengantar sudah dibuat, tetapi saldo Mengantar belum cukup sehingga resi belum terbit. Isi saldo terlebih dahulu; Anda dapat membayar batch dari sini (khusus admin) atau membayarnya di aplikasi Mengantar lalu memeriksa pembayarannya. Jangan buat pengiriman baru untuk paket ini.</p>
+          <p>Pesanan Mengantar sudah dibuat, tetapi saldo belum cukup sehingga resi belum terbit. Isi saldo lalu bayar batch dari sini (khusus admin) atau membayarnya di aplikasi Mengantar; jangan buat pengiriman baru untuk paket ini.</p>
         ) : (
           // Operators cannot see the batch's payment attempts, so an unresolved attempt cannot be
           // ruled out: no instruction to pay anywhere, only to escalate.
@@ -93,7 +93,7 @@ export function NextStepCard({ s, op, hasLabel, isAdmin, batchReview }: {
           <div className="flex flex-col gap-3 border-t border-border pt-4" data-testid="batch-payment-review">
             <div className="flex flex-col gap-1">
               <h3 className="text-base font-semibold">
-                Tinjau Batch Mengantar <span className="tabular">{batchReview.batch}</span> ({courierName(batchReview.courier)})
+                Tinjau batch Mengantar <span className="tabular">{batchReview.batch}</span> ({courierName(batchReview.courier)})
               </h3>
               <p className="text-sm text-muted-foreground">
                 <span className="tabular">{batchReview.member_count}</span> pesanan · Total ongkir pelanggan{" "}

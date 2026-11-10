@@ -14,7 +14,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
           <AuthCard>
             <AuthHeading title="Terjadi kesalahan" />
             <p role="alert" className="-mt-4 text-[15px] text-muted-foreground sm:text-base">
-              Aplikasi tidak bisa ditampilkan saat ini. Data Anda tidak berubah oleh kesalahan ini. Coba lagi, atau buka beranda.
+              Aplikasi tidak bisa ditampilkan saat ini. Kesalahan ini tidak mengubah data Anda. Coba lagi, atau buka beranda.
             </p>
             {error.digest ? <p className="text-sm text-muted-foreground">Kode: <span className="tabular break-all">{error.digest}</span></p> : null}
             <div className="flex flex-col gap-3">

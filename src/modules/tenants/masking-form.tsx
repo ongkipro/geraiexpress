@@ -30,7 +30,7 @@ export function MaskingForm({ tenantId, tenantName, allowed }: { tenantId: strin
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
           <Button type="button" variant="outline" aria-haspopup="dialog" className="max-sm:w-full">
-            <span>{verb}<span className="sr-only"> untuk {tenantName}</span>…</span>
+            <span>{verb}<span className="sr-only"> untuk {tenantName}</span></span>
           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-lg" data-testid="masking-dialog">

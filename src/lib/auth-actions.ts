@@ -81,7 +81,7 @@ export async function startDemoAction(_: DemoState, form: FormData): Promise<Dem
     } else {
       const captchaToken = String(form.get("cf-turnstile-response") ?? "");
       const result = await getAuth().signInAnonymous({ captchaToken, ...(await requestContext()) });
-      if (!result.ok) return { error: result.reason === "captcha_failed" ? CAPTCHA_FAILED : "Demo belum bisa dibuka. Coba lagi sebentar lagi." };
+      if (!result.ok) return { error: result.reason === "captcha_failed" ? CAPTCHA_FAILED : "Demo belum bisa dibuka. Tunggu sebentar lalu coba lagi." };
       await writeSessionCookies(result.session);
       db = dataClient(postgrestUrl(), result.session.accessToken);
     }

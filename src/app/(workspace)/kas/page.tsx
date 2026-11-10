@@ -31,7 +31,7 @@ export default async function CashPage() {
   // signed-in member, never by a raw user id (a prefix is not unique and is meaningless to staff).
   const staffName = (staff: { id: string; label: string }, index: number) =>
     `${staff.label} ${index + 1}${staff.id === ws.userId ? " (Anda)" : ""}`;
-  const closedBy = (id: string | null) => id === ws.userId ? "oleh Anda" : id ? "oleh petugas lain" : "petugas tidak diketahui";
+  const closedBy = (id: string | null) => id === ws.userId ? "oleh Anda" : id ? "oleh staf lain" : "staf tidak diketahui";
   let content;
   try {
     const [outlets, open, closedResult] = await Promise.all([
@@ -58,7 +58,7 @@ export default async function CashPage() {
         {!period.closed_at || ws.role === "tenant_admin" ? <CashPeriodDialog period={period} outlet={names.get(period.outlet_id) ?? "Outlet"} totals={totals} isDemo={ws.isDemo} reopen={!!period.closed_at} /> : null}
       </div>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">{PAYMENT_METHODS.map((m) => <div key={m}><dt className="text-sm text-muted-foreground">{PAYMENT_METHOD_LABEL[m]}</dt><dd className="tabular break-words">{money(totals.methods[m])}</dd></div>)}</dl>
-      <div><h4 className="text-sm text-muted-foreground">Total per petugas</h4>
+      <div><h4 className="text-sm text-muted-foreground">Total per staf</h4>
         {totals.staff.length ? <ul className="mt-2 flex flex-col gap-2 text-sm">{totals.staff.map((staff, index) => <li key={staff.id} className="flex flex-wrap justify-between gap-2"><span>{staffName(staff, index)}</span><span className="tabular">{money(staff.total)}</span></li>)}</ul> : <p>Belum ada pembayaran aktif.</p>}
       </div>
       <dl className="grid gap-3 border-t pt-4 sm:grid-cols-3">

@@ -113,7 +113,7 @@ test("real tenant without a provider cannot quote and is told why", async ({ pag
   await page.getByLabel("No. HP penerima").fill("081211112222");
   await page.getByLabel("Alamat lengkap").fill("Jl. Tujuan A No. 9");
   // A real gerai picks the recipient's area from Mengantar (T-023); without a key it cannot.
-  await expect(page.getByLabel("Kecamatan / kota penerima")).toHaveCount(0);
+  await expect(page.getByLabel("Kecamatan/kota penerima")).toHaveCount(0);
   await page.getByLabel("Wilayah penerima").fill("Sukatani");
   // exact: the mobile top bar also has "Cari pengiriman" (T-079).
   await page.getByRole("button", { name: "Cari", exact: true }).click();
@@ -176,7 +176,7 @@ test("choosing 'Jemput kurir' saves the slot with the draft and the review shows
   await expectNoHorizontalOverflow(page);
 
   // Back to drop-off: the review says so and the pickup columns are cleared on the next save.
-  await dialog.getByRole("button", { name: "Kembali" }).click();
+  await dialog.getByRole("button", { name: "Batal" }).click();
   await page.getByRole("radio", { name: /Antar sendiri/ }).check();
   await page.getByRole("button", { name: "Simpan & cek ongkir" }).click();
   // The previous "Ongkir diperbarui" message is still on screen: wait on the stored state itself.
@@ -249,7 +249,7 @@ test("saving a typed recipient as a contact is explicit and visible in Kontak", 
   await page.getByLabel("Nama penerima").fill("Penerima Baru Disimpan");
   await page.getByLabel("No. HP penerima").fill("081299990000");
   await page.getByLabel("Alamat lengkap").fill("Jl. Baru Disimpan No. 2");
-  await page.getByLabel("Kecamatan / kota penerima").fill("Kec. Baru, Kota Uji");
+  await page.getByLabel("Kecamatan/kota penerima").fill("Kec. Baru, Kota Uji");
   await page.getByRole("checkbox", { name: "Simpan sebagai kontak penerima" }).click();
   await page.getByRole("button", { name: "Simpan draf" }).click();
   await expect(page.getByText("Draf tersimpan.")).toBeVisible();

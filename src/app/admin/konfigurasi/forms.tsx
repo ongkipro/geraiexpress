@@ -40,14 +40,14 @@ export function DeclarationForm({ current }: { current: { body: string; prohibit
   const [open, setOpen] = useDialogUntilSuccess(state);
   return (
     <div className="flex flex-col items-start gap-2">
-      <Button type="button" variant="outline" onClick={() => setOpen(true)} aria-haspopup="dialog">Tambah versi teks pernyataan…</Button>
+      <Button type="button" variant="outline" onClick={() => setOpen(true)} aria-haspopup="dialog">Tambah versi teks pernyataan</Button>
       {state.ok && !open ? <p role="status" className="text-sm text-success">{state.ok}</p> : null}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader className="pr-12">
             <DialogTitle>Tambah versi teks pernyataan isi paket</DialogTitle>
             <DialogDescription>
-              Versi baru langsung berlaku untuk konfirmasi berikutnya di semua gerai. Versi lama tetap tersimpan di riwayat dan pada kiriman yang sudah dikonfirmasi.
+              Versi baru langsung berlaku untuk konfirmasi berikutnya di semua gerai. Versi lama tetap tersimpan di riwayat dan pada pengiriman yang sudah dikonfirmasi.
             </DialogDescription>
           </DialogHeader>
           <form action={action} className="flex flex-col gap-5">
@@ -97,7 +97,7 @@ export function WeightRuleForm({ prefill }: { prefill: RulePrefill }) {
   return (
     <div className="flex flex-col items-start gap-1">
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)} aria-haspopup="dialog">
-        <span>Versi baru<span className="sr-only"> {name}</span>…</span>
+        <span>Versi baru<span className="sr-only"> {name}</span></span>
       </Button>
       {state.ok && !open ? <p role="status" className="text-sm text-success">{state.ok}</p> : null}
       <Dialog open={open} onOpenChange={setOpen}>
