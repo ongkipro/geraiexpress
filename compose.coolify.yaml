@@ -2,28 +2,201 @@
 # Coolify owns public TLS and ports 80/443. Assign all four HTTPS domains ONLY
 # to service proxy, port 8080. No application/database port is published.
 # Supply variables through Coolify; GX_IMAGE names an already built immutable image.
+#
+# FLAT ON PURPOSE: Coolify parses this file with Symfony YAML (no custom tags) and
+# does not resolve `extends`. Do not use `extends`, `!reset`/`!override` or any other
+# YAML tag, anchors, aliases or merge keys here (tests/unit/coolify-compose.test.ts).
+# Keep it in step with compose.yaml by hand: same pinned images, environment
+# allowlists and hardening. No service has `profiles`, so Coolify always starts all
+# five, including the same-host `postgres`; COMPOSE_PROFILES is irrelevant here.
 services:
   app:
-    extends: {file: compose.yaml, service: app}
-  scheduler:
-    extends: {file: compose.yaml, service: scheduler}
-  postgrest:
-    extends: {file: compose.yaml, service: postgrest}
-    profiles: !reset []
-  proxy:
-    extends: {file: compose.yaml, service: proxy}
-    profiles: !reset []
-    ports: !reset []
-    expose: ["8080"]
+    image: ${GX_IMAGE:-geraiexpress:local}
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+    # T-105: covers the 270 s cron deadline plus persisting its outcome before SIGKILL.
+    stop_grace_period: 300s
     environment:
+      # Explicit allowlist: migration credentials and the PostgreSQL owner password
+      # must never enter the application container.
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      TRACKING_TOKEN_SECRET: ${TRACKING_TOKEN_SECRET:-}
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      TURNSTILE_HOSTNAMES: ${TURNSTILE_HOSTNAMES:-}
+      SITE_ORIGIN: ${SITE_ORIGIN:-}
+      APP_ORIGIN: ${APP_ORIGIN:-}
+      OWNER_ORIGIN: ${OWNER_ORIGIN:-}
+      HOOKS_ORIGIN: ${HOOKS_ORIGIN:-}
+      MENGANTAR_ENV: ${MENGANTAR_ENV:-}
+      PARTNER_ID: ${PARTNER_ID:-}
+      MENGANTAR_PARTNER_SECRET: ${MENGANTAR_PARTNER_SECRET:-}
+      GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET: ${GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET:-}
+      PARTNER_TERMS_VERSION: ${PARTNER_TERMS_VERSION:-}
+      PARTNER_PRIVACY_VERSION: ${PARTNER_PRIVACY_VERSION:-}
+      PARTNER_TERMS_URL: ${PARTNER_TERMS_URL:-}
+      PARTNER_PRIVACY_URL: ${PARTNER_PRIVACY_URL:-}
+      CREDENTIAL_KEY: ${CREDENTIAL_KEY:-}
+      CREDENTIAL_KEYS: ${CREDENTIAL_KEYS:-}
+      CREDENTIAL_KEY_CURRENT: ${CREDENTIAL_KEY_CURRENT:-}
+      CRON_SECRET: ${CRON_SECRET:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      # The proxy below is the only peer that can reach this container; it overwrites X-Real-IP.
+      TRUSTED_PROXY: "1"
+      POSTGREST_URL: ${POSTGREST_URL:-http://postgrest:3000}
+    expose:
+      - "3000"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache:uid=1000,gid=1000,mode=0700
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # The image's HEALTHCHECK probes /healthz on the internal host name.
+    networks: [internal]
+
+  scheduler:
+    image: ${GX_IMAGE:-geraiexpress:local}
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+    command: ["node", "scheduler.mjs"]
+    stop_grace_period: 300s
+    environment:
+      # The scheduler holds the cron secret only, never the app's other secrets.
+      CRON_SECRET: ${CRON_SECRET:?CRON_SECRET must be set in the env file passed with --env-file}
+      SCHEDULER_TARGET: http://app:3000
+    depends_on:
+      app:
+        condition: service_healthy
+    # The image's HEALTHCHECK is the app's (port 3000); it does not apply to this process.
+    healthcheck:
+      disable: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    networks: [internal]
+
+  proxy:
+    image: caddy:2.11.2-alpine@sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      SITE_HOST: ${SITE_HOST:-geraiexpress.com}
+      APP_HOST: ${APP_HOST:-app.geraiexpress.com}
+      OWNER_HOST: ${OWNER_HOST:-owner.geraiexpress.com}
+      HOOKS_HOST: ${HOOKS_HOST:-hooks.geraiexpress.com}
       # Exact IP/CIDR of the Coolify edge proxy on this resource's network;
       # do not trust all private ranges or all addresses. Verify on the host.
       COOLIFY_PROXY_CIDR: ${COOLIFY_PROXY_CIDR:?Set the verified Coolify proxy IP/CIDR}
-    volumes: !override
+    # No `ports`: Coolify's edge reaches this service on the internal port only.
+    expose:
+      - "8080"
+    volumes:
       - ./infra/proxy/Caddyfile.coolify:/etc/caddy/Caddyfile:ro
-    tmpfs: [/tmp, /data, /config]
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /data
+      - /config
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [internal]
+
+  postgrest:
+    image: postgrest/postgrest:v14.18@sha256:c7cd7e265a85b05248abf53f4473fcec7e327c282d0bd0cf60f1551996d09fcf
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: ${PGRST_DB_URI:-}
+      PGRST_JWT_SECRET: ${AUTH_JWT_SECRET:-}
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_DB_EXTRA_SEARCH_PATH: public, extensions
+      PGRST_JWT_AUD: authenticated
+      PGRST_DB_MAX_ROWS: "1000"
+      PGRST_DB_POOL: "10"
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: "5"
+      # `postgrest --ready` (health check) needs the admin server and an explicit IPv4 bind.
+      PGRST_SERVER_HOST: 0.0.0.0
+      PGRST_ADMIN_SERVER_PORT: "3001"
+    expose:
+      - "3000"
+    healthcheck:
+      test: [CMD, postgrest, --ready]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    networks: [internal]
+
+  # Same-host PostgreSQL (always started here). Back up the `postgres_data` volume.
   postgres:
-    extends: {file: compose.yaml, service: postgres}
+    image: postgres:17@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-geraiexpress}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run/postgresql
+    # The image entrypoint initialises the data directory as root, then drops to the postgres user.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt:
+      - no-new-privileges:true
+    networks: [internal]
 
 networks:
   internal: {}
