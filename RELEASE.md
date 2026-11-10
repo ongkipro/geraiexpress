@@ -30,8 +30,8 @@ Enable **Preserve repository during deployment**: the gateway bind-mounts
    `COOLIFY_PROXY_CIDR` to that exact IPv4 `/32` or IPv6 `/128`. Re-verify after the edge
    is recreated. Never use `private_ranges`, a whole subnet or `0.0.0.0/0`. Caddy resolves
    forwarded addresses right-to-left; untrusted peers cannot choose a visitor's limiter key.
-3. For the initial same-host PostgreSQL target, enable the `db` profile (`COMPOSE_PROFILES=db`),
-   give `postgres_data` persistent storage, and set independent database passwords. Apply the
+3. For the initial same-host PostgreSQL target, `compose.coolify.yaml` always starts `postgres`
+   (it has no profiles, so `COMPOSE_PROFILES` is not needed); give `postgres_data` persistent storage, and set independent database passwords. Apply the
    schema as the `postgres` migration owner through the approved operator credential path;
    PostgREST must connect as `authenticator`. Never seed or reset production.
 4. Validate both the rendered Compose model and proxy config before release:
