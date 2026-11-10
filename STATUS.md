@@ -10,6 +10,28 @@ Independent-Review-Detail: M4: T-045 R4 GPT-6.1 Sol 68b3b525 -> c14f0e6d -> 3844
 Independent-Reviewer: reviewer (cx/gpt-6.1-sol, high), separate subagent per task; implementer pi-parent-01a1a300 (cc/claude-opus-5-5)
 Independent-Review-Head: c9c7164
 
+## M12 CLOSED (2026-11-10) — Live-deploy audit fixes: secrets per service, visitor IP, non-root gateway, UI copy
+
+- INT-M12 on head `f2403cb`. Executed, ledger-recorded PASS: typecheck; unit 1629; db 661; upgrade; e2e 738 passed /
+  0 failed / 27 skipped (390, 768, 1280); diff-hygiene; boundary PASS R2. Evidence `/data/tmp/geraiexpress/int-m12/ev2/`.
+  INT-M11 (secrets alone) stopped at e2e on 2 mobile-390 tests while another project's suite loaded the host; both
+  passed 12 of 12 in isolation (`--repeat-each=3`); recorded FAIL and superseded by INT-M12.
+- Live audit (Argon, read-only, GO WITH CONDITIONS for alpha): Coolify attaches its whole `.env` to every service
+  (Coolify 4.7.2 source, `ApplicationDeploymentJob` and `parsers.php`), so all 45 variables, the database password and
+  credential keys included, reached all five containers, the internet-facing gateway too. Behind Cloudflare, Traefik
+  rewrites X-Forwarded-For to the Cloudflare edge (tcpdump on the host), so every visitor shared one limiter key.
+- Fix: secrets live in root-owned host files under `/etc/geraiexpress/`, each mounted read-only into its one service
+  and readable through that service's group (`node --env-file`, PostgREST `@file`, `POSTGRES_PASSWORD_FILE`;
+  `create_host_path: false`). `check:environments` refuses a secret in any Coolify service environment and pins each
+  service's group, command and mounts exactly. The gateway reads `CF-Connecting-IP` only, only from the verified edge,
+  and runs as 65534. Argon APPROVE WITH NOTES, all notes fixed with mutation proof.
+- UI copy (writer skill audit + Indonesian shipping-market terminology research): one term per concept (`gerai`,
+  `cabang` for a location, `Pickup`/`Drop Off` with a gloss on the choice, `resi`, `invoice`, `masuk`), Settings
+  "Kesiapan" renamed "Status layanan", untranslated aria labels and internal ticket ids removed, stiff phrasing fixed.
+  Supervisor review of the full diff restored facts the pass had dropped. Marketing still claims drop-off only (PR-35
+  until T-048). Not yet deployed at this record; host-side: daily on-host backup timer with a passing restore drill,
+  Mengantar area catalogue loaded (79,391 rows). Off-server backup, SMTP and SSH source restriction remain open.
+
 ## M10 CLOSED (2026-11-10) — Coolify-compatible compose file
 
 - INT-M10 on head `109ac84`. Executed, ledger-recorded PASS: typecheck; unit 1624; db 661; upgrade; e2e 738 passed /

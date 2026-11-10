@@ -1467,3 +1467,11 @@ server/DNS, SMTP and backup-target inputs.
 
 - A green `docker compose config` does not prove a platform can load the file: Coolify parses YAML itself. Test against the
   consumer's real parser (here: the server's Symfony YAML, run read-only) before calling a deploy file ready.
+
+## 2026-11-10 — M12: what a platform injects is part of the trust boundary
+
+- A per-service `environment` allowlist in Compose proves nothing when the platform adds its own `env_file` to every
+  service. Inspect the generated file and `docker inspect` env names on the live host after the first deploy; keep
+  secrets outside the platform's variable store when it cannot scope them.
+- Behind a CDN plus a platform proxy, read the visitor address from the CDN's own header, trusted only from the one
+  verified peer, and only while the firewall admits the CDN alone. Prove it with a packet capture, not with config.
