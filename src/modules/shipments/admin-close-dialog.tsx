@@ -37,8 +37,8 @@ const COPY = {
     example: "sudah dicek di aplikasi Mengantar, batch belum dibayar.",
   },
   reservation: {
-    trigger: "Tutup pemesanan slot jemput",
-    title: "Tutup pemesanan slot jemput?",
+    trigger: "Tutup pemesanan jadwal pickup",
+    title: "Tutup pemesanan jadwal pickup?",
     confirm: "Tutup pemesanan slot",
     example: "sudah dicek di aplikasi Mengantar, tidak ada slot maupun pesanan.",
   },
@@ -95,7 +95,7 @@ export function AdminCloseDialog(props: Props) {
               </>
             ) : (
               <>
-                <li>Lakukan hanya setelah Anda memeriksa aplikasi Mengantar dan memastikan tidak ada slot jemput maupun pesanan untuk referensi <span className="tabular font-semibold">{props.reference}</span>.</li>
+                <li>Lakukan hanya setelah Anda memeriksa aplikasi Mengantar dan memastikan tidak ada jadwal pickup maupun pesanan untuk referensi <span className="tabular font-semibold">{props.reference}</span>.</li>
                 <li>Setelah ditutup, pengiriman ini berstatus gagal dan drafnya bisa dibuka lagi untuk dikonfirmasi ulang.</li>
               </>
             )}

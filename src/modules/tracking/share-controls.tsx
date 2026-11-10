@@ -80,7 +80,7 @@ export function ShareControls({ shipmentId, hasPhone, linkId, isAdmin, shared, r
                 <DialogDescription>Tautan yang sudah dibagikan ke pelanggan tidak bisa dibuka lagi. Bagikan lagi untuk membuat tautan baru.</DialogDescription>
               </DialogHeader>
               <DialogFooter className="gap-3">
-                <DialogClose asChild><Button type="button" variant="outline">Kembali</Button></DialogClose>
+                <DialogClose asChild><Button type="button" variant="outline">Batal</Button></DialogClose>
                 <Button type="button" variant="destructive" disabled={pending} aria-busy={pending || undefined} onClick={() => revoke(linkId)}>Ya, cabut tautan</Button>
               </DialogFooter>
             </DialogContent>

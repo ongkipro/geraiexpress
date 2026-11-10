@@ -88,7 +88,7 @@ export default async function IntegrationsPage() {
     <div className="flex max-w-[1160px] flex-col gap-8">
       <PageHeader
         title="Integrasi Mengantar"
-        description="Kesiapan konfigurasi platform dan koneksi akun penjual tiap gerai. Nilai rahasia tidak pernah ditampilkan."
+        description="Status konfigurasi platform dan koneksi akun penjual tiap gerai. Nilai rahasia tidak pernah ditampilkan."
         meta={<EnvironmentBadge environment={environment} />}
       />
       {environment === "production" || environment === "sandbox" ? (
@@ -125,7 +125,7 @@ export default async function IntegrationsPage() {
 
       <section aria-labelledby="acceptance-heading" className="flex flex-col gap-4">
         <SectionHeader id="acceptance-heading" title="Penerimaan label masking per kurir"
-          description="Bukti bahwa kurir menerima label masking yang dicetak gerai (PR-46). Selain terverifikasi, operator wajib mencentang konfirmasi sebelum mencetak label masking, dan konfirmasinya dicatat di riwayat cetak." />
+          description="Bukti bahwa kurir menerima label masking yang dicetak gerai. Selain terverifikasi, operator wajib mencentang konfirmasi sebelum mencetak label masking, dan konfirmasinya dicatat di riwayat cetak." />
         <ul className="divide-y divide-border rounded-lg bg-card ring-1 ring-border">
           {acceptance.map(({ courier, row }) => {
             const state = ACCEPTANCE[row?.state ?? "unverified"];

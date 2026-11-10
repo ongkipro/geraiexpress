@@ -2,7 +2,7 @@ import "server-only";
 import { AuthUnavailableError } from "@/lib/auth/store";
 
 export const TOO_MANY_AUTH_ATTEMPTS = "Terlalu banyak percobaan dari jaringan ini. Tunggu satu menit lalu coba lagi.";
-export const AUTH_BUSY = "Layanan masuk sedang sibuk. Coba lagi sebentar lagi.";
+export const AUTH_BUSY = "Layanan masuk sedang sibuk. Tunggu sebentar lalu coba lagi.";
 type AuthRoute = "/masuk" | "/daftar" | "/verifikasi-2fa" | "/refresh";
 
 // SEC-5 / RATE-2: bounded labels only. Never serialize anything the caller submitted.

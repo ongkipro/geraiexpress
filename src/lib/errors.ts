@@ -38,7 +38,7 @@ const MESSAGES: Record<string, string> = {
   mengantar_not_configured: "Koneksi Mengantar di server belum disiapkan. Hubungi admin GeraiExpress.",
   mengantar_no_key: "Akun Mengantar gerai ini belum terhubung. Admin gerai bisa menyimpan kunci API di Pengaturan.",
   mengantar_key_unreadable: "Kunci API Mengantar tersimpan tidak bisa dipakai. Admin gerai perlu menyimpannya ulang di Pengaturan.",
-  mengantar_unavailable: "Mengantar sedang tidak bisa dihubungi. Coba lagi sebentar lagi.",
+  mengantar_unavailable: "Mengantar sedang tidak bisa dihubungi. Tunggu sebentar lalu coba lagi.",
   mengantar_key_refused: "Mengantar menolak akses dengan kunci ini (kunci salah atau server belum diizinkan). Periksa kunci di akun Mengantar, lalu simpan lagi.",
   area_required: "Pilih wilayah penerima dari hasil pencarian Mengantar sebelum konfirmasi.",
   not_closable: "Belum bisa ditutup: tunggu minimal 30 menit sejak dikirim dan periksa lagi di Mengantar terlebih dahulu.",
@@ -49,7 +49,7 @@ const MESSAGES: Record<string, string> = {
   nothing_to_check: "Tidak ada pembayaran yang perlu diperiksa.",
   mengantar_data_unreadable: "Data dari Mengantar tidak bisa dibaca. Coba lagi; jika berulang, hubungi admin GeraiExpress.",
   mengantar_refused: "Mengantar menolak permintaan ini. Periksa wilayah, berat dan alamat pickup.",
-  pickup_not_set: "Alamat pickup Mengantar outlet ini belum dipilih. Admin gerai bisa memilihnya di Pengaturan.",
+  pickup_not_set: "Alamat pickup Mengantar gerai ini belum dipilih. Admin gerai bisa memilihnya di Pengaturan.",
   pickup_not_found: "Alamat pickup itu tidak ditemukan di akun Mengantar gerai ini. Muat ulang lalu pilih lagi.",
   // T-025 COD & T-026 batch payment recovery
   // T-091 platform configuration
@@ -78,19 +78,19 @@ const MESSAGES: Record<string, string> = {
   not_recoverable: "Tidak ada pendaftaran Mengantar dengan kunci tertunda yang dapat dipulihkan. Periksa status akun di Pengaturan.",
   live_recipient_name_invalid: "Nama penerima untuk Mengantar maksimal 100 karakter.",
   live_recipient_address_invalid: "Alamat penerima untuk Mengantar maksimal 300 karakter.",
-  live_recipient_phone_invalid: "Nomor HP penerima untuk Mengantar harus memakai awalan 0, 62, atau +62 dan menjadi 10–15 digit setelah diubah ke awalan 0.",
+  live_recipient_phone_invalid: "Nomor HP penerima harus berawalan 0, 62, atau +62 dan berisi 10–15 digit setelah diubah ke awalan 0.",
   immutable_partner_owner_consent: "Data pemilik dan persetujuan akun Mengantar yang sudah terdaftar tidak dapat diubah.",
   // T-028 Contact archive
   contact_already_archived: "Kontak ini sudah diarsipkan.",
   // Batch payment and dispatch codes that reach the operator as an error
   authorization_required: "Pembayaran massal ini belum diotorisasi. Periksa ringkasan pembayaran, lalu otorisasi lagi sebelum melanjutkan.",
   batch_id_unavailable: "Nomor batch Mengantar untuk pembayaran ini tidak tersedia, jadi pembayaran belum bisa dicek otomatis. Hubungi admin GeraiExpress sebelum mencoba lagi.",
-  account_busy: "Pesanan lain gerai ini sedang dikirim ke Mengantar. Coba lagi beberapa saat lagi.",
+  account_busy: "Pesanan lain gerai ini sedang dikirim ke Mengantar. Tunggu beberapa saat lalu coba lagi.",
   invalid_order_request: "Data pesanan belum memenuhi syarat Mengantar, jadi tidak ada yang dikirim. Periksa data penerima dan barang, lalu coba lagi.",
   // T-041 Gerai discount terms
   discount_above_observed:
     "Diskon gerai melebihi diskon Mengantar yang teramati. GeraiExpress tidak menanggung selisihnya, sehingga nilai ini tidak dapat disimpan.",
-  observation_required: "Status \"Teramati dari Mengantar\" butuh diskon Mengantar yang sudah teramati dari estimasi sungguhan. Belum ada.",
+  observation_required: "Status \"Teramati dari Mengantar\" butuh diskon Mengantar yang teramati dari cek ongkir nyata. Belum ada.",
   source_reference_required: "Isi referensi sumber (3–500 karakter).",
   verification_reference_required: "Terverifikasi Mengantar butuh referensi konfirmasi tertulis Mengantar (3–500 karakter).",
   verification_reference_unexpected: "Referensi konfirmasi hanya diisi untuk status Terverifikasi Mengantar.",
@@ -110,11 +110,11 @@ const MESSAGES: Record<string, string> = {
   rotation_restricted: "Mengantar menonaktifkan akun penjual atau kunci API ini, jadi pembuatan ulang dihentikan dan tidak dicoba lagi. Hubungi dukungan Mengantar; pengiriman tetap dijeda.",
   rotation_store_failed: "Kunci baru dibuat di Mengantar tetapi belum tersimpan. Pengiriman dijeda; pilih Ambil kunci terbaru untuk melanjutkan.",
   // T-043 Pickup orders
-  pickup_time_invalid: "Jam jemput terlalu dekat dari sekarang (WIB; batas minimal ada di keterangan jam jemput) atau di luar 09.00 sampai 18.00. Pilih slot yang lebih lambat lalu cek ongkir lagi.",
+  pickup_time_invalid: "Jam pickup terlalu dekat dengan waktu sekarang atau di luar pukul 09.00–18.00 WIB. Pilih jam pickup berikutnya lalu cek ongkir lagi.",
   // T-105: a visitor budget (src/lib/rate-limit.ts) refused the action.
   rate_limited: "Terlalu banyak percobaan dari jaringan ini. Tunggu satu menit lalu coba lagi.",
   // T-110: Partner-wide quota (all gerai share one Partner account) and the post-restore mutation fence.
-  partner_quota_exhausted: "Batas permintaan akun Partner Mengantar sedang penuh. Tidak ada yang dikirim; coba lagi beberapa saat lagi.",
+  partner_quota_exhausted: "Batas permintaan akun Partner Mengantar sedang penuh. Tidak ada yang dikirim; tunggu beberapa saat lalu coba lagi.",
   provider_fence_engaged: "Perubahan ke Mengantar sedang dijeda setelah pemulihan data. Pengecekan status tetap berjalan; coba lagi setelah admin GeraiExpress membuka jeda.",
 };
 

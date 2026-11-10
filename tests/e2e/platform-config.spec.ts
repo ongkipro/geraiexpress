@@ -17,7 +17,7 @@ test("shows the current declaration and weight rules and appends a new declarati
 
   const before = Number(localSql("select max(version) from public.declaration_texts"));
   try {
-    await page.getByRole("button", { name: "Tambah versi teks pernyataan…" }).click();
+    await page.getByRole("button", { name: "Tambah versi teks pernyataan" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("Versi lama tetap tersimpan");
     // T-097: the shared Checkbox still posts `provisional`; unchecking it saves a final text.

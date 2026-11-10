@@ -107,7 +107,7 @@ export async function loadSetup(tenantId: string, mengantarPickupId: string | nu
   const configured = Boolean(((credential.data ?? []) as { configured: boolean }[])[0]?.configured);
   return [
     { key: "mengantar", label: "Akun Mengantar", done: configured, todo: "Hubungkan akun Mengantar untuk cek ongkir dan menerbitkan resi." },
-    { key: "alamat-jemput", label: "Alamat jemput", done: Boolean(mengantarPickupId), todo: "Pilih alamat jemput outlet dari akun Mengantar." },
+    { key: "alamat-jemput", label: "Alamat pickup", done: Boolean(mengantarPickupId), todo: "Pilih alamat pickup gerai dari akun Mengantar." },
     { key: "whatsapp-gerai", label: "WhatsApp gerai", done: Boolean(tenant.data?.contact_whatsapp), todo: "Isi nomor WhatsApp gerai agar label bisa dicetak." },
   ];
 }

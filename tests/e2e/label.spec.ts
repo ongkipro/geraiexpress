@@ -257,7 +257,7 @@ test("masking on needs all three sender fields, previews them, keeps the true id
   await expect(page.getByLabel("Nama pengirim")).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByText("Isi nama pengirim.")).toBeVisible();
   await expect(page.getByText("Isi nomor HP pengirim.")).toBeVisible();
-  await expect(page.getByText("Isi kecamatan / kota pengirim.")).toBeVisible();
+  await expect(page.getByText("Isi kecamatan/kota pengirim.")).toBeVisible();
   await expect(page.getByLabel("Nama pengirim")).toBeFocused();
   expect(await prints(page)).toBe(0);
   expect(count("label_snapshots", id)).toBe(0);
@@ -265,7 +265,7 @@ test("masking on needs all three sender fields, previews them, keeps the true id
   await page.getByLabel("Nama pengirim").fill("Toko Pelanggan");
   await page.getByLabel("No. HP pengirim").fill("0813-1111-2222");
   await expect(page.getByText("Isi nama pengirim.")).toHaveCount(0);
-  await page.getByLabel("Kecamatan / kota pengirim").fill("Bandung");
+  await page.getByLabel("Kecamatan/kota pengirim").fill("Bandung");
   // The preview changes with the entered sender and no longer shows the gerai pickup address.
   await expect(page.getByTestId("label-sender-name")).toHaveText("Toko Pelanggan");
   await expect(page.getByTestId("label-sender-phone")).toHaveText("081311112222");
@@ -461,7 +461,7 @@ test("an empty gerai WhatsApp blocks the unmasked print: operators see the promp
   await signIn(page, "operator-a@geraiexpress.test");
   await page.goto(`/pengiriman/${id}/label`);
   const prompt = page.getByTestId("whatsapp-missing");
-  await expect(prompt).toContainText("Nomor WhatsApp gerai belum diisi. Minta administrator gerai mengisinya di Pengaturan.");
+  await expect(prompt).toContainText("Nomor WhatsApp gerai belum diisi. Minta admin gerai mengisinya di Pengaturan.");
   await expect(page.getByRole("link", { name: /Isi nomor WhatsApp gerai/ })).toHaveCount(0);
   await expect(printButton(page)).toBeDisabled();
   expect(count("label_snapshots", id)).toBe(0);
@@ -490,7 +490,7 @@ test("masking disabled by the platform: the switch is disabled with the reason, 
   await expect(maskSwitch(page)).toBeDisabled();
   await expect(maskSwitch(page)).not.toBeChecked();
   await expect(page.getByTestId("mask-disabled-reason")).toHaveText(
-    "Masking pengirim dinonaktifkan untuk gerai ini oleh administrator platform. Label dicetak dengan identitas gerai. Hubungi administrator gerai untuk informasi lebih lanjut.",
+    "Masking pengirim dinonaktifkan untuk gerai ini oleh administrator platform. Label dicetak dengan identitas gerai. Hubungi admin gerai untuk informasi lebih lanjut.",
   );
   await expect(maskSwitch(page)).toHaveAccessibleDescription(/dinonaktifkan untuk gerai ini oleh administrator platform/);
   await expect(page.getByTestId("label-sender-name")).toHaveText("Gerai Uji A");
@@ -563,8 +563,8 @@ test("batch queue prints selected labels and excludes unavailable shipments", as
   expect(geometry.heightMm).toBeCloseTo(150, 0);
   await page.emulateMedia({ media: "screen" });
   await page.getByRole("switch", { name: "Gunakan masking pengirim" }).check();
-  await expect(page.getByText("Isi kecamatan / kota pengirim.").first()).toBeVisible();
-  await page.getByLabel("Kecamatan / kota pengirim untuk kiriman yang belum mengisinya").fill("Bandung");
+  await expect(page.getByText("Isi kecamatan/kota pengirim.").first()).toBeVisible();
+  await page.getByLabel("Kecamatan/kota pengirim untuk pengiriman yang belum mengisinya").fill("Bandung");
   // T-084 / PR-46: one acknowledgement for the masked batch (JT is not verified); shown once labels are included.
   await ackBox(page).check();
   await page.getByRole("radio", { name: "10 × 10 cm" }).click();
@@ -646,7 +646,7 @@ test.describe("masking acceptance gate (PR-46)", () => {
     const note = page.getByTestId("return-destination");
     await expect(note).toContainText("alamat pickup (Jl. Pickup Nyata No. 5)");
     await expect(note).toContainText("bukan ke pengirim yang tercetak di label");
-    await page.getByLabel("Kecamatan / kota pengirim").fill("Bandung");
+    await page.getByLabel("Kecamatan/kota pengirim").fill("Bandung");
     await expectNoHorizontalOverflow(page);
     await expectTouchTargets(page);
     await evidence(page, "label-masking-acceptance-gate");
@@ -683,7 +683,7 @@ test.describe("masking acceptance gate (PR-46)", () => {
     await maskSwitch(page).check();
     await expect(page.getByTestId("masking-acceptance")).toHaveCount(0);
     await expect(page.getByTestId("return-destination")).toBeVisible();
-    await page.getByLabel("Kecamatan / kota pengirim").fill("Bandung");
+    await page.getByLabel("Kecamatan/kota pengirim").fill("Bandung");
     await printButton(page).click();
     await expect.poll(() => prints(page)).toBe(1);
     expect(localSql(`select acceptance_state || '|' || acknowledged from public.label_print_events where shipment_id = '${id}'`)).toBe("verified|false");
@@ -696,7 +696,7 @@ test.describe("masking acceptance gate (PR-46)", () => {
     await signIn(page, "owner-a@geraiexpress.test");
     await page.goto(`/pengiriman/cetak?ids=${first},${second}`);
     await page.getByRole("switch", { name: "Gunakan masking pengirim" }).check();
-    await page.getByLabel("Kecamatan / kota pengirim untuk kiriman yang belum mengisinya").fill("Bandung");
+    await page.getByLabel("Kecamatan/kota pengirim untuk pengiriman yang belum mengisinya").fill("Bandung");
     const gate = page.getByTestId("masking-acceptance");
     await expect(gate.getByTestId("masking-acceptance-couriers").getByRole("listitem")).toHaveCount(1);
     await expect(gate).toContainText("Belum terverifikasi untuk J&T Express");

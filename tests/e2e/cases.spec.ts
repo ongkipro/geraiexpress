@@ -45,7 +45,7 @@ test("operator opens and updates a case with an entered anchor; admin closes it 
   await dialog.getByRole("radio", { name: "Rusak", exact: true }).check();
   await dialog.getByRole("radio", { name: /Klaim nilai penuh/ }).check();
   await dialog.getByLabel("Keterangan").fill("Kardus penyok, piring pecah saat diterima");
-  await dialog.getByLabel("Bukti (nama file atau tautan)").fill("foto-paket.jpg\nvideo-unboxing.mp4");
+  await dialog.getByLabel("Bukti (nama berkas atau tautan)").fill("foto-paket.jpg\nvideo-unboxing.mp4");
   await dialog.getByLabel("Nomor tiket Mengantar (jika ada)").fill("TKT-4411");
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("case-open-dialog.png"), fullPage: true, animations: "disabled" });
@@ -73,7 +73,7 @@ test("operator opens and updates a case with an entered anchor; admin closes it 
   await expect(dialog).toHaveCount(0);
   await expect(panel.getByTestId("case-state")).toHaveText("Diajukan ke Mengantar");
   await expect(panel.getByTestId("case-deadline-value")).toContainText("16 Nov 2026");
-  await expect(panel.getByTestId("case-anchor")).toContainText("dimasukkan petugas: Anda");
+  await expect(panel.getByTestId("case-anchor")).toContainText("dimasukkan staf: Anda");
   expect(localSql(`select to_char(deadline_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI') from public.shipment_cases where shipment_id = '${s.id}'`)).toBe("2026-11-16 03:00");
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("case-detail-operator.png"), fullPage: true });
@@ -120,7 +120,7 @@ test("a provider return shows Retur with the return rule on list, detail and das
   await signIn(page, "operator-a@geraiexpress.test");
   await page.goto(`/pengiriman/${s.id}`);
   await expect(page.getByTestId("shipment-cases").getByTestId("return-badge")).toHaveText("Retur");
-  await expect(page.getByTestId("return-rule")).toContainText("alamat jemput");
+  await expect(page.getByTestId("return-rule")).toContainText("alamat pickup");
   await page.goto(`/pengiriman?q=${s.reference}`);
   await expect(page.getByTestId("return-badge").filter({ visible: true }).first()).toHaveText("Retur");
   await page.goto("/");

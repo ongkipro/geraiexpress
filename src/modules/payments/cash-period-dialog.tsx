@@ -56,7 +56,7 @@ export function CashPeriodDialog({ period, outlet, totals, isDemo, reopen = fals
           <div data-testid="cash-variance"><dt>Selisih kas</dt><dd>{money(variance)}</dd></div>
         </dl>
         <DialogFooter>
-          <DialogClose asChild><Button type="button" variant="outline" disabled={pending}>Kembali</Button></DialogClose>
+          <DialogClose asChild><Button type="button" variant="outline" disabled={pending}>Batal</Button></DialogClose>
           {state.reconcile ? <Button asChild><a href="/kas">Muat ulang</a></Button> : <SubmitButton pendingLabel="Menyimpan…">{reopen ? "Konfirmasi buka ulang" : "Konfirmasi tutup kas"}</SubmitButton>}
         </DialogFooter>
       </form>

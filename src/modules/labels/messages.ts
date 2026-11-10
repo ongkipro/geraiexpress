@@ -2,12 +2,12 @@ import { friendlyError } from "../../lib/errors";
 
 // Bahasa Indonesia messages for the label and gerai-WhatsApp commands (UX-9). Stable database codes in,
 // operator-facing sentences out; anything else falls back to the shared mapping.
-export const WHATSAPP_MISSING = "Nomor WhatsApp gerai belum diisi. Minta administrator gerai mengisinya di Pengaturan.";
-export const WHATSAPP_INVALID = "Nomor WhatsApp gerai tidak valid. Gunakan nomor Indonesia berawalan 0, misalnya 081234567890.";
+export const WHATSAPP_MISSING = "Nomor WhatsApp gerai belum diisi. Minta admin gerai mengisinya di Pengaturan.";
+export const WHATSAPP_INVALID = "Nomor WhatsApp gerai tidak valid. Gunakan nomor Indonesia (misalnya 081234567890).";
 export const WHATSAPP_SAVED = "Nomor WhatsApp gerai disimpan.";
 export const MASKING_DISABLED =
-  "Masking pengirim dinonaktifkan untuk gerai ini oleh administrator platform. Label dicetak dengan identitas gerai. Hubungi administrator gerai untuk informasi lebih lanjut.";
-export const RETENTION_NOTE = "Identitas asli gerai dan alamat pickup tetap tersimpan pada setiap label, juga saat masking aktif, dan disimpan selama masa retensi audit.";
+  "Masking pengirim dinonaktifkan untuk gerai ini oleh administrator platform. Label dicetak dengan identitas gerai. Hubungi admin gerai untuk informasi lebih lanjut.";
+export const RETENTION_NOTE = "Identitas asli gerai dan alamat pickup tetap tersimpan pada setiap label selama masa retensi audit, termasuk saat masking aktif.";
 
 export const FORMAT_LOCKED = "Format resi terkunci sejak cetak pertama. Cetak ulang memakai ukuran yang sama.";
 

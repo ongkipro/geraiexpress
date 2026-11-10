@@ -179,7 +179,7 @@ export function LabelWorkbench({
           return;
         }
         setPrinted(result.snapshot);
-        setNotice(`Permintaan cetak label versi ${result.snapshot.version} dicatat di riwayat dan dialog cetak peramban dibuka. Ini belum membuktikan kertas tercetak.`);
+        setNotice(`Permintaan cetak label versi ${result.snapshot.version} dicatat di riwayat dan dialog cetak dibuka. Ini belum membuktikan kertas tercetak.`);
         setPrintNonce((n) => n + 1);
       } catch {
         setReconcile(true);
@@ -196,7 +196,7 @@ export function LabelWorkbench({
     { key: "phone", label: "No. HP pengirim", autoComplete: "off", inputMode: "tel", maxLength: 20, required: true },
     { key: "address", label: "Alamat pengirim (opsional)", autoComplete: "off", maxLength: SENDER_LIMITS.addressMax, required: false,
       hint: `Jalan dan nomor, maks. ${SENDER_LIMITS.addressMax} karakter.` },
-    { key: "city", label: "Kecamatan / kota pengirim", autoComplete: "off", maxLength: SENDER_LIMITS.cityMax, required: true },
+    { key: "city", label: "Kecamatan/kota pengirim", autoComplete: "off", maxLength: SENDER_LIMITS.cityMax, required: true },
   ];
 
   return (
@@ -229,7 +229,7 @@ export function LabelWorkbench({
             />
           </label>
           <p id="mask-help" className="text-sm text-muted-foreground">
-            Mati: label memakai nama, WhatsApp dan alamat pickup gerai. Hidup: label memakai pengirim kiriman ini (nama, nomor HP, alamat, kecamatan/kota), yang masih bisa Anda ubah. Pilihan ini diingat selama tab ini terbuka; perubahan isian hanya untuk label ini.
+            Nonaktif: label memakai nama, WhatsApp, dan alamat pickup gerai. Aktif: label memakai data pengirim paket ini (nama, nomor HP, alamat, kecamatan/kota), yang masih bisa Anda ubah khusus untuk label ini. Pilihan ini diingat selama tab terbuka.
           </p>
           {!maskingAllowed ? (
             <p id="mask-disabled" data-testid="mask-disabled-reason" className="rounded-md bg-muted p-3 text-sm">{MASKING_DISABLED}</p>

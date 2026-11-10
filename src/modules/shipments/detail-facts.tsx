@@ -69,12 +69,12 @@ export function ShipmentFacts({ s, quote, op, pickup, isPickup, reservationText,
     {
       title: "Serah terima",
       facts: isPickup ? [
-        ["Serah paket", "Dijemput kurir"],
-        ["Jadwal jemput", <span className="tabular" key="pj" data-testid="pickup-slot">{dateLabel(pickup.pickup_date!)} · {slotLabel(pickup.pickup_slot_hour!)}</span>],
+        ["Serah paket", "Pickup"],
+        ["Jadwal pickup", <span className="tabular" key="pj" data-testid="pickup-slot">{dateLabel(pickup.pickup_date!)} · {slotLabel(pickup.pickup_slot_hour!)}</span>],
         ["Kendaraan penjemput", pickup.pickup_volume && isPickupVolume(pickup.pickup_volume) ? VOLUME_LABEL[pickup.pickup_volume] : "—"],
         ...(real && reservationText ? [["Status slot", <span key="ps" data-testid="pickup-state">{reservationText}</span>] as Fact] : []),
-        ...(pickup.pickup_note ? [["Catatan jemput (lokal)", pickup.pickup_note] as Fact] : []),
-      ] : [["Serah paket", "Antar sendiri ke gerai kurir"]],
+        ...(pickup.pickup_note ? [["Catatan pickup (lokal)", pickup.pickup_note] as Fact] : []),
+      ] : [["Serah paket", "Drop Off"]],
     },
     {
       title: "Paket",

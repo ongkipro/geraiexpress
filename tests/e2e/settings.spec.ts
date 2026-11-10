@@ -5,7 +5,7 @@ import { atDashboard, expectNoHorizontalOverflow, expectTouchTargets, localSql, 
 test("demo settings show simulated capabilities and restrictions", async ({ page }) => {
   await startDemo(page);
   await page.goto("/pengaturan");
-  await expect(page.getByRole("heading", { name: "Kesiapan outlet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Status layanan gerai" })).toBeVisible();
   await expect(page.getByText("Simulasi").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Dibatasi di demo" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -47,7 +47,7 @@ test.describe("gerai WhatsApp (PR-34)", () => {
 
     await field.fill("12345");
     await page.getByRole("button", { name: "Simpan nomor" }).click();
-    const message = "Nomor WhatsApp gerai tidak valid. Gunakan nomor Indonesia berawalan 0, misalnya 081234567890.";
+    const message = "Nomor WhatsApp gerai tidak valid. Gunakan nomor Indonesia (misalnya 081234567890).";
     await expect(page.getByText(message)).toBeVisible();
     await expect(field).toHaveAttribute("aria-invalid", "true");
     await expect(field).toHaveAccessibleDescription(new RegExp(message.slice(0, 30)));

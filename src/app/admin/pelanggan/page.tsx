@@ -20,7 +20,7 @@ export default async function CustomerDataPage() {
       <PageHeader title="Data pelanggan"
         description="Cari satu nomor HP untuk melihat berapa kali ia mengirim atau menerima, dan di gerai/cabang mana. Hanya untuk ditinjau; tidak ada tindakan atas nama gerai." />
       <Notice tone="warning">
-        Data pribadi. Buka hanya dengan alasan yang jelas; setiap pencarian tercatat di audit. Penggunaan di produksi menunggu tinjauan counsel (T-048).
+        Data pribadi. Buka hanya dengan alasan yang jelas; setiap pencarian tercatat di audit. Penggunaan di produksi menunggu tinjauan counsel.
       </Notice>
       <CustomerLookupForm />
     </div>

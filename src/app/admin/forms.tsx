@@ -62,7 +62,7 @@ export function LifecycleForm({ tenantId, tenantName, lifecycle }: { tenantId: s
   return (
     <div className="flex flex-col items-start gap-2 md:items-end">
       <Button type="button" variant="outline" size="sm" className="md:min-w-[156px]" aria-haspopup="dialog" onClick={() => setOpen(true)}>
-        <span>{verb}<span className="sr-only"> {tenantName}</span>…</span>
+        <span>{verb}<span className="sr-only"> {tenantName}</span></span>
       </Button>
       {state.ok && !open ? <p role="status" className="text-sm text-success">{state.ok}</p> : null}
       <Dialog open={open} onOpenChange={setOpen}>
@@ -127,7 +127,7 @@ export function RevokeForm({ userId, email, revision }: { userId: string; email:
   return (
     <div className="flex flex-col items-start gap-2 md:items-end">
       <Button type="button" variant="outline" size="sm" aria-haspopup="dialog" onClick={() => setOpen(true)}>
-        <span>Cabut akses<span className="sr-only"> {email}</span>…</span>
+        <span>Cabut akses<span className="sr-only"> {email}</span></span>
       </Button>
       {state.ok && !open ? <p role="status" className="text-sm text-success">{state.ok}</p> : null}
       <Dialog open={open} onOpenChange={setOpen}>
@@ -183,7 +183,7 @@ export function ReviewForm({ id, revision, name }: { id: string; revision: numbe
           const d = DECISIONS[key];
           return (
             <Button key={key} type="button" variant={d.variant} aria-haspopup="dialog" onClick={() => setDecision(key)}>
-              <d.Icon aria-hidden="true" /><span>{d.label}<span className="sr-only"> {name}</span>…</span>
+              <d.Icon aria-hidden="true" /><span>{d.label}<span className="sr-only"> {name}</span></span>
             </Button>
           );
         })}

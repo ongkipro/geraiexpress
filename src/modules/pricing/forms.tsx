@@ -137,7 +137,7 @@ export function DiscountForm(p: Props) {
             <Field>
               <FieldLabel htmlFor={`${formId}-verification`}>Referensi konfirmasi tertulis Mengantar</FieldLabel>
               <Input id={`${formId}-verification`} name="verification" required minLength={3} maxLength={500} autoComplete="off"
-                value={verification} onChange={(e) => setVerification(e.target.value)} placeholder="mis. nomor atau tanggal surel konfirmasi" />
+                value={verification} onChange={(e) => setVerification(e.target.value)} placeholder="mis. nomor atau tanggal email konfirmasi" />
               <FieldDescription>Wajib untuk status Terverifikasi Mengantar: ketik referensi konfirmasi tertulis yang Anda terima.</FieldDescription>
             </Field>
           ) : null}

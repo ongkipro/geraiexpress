@@ -18,7 +18,7 @@ export const slotHeld = (phase: PickupPhase) => phase === "reserved" || phase ==
 // The shared QUOTE_STALE reason says nothing was sent to Mengantar; with a held slot that is false.
 export function pickupFailureReason(resultCode: string | null, phase: PickupPhase, shared: string | undefined): string | undefined {
   return resultCode === "QUOTE_STALE" && slotHeld(phase)
-    ? "Pesanan terlalu lama di antrean sehingga ongkirnya kedaluwarsa; pesanan tidak dikirim, tetapi slot jemput sudah dipesan di Mengantar."
+    ? "Pesanan terlalu lama di antrean sehingga ongkirnya kedaluwarsa; pesanan tidak dikirim, tetapi jadwal pickup sudah dipesan di Mengantar."
     : shared;
 }
 
@@ -37,7 +37,7 @@ export function pickupReservationText(input: { shipmentState: string; phase: Pic
     }
     return REFUSED_BEFORE_RESERVATION.includes(resultCode ?? "")
       ? "Slot tidak dipesan."
-      : "Slot jemput tidak terkonfirmasi di Mengantar dan tidak ada pesanan yang dibuat.";
+      : "Jadwal pickup tidak terkonfirmasi di Mengantar dan tidak ada pesanan yang dibuat.";
   }
   if (phase === "reserving") return "Memesan slot… hasil belum pasti; sistem membaca ulang tanpa memesan lagi.";
   if (phase === "reserved") return "Slot sudah dipesan di Mengantar; pesanan belum dikirim.";

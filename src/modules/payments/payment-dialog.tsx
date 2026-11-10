@@ -109,7 +109,7 @@ export function PaymentDialog({ shipmentId, reference, chargeIdr, isDemo }: {
             ) : null}
           </FieldGroup>
           <DialogFooter className="gap-3">
-            <DialogClose asChild><Button type="button" variant="outline">Kembali</Button></DialogClose>
+            <DialogClose asChild><Button type="button" variant="outline">Batal</Button></DialogClose>
             {state.reconcile ? <Button asChild><a href={`/pengiriman/${shipmentId}`}>Muat ulang</a></Button> : (
               <SubmitButton pendingLabel="Menyimpan…" data-testid="payment-save">Simpan</SubmitButton>
             )}

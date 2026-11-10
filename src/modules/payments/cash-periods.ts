@@ -32,6 +32,6 @@ const CASH_ERRORS: Record<string, string> = {
   counted_cash_invalid: "Isi uang tunai terhitung dalam rupiah, minimal Rp0.",
   period_closed: "Periode sudah ditutup. Muat ulang untuk melihat hasil penutupan.",
   period_open: "Periode sudah terbuka. Muat ulang untuk melihat status kas.",
-  period_open_exists: "Outlet ini memiliki periode terbuka. Tutup periode yang sedang terbuka sebelum membuka ulang periode ini.",
+  period_open_exists: "Cabang ini memiliki periode terbuka. Tutup periode yang sedang terbuka sebelum membuka ulang periode ini.",
 };
 export const cashPeriodError = (error: { message?: string | null }) => CASH_ERRORS[error.message ?? ""] ?? CASH_UNKNOWN_RESULT;

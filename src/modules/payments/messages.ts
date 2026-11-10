@@ -25,7 +25,7 @@ const PAYMENT_ERRORS: Record<string, string> = {
   payment_invalid: "Pilih cara bayar dan isi jumlah lebih dari Rp0.",
   difference_reason_required: "Jumlah berbeda dari tarif pelanggan. Tuliskan alasan singkat (5–500 karakter).",
   cash_received_invalid: "Uang diterima harus sama atau lebih besar dari jumlah bayar.",
-  period_closed: "Kas outlet ini sudah ditutup, jadi catatan tidak bisa diubah.",
+  period_closed: "Kas cabang ini sudah ditutup, jadi catatan tidak bisa diubah.",
   payment_voided: "Catatan ini sudah dibatalkan.",
   admin_required: "Hanya admin gerai yang dapat membatalkan catatan pembayaran.",
   reason_required: "Tuliskan alasan (5–500 karakter).",

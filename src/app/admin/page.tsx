@@ -32,7 +32,7 @@ type Overview = {
 const PAGE_SIZE = 25;
 // T-092: each overview signal drills down to the gerai that have it (read-only, no shipment detail).
 const ATTENTION: Record<string, string> = {
-  today: "Ada kiriman hari ini", unknown: "Ada hasil belum pasti", awaiting_payment: "Ada yang menunggu pembayaran",
+  today: "Ada pengiriman hari ini", unknown: "Ada hasil belum pasti", awaiting_payment: "Ada yang menunggu pembayaran",
   queue: "Ada yang antre / sedang dikirim", failed: "Ada yang gagal",
 };
 
@@ -80,7 +80,7 @@ export default async function PlatformTenantsPage({ searchParams }: { searchPara
     if (session.capabilities.includes("audit_review")) redirect("/admin/audit");
     return (
       <div className="flex max-w-[680px] flex-col gap-6">
-        <PageHeader title="Super Admin" description="Kemampuan Anda belum memiliki halaman di versi ini." />
+        <PageHeader title="Super Admin" description="Belum ada halaman untuk hak akses Anda di versi ini." />
       </div>
     );
   }
@@ -155,7 +155,7 @@ export default async function PlatformTenantsPage({ searchParams }: { searchPara
 
       <section aria-labelledby="overview-heading" className="flex flex-col gap-3">
         <SectionHeader id="overview-heading" title="Ringkasan platform"
-          description={ov ? `Diperbarui ${formatWib(ov.generated_at)}. Angka gabungan kiriman nyata; tanpa data pelanggan.` : undefined} />
+          description={ov ? `Diperbarui ${formatWib(ov.generated_at)}. Angka gabungan pengiriman nyata; tanpa data pelanggan.` : undefined} />
         {overviewError ? (
           <LoadError href="/admin">Ringkasan platform belum bisa dimuat.</LoadError>
         ) : (
@@ -232,7 +232,7 @@ export default async function PlatformTenantsPage({ searchParams }: { searchPara
                   <TableHead>Gerai</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Kesiapan</TableHead>
-                  <TableHead className="text-right">Kiriman 30 hari</TableHead>
+                  <TableHead className="text-right">Pengiriman 30 hari</TableHead>
                   <TableHead className="text-right"><span className="sr-only">Tindakan</span></TableHead>
                 </TableRow>
               </TableHeader>
@@ -259,9 +259,9 @@ export default async function PlatformTenantsPage({ searchParams }: { searchPara
                       <span className="block text-muted-foreground">{t.pickup_ready ? "Alamat pickup siap" : "Alamat pickup belum dipilih"}</span>
                     </TableCell>
                     <TableCell className={cn(RT.cell, "text-sm md:text-right")}>
-                      <span className="tabular font-semibold">{t.shipments_30d}</span><span className="md:hidden"> kiriman 30 hari</span>
+                      <span className="tabular font-semibold">{t.shipments_30d}</span><span className="md:hidden"> pengiriman 30 hari</span>
                       {t.open_problems > 0 ? <span className="block text-warning" data-testid="tenant-open-problems">{t.open_problems} perlu perhatian</span> : null}
-                      <span className="block text-muted-foreground">{t.last_shipment_at ? `Terakhir ${formatWib(t.last_shipment_at)}` : "Belum ada kiriman"}</span>
+                      <span className="block text-muted-foreground">{t.last_shipment_at ? `Terakhir ${formatWib(t.last_shipment_at)}` : "Belum ada pengiriman"}</span>
                     </TableCell>
                     <TableCell className={cn(RT.cell, "max-md:col-span-2 max-md:pt-2")}>
                       <div className="flex flex-wrap items-start gap-2 md:flex-nowrap md:justify-end">

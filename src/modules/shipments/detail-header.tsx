@@ -12,9 +12,9 @@ import { CLOSE_ERROR, DISPATCH_INFO as BASE_DISPATCH_INFO } from "@/lib/format";
 // T-043: dispatch messages of the pickup flow, kept beside the shared table.
 const DISPATCH_INFO: Record<string, string> = {
   ...BASE_DISPATCH_INFO,
-  reservation_ambiguous: "Ada lebih dari satu slot jemput yang cocok di Mengantar. Tidak ada slot baru yang dipesan; hubungi admin GeraiExpress sebelum melanjutkan.",
-  requeue_failed: "Slot jemput ditemukan, tetapi pesanan belum bisa dijadwalkan ulang. Periksa lagi sebentar lagi.",
-  pickup_phase_unexpected: "Pesanan jemput ini sedang diperiksa. Jangan buat pengiriman baru; sistem akan memeriksanya.",
+  reservation_ambiguous: "Ada lebih dari satu jadwal pickup yang cocok di Mengantar. Tidak ada slot baru yang dipesan; hubungi admin GeraiExpress sebelum melanjutkan.",
+  requeue_failed: "Jadwal pickup ditemukan, tetapi pesanan belum bisa dijadwalkan ulang. Tunggu sebentar lalu periksa lagi.",
+  pickup_phase_unexpected: "Pesanan pickup ini sedang diperiksa. Jangan buat pengiriman baru; sistem akan memeriksanya.",
 };
 
 // Flash after a real dispatch, reconciliation or payment check (T-024).
@@ -25,8 +25,8 @@ const RESULT_TEXT: Record<string, string> = {
   failed: "Mengantar mencatat percobaan ini sebagai gagal.",
   unknown: "Hasil pengiriman ke Mengantar belum pasti. Jangan buat pengiriman baru; sistem akan memeriksanya.",
   not_created: "Pemeriksaan tidak menemukan pesanan di Mengantar.",
-  quote_stale: "Pesanan terlalu lama di antrean sehingga ongkirnya kedaluwarsa. Pesanan tidak dikirim; buka draf lagi dan cek ongkir ulang. Jika ini pengiriman jemput, cek status slot di halaman pengiriman.",
-  reservation_confirmed: "Slot jemput terkonfirmasi di Mengantar. Pesanan akan dikirim; tidak ada slot kedua yang dipesan.",
+  quote_stale: "Pesanan terlalu lama di antrean sehingga ongkirnya kedaluwarsa. Pesanan tidak dikirim; buka draf lagi dan cek ongkir ulang. Jika ini pengiriman pickup, cek status slot di halaman pengiriman.",
+  reservation_confirmed: "Jadwal pickup terkonfirmasi di Mengantar. Pesanan akan dikirim; tidak ada slot kedua yang dipesan.",
 };
 
 export type ShipmentFlags = { galat?: string; terbit?: string; rekonsiliasi?: string; hasil?: string; info?: string; kontak?: string };

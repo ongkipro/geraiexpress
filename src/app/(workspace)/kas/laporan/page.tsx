@@ -31,8 +31,8 @@ export default async function PilotReportPage({ searchParams }: { searchParams: 
   const earningsText = (row: PilotReportRow) => (earningsKnown(row) ? money(row.earnings_idr!) : PILOT_UNKNOWN);
   const unknownNote = (row: PilotReportRow) => row.earnings_unknown_count > 0
     ? <span className="block text-xs font-normal text-muted-foreground">{row.earnings_unknown_count} pengiriman biaya gerai belum diketahui</span> : null;
-  const rowName = (row: PilotReportRow) => row.row_level === "total" ? "Total semua outlet"
-    : row.row_level === "outlet" ? `Total ${row.outlet_name ?? "Outlet"}` : `${row.outlet_name ?? "Outlet"} · ${dayText(row.day!)}`;
+  const rowName = (row: PilotReportRow) => row.row_level === "total" ? "Total semua cabang"
+    : row.row_level === "outlet" ? `Total ${row.outlet_name ?? "Cabang"}` : `${row.outlet_name ?? "Cabang"} · ${dayText(row.day!)}`;
   const rowKey = (row: PilotReportRow) => `${row.row_level}-${row.outlet_id ?? "all"}-${row.day ?? "all"}`;
   const csvHref = `/kas/laporan/export.csv?${new URLSearchParams({ from: range.from, to: range.to })}`;
 
@@ -53,14 +53,14 @@ export default async function PilotReportPage({ searchParams }: { searchParams: 
         : <>
           <p className="text-sm text-muted-foreground" data-testid="pilot-data-at">Periode {range.from} s.d. {range.to} (WIB) · Data per {formatWib(dataAt)}</p>
           {/* UI-7: below 768 px every row is a record card (same rows, same formatters); the table from md up. */}
-          <ul className="flex flex-col gap-3 lg:hidden" data-testid="pilot-cards" aria-label="Laporan pilot per outlet dan hari WIB, dengan total">
+          <ul className="flex flex-col gap-3 lg:hidden" data-testid="pilot-cards" aria-label="Laporan pilot per cabang dan hari WIB, dengan total">
             {rows.map((row) => (
               <li key={rowKey(row)} data-testid={`pilot-card-${row.row_level}`}
                 className={row.row_level === "day" ? "rounded-lg bg-card p-4 ring-1 ring-border"
                   : row.row_level === "outlet" ? "rounded-lg bg-muted/40 p-4 ring-1 ring-border"
                   : "rounded-lg bg-info-soft p-4 ring-2 ring-primary/40"}>
                 <h3 className="text-base font-semibold break-words">{rowName(row)}</h3>
-                {row.row_level !== "day" ? <p className="text-sm text-muted-foreground">{row.row_level === "outlet" ? "Total outlet untuk periode ini" : "Total semua outlet untuk periode ini"}</p> : null}
+                {row.row_level !== "day" ? <p className="text-sm text-muted-foreground">{row.row_level === "outlet" ? "Total cabang untuk periode ini" : "Total semua cabang untuk periode ini"}</p> : null}
                 <dl className="mt-3 grid grid-cols-1 gap-2 text-sm">
                   <div className="flex flex-wrap justify-between gap-x-3"><dt className="text-muted-foreground">Resi terbit</dt><dd className="tabular">{row.shipments_issued}</dd></div>
                   <div className="flex flex-wrap justify-between gap-x-3"><dt className="text-muted-foreground">Median draf ke resi</dt><dd className="tabular">{medianText(row.median_draft_to_resi_minutes)}</dd></div>
@@ -77,10 +77,10 @@ export default async function PilotReportPage({ searchParams }: { searchParams: 
           </ul>
           <div className="relative hidden w-full overflow-x-auto rounded-lg ring-1 ring-border lg:block">
             <table className="w-full min-w-[720px] text-sm" data-testid="pilot-table">
-              <caption className="sr-only">Laporan pilot per outlet dan hari WIB, dengan total</caption>
+              <caption className="sr-only">Laporan pilot per cabang dan hari WIB, dengan total</caption>
               <thead className="bg-muted/50 text-left">
                 <tr>
-                  <th scope="col" className="px-3 py-2">Outlet / hari</th>
+                  <th scope="col" className="px-3 py-2">Cabang/hari</th>
                   <th scope="col" className="px-3 py-2 text-right">Resi terbit</th>
                   <th scope="col" className="px-3 py-2 text-right">Median draf ke resi</th>
                   <th scope="col" className="px-3 py-2">Cara bayar (jumlah · nilai)</th>
@@ -115,7 +115,7 @@ export default async function PilotReportPage({ searchParams }: { searchParams: 
     <div className="flex flex-col gap-6 lg:gap-8">
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl tracking-tight">Laporan pilot</h1>
-        <p className="text-muted-foreground">Ukuran pilot per outlet dan hari WIB untuk {ws.tenant.name}. Hanya terlihat oleh admin gerai. Ini ukuran evaluasi, bukan janji pendapatan.</p>
+        <p className="text-muted-foreground">Ukuran pilot per cabang dan hari WIB untuk {ws.tenant.name}. Hanya terlihat oleh admin gerai. Ini ukuran evaluasi, bukan janji pendapatan.</p>
         {ws.isDemo ? <p className="text-sm text-muted-foreground">Mode demo: angka dihitung dari pengiriman contoh; semua nilai merupakan contoh.</p> : null}
       </header>
       <form method="get" className="flex flex-wrap items-end gap-3" aria-label="Periode laporan">

@@ -12,7 +12,7 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
       <AuthCard>
         <AuthHeading title="Terjadi kesalahan" />
         <p role="alert" className="-mt-4 text-[15px] text-muted-foreground sm:text-base">
-          Halaman ini tidak bisa ditampilkan. Data Anda tidak berubah oleh kesalahan ini. Coba lagi, atau kembali ke beranda.
+          Halaman ini tidak bisa ditampilkan. Kesalahan ini tidak mengubah data Anda. Coba lagi, atau kembali ke beranda.
         </p>
         {error.digest ? <p className="text-sm text-muted-foreground">Kode: <span className="tabular break-all">{error.digest}</span></p> : null}
         <div className="flex flex-col gap-3">

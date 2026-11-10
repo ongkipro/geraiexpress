@@ -41,7 +41,7 @@ export function PrintHeader({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
             <StatusBadge state={state} />
             <span className="tabular">{reference}</span>
-            {awb ? <span>AWB <span className="tabular text-foreground">{awb}</span></span> : null}
+            {awb ? <span>Resi <span className="tabular text-foreground">{awb}</span></span> : null}
           </div>
         </div>
         {tabs ? (

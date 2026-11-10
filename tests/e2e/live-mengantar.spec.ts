@@ -39,7 +39,7 @@ test("a connected gerai picks its Mengantar pickup, searches the recipient area 
     await pickup.getByRole("button", { name: "Pakai alamat ini" }).click();
     await expect(pickup.getByRole("status")).toContainText("Alamat pickup diatur");
     await page.reload();
-    const pickupRow = page.getByRole("listitem").filter({ hasText: /^Alamat pickup outlet/ });
+    const pickupRow = page.getByRole("listitem").filter({ hasText: /^Alamat pickup gerai/ });
     await expect(pickupRow).toContainText("MELAWAI");
     await expect(page.getByRole("listitem").filter({ hasText: /^Cek ongkir/ })).toContainText("Siap");
     await expect(page.getByRole("listitem").filter({ hasText: /^Penerbitan resi/ })).toContainText("Siap");

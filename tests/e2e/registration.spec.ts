@@ -31,17 +31,17 @@ test("a new applicant verifies email, sets a password, applies, and works after 
   await page.getByRole("button", { name: "Simpan kata sandi" }).click();
 
   await expect(page).toHaveURL(/\/daftar\/gerai$/);
-  await page.getByLabel("Nama bisnis / gerai").fill(business);
+  await page.getByLabel("Nama bisnis/gerai").fill(business);
   await page.getByRole("button", { name: "Simpan draf" }).click();
   await expect(page.getByText("Draf tersimpan.")).toBeVisible();
   // Resumable: a reload keeps the draft.
   await page.reload();
-  await expect(page.getByLabel("Nama bisnis / gerai")).toHaveValue(business);
+  await expect(page.getByLabel("Nama bisnis/gerai")).toHaveValue(business);
   await page.getByRole("button", { name: "Ajukan untuk ditinjau" }).click();
   await expect(page.getByText("Wajib diisi untuk mengajukan.").first()).toBeVisible();
-  await page.getByLabel("Nama outlet pertama").fill("Outlet E2E");
-  await page.getByLabel("Alamat pickup outlet").fill("Jl. Uji E2E No. 5");
-  await page.getByLabel("Kecamatan / kota").fill("Kec. Uji, Kota E2E");
+  await page.getByLabel("Nama cabang pertama").fill("Outlet E2E");
+  await page.getByLabel("Alamat pickup gerai").fill("Jl. Uji E2E No. 5");
+  await page.getByLabel("Kecamatan/kota").fill("Kec. Uji, Kota E2E");
   await page.getByLabel("No. HP penanggung jawab").fill("081233334444");
   await page.getByRole("button", { name: "Ajukan untuk ditinjau" }).click();
   await expect(page.getByRole("heading", { name: "Sedang ditinjau" })).toBeVisible();

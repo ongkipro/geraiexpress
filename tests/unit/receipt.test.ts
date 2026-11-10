@@ -27,12 +27,12 @@ const plain = (s: string) => s.replace(/\u00a0/g, " ");
 describe("receiptText", () => {
   it("lists gerai/outlet, payment number, reference, AWB, courier, charge, method, change and WIB time without staff", () => {
     const text = plain(receiptText(base));
-    expect(text).toContain("Gerai Uji\nOutlet Cabang Utara");
+    expect(text).toContain("Gerai Uji\nCabang Cabang Utara");
     expect(text).toContain("No. pembayaran: PAY-A1B2C3D4");
     expect(text).not.toContain(base.payment!.id);
     expect(text).toContain("WhatsApp 081234567890");
     expect(text).toContain("Referensi: GX261104-ABC123");
-    expect(text).toContain("AWB: JT0001234567");
+    expect(text).toContain("Resi: JT0001234567");
     expect(text).toContain("REG");
     expect(text).toContain("Ongkir: Rp 12.000");
     expect(text).toContain("Dibayar: Rp 12.000");
@@ -63,7 +63,7 @@ describe("receiptText", () => {
         expect(html).not.toMatch(FORBIDDEN);
         expect(html).not.toMatch(/987654321|PRIVATE_|Petugas/i);
         if (v.payment) expect(html).toContain("PAY-A1B2C3D4");
-        expect(html).toContain("Outlet Cabang Utara");
+        expect(html).toContain("Cabang Cabang Utara");
         expect(html).toContain(`data-width="${width}"`);
       }
       for (const line of buildReceipt(v).lines) expect(line.label).not.toMatch(FORBIDDEN);
@@ -74,9 +74,9 @@ describe("receiptText", () => {
     for (const outletName of [null, "", "Gerai Uji", " Gerai Uji "]) {
       const input = { ...base, outletName };
       expect(buildReceipt(input).header).toEqual(["Gerai Uji", "WhatsApp 081234567890"]);
-      expect(receiptText(input)).not.toContain("Outlet");
+      expect(receiptText(input)).not.toContain("Cabang");
     }
-    expect(buildReceipt({ ...base, geraiWhatsapp: null }).header).toEqual(["Gerai Uji", "Outlet Cabang Utara"]);
+    expect(buildReceipt({ ...base, geraiWhatsapp: null }).header).toEqual(["Gerai Uji", "Cabang Cabang Utara"]);
   });
 
   it("labels every amount 'contoh' in a demo workspace", () => {

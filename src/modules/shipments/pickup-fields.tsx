@@ -34,14 +34,14 @@ type Props = {
 
 // One line for the confirmation review: how the parcel reaches the courier.
 export function handoverSummary(values: Pick<DraftValues, "handover" | "pickup_date" | "pickup_slot_hour">): string {
-  if (values.handover !== "pickup") return "Antar sendiri ke gerai kurir";
+  if (values.handover !== "pickup") return "Drop Off";
   const hour = Number(values.pickup_slot_hour);
-  return values.pickup_date && Number.isInteger(hour) ? `Jemput kurir · ${dateLabel(values.pickup_date)} · ${slotLabel(hour)}` : "Jemput kurir";
+  return values.pickup_date && Number.isInteger(hour) ? `Pickup · ${dateLabel(values.pickup_date)} · ${slotLabel(hour)}` : "Pickup";
 }
 
 const OPTIONS = [
-  ["dropoff", "Antar sendiri ke gerai kurir", "Paket diantar ke gerai atau agen kurir. Tidak ada jadwal.", Store],
-  ["pickup", "Jemput kurir", "Kurir menjemput di alamat pickup gerai pada jadwal yang dipilih.", Truck],
+  ["dropoff", "Drop Off (antar ke gerai kurir)", "Paket diantar ke gerai atau agen kurir. Tidak ada jadwal.", Store],
+  ["pickup", "Pickup (dijemput kurir)", "Kurir menjemput di alamat pickup gerai pada jadwal yang dipilih.", Truck],
 ] as const;
 
 export function PickupFields({ values, errors, onChange, courier = null, leadMinutes = PICKUP_LEAD_MINUTES }: Props) {
@@ -84,7 +84,7 @@ export function PickupFields({ values, errors, onChange, courier = null, leadMin
         <div className="flex flex-col gap-4" data-testid="pickup-details">
           <div className="grid gap-4 @md:grid-cols-2">
             <Field data-invalid={invalid("pickup_date")}>
-              <FieldLabel htmlFor="f-pickup_date">Tanggal jemput</FieldLabel>
+              <FieldLabel htmlFor="f-pickup_date">Tanggal pickup</FieldLabel>
               <ChoiceSelect id="f-pickup_date" name="pickup_date" value={values.pickup_date} placeholder="Pilih tanggal"
                 invalid={!!errors.pickup_date} describedBy={errors.pickup_date ? "f-pickup_date-err" : undefined}
                 onValueChange={(v) => onChange("pickup_date", v)}
@@ -92,7 +92,7 @@ export function PickupFields({ values, errors, onChange, courier = null, leadMin
               {err("pickup_date", "f-pickup_date")}
             </Field>
             <Field data-invalid={invalid("pickup_slot_hour")}>
-              <FieldLabel htmlFor="f-pickup_slot_hour">Jam jemput (WIB)</FieldLabel>
+              <FieldLabel htmlFor="f-pickup_slot_hour">Jam pickup (WIB)</FieldLabel>
               <ChoiceSelect id="f-pickup_slot_hour" name="pickup_slot_hour" value={values.pickup_slot_hour} placeholder="Pilih jam"
                 invalid={!!errors.pickup_slot_hour} describedBy={`f-pickup_slot_hour-hint${errors.pickup_slot_hour ? " f-pickup_slot_hour-err" : ""}`}
                 onValueChange={(v) => onChange("pickup_slot_hour", v)}
@@ -122,7 +122,7 @@ export function PickupFields({ values, errors, onChange, courier = null, leadMin
             {err("pickup_volume", "f-pickup_volume")}
           </Field>
           <Field data-invalid={invalid("pickup_note")}>
-            <FieldLabel htmlFor="f-pickup_note">Catatan jemput (opsional)</FieldLabel>
+            <FieldLabel htmlFor="f-pickup_note">Catatan pickup (opsional)</FieldLabel>
             <Textarea id="f-pickup_note" name="pickup_note" rows={2} maxLength={200} value={values.pickup_note}
               aria-describedby={`f-pickup_note-hint${errors.pickup_note ? " f-pickup_note-err" : ""}`} onChange={(e) => onChange("pickup_note", e.target.value)} />
             <FieldDescription id="f-pickup_note-hint">Hanya catatan untuk gerai; tidak dikirim ke Mengantar.</FieldDescription>
@@ -131,9 +131,8 @@ export function PickupFields({ values, errors, onChange, courier = null, leadMin
           <p className="flex items-start gap-2 text-sm text-muted-foreground" data-testid="pickup-note">
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <span>
-              Slot jemput dipesan di Mengantar saat Anda mengonfirmasi, sebelum pesanan dibuat. Alamat jemput tetap alamat pickup gerai
-              ({"\u201C"}alamat asli{"\u201D"} di detail pengiriman), bukan alamat pengirim pelanggan. Jika konfirmasi tertunda atau hasilnya
-              belum pasti, sistem memeriksa pesanan yang sama; slot tidak dipesan dua kali.
+              Jadwal pickup dipesan di Mengantar di alamat pickup gerai (bukan alamat pengirim) saat konfirmasi. Jika hasil konfirmasi
+              belum pasti, sistem memeriksa pesanan yang sama tanpa memesan slot dua kali.
             </span>
           </p>
         </div>

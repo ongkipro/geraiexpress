@@ -67,7 +67,7 @@ test("F4: an integration-only Super Admin lands on Integrasi Mengantar", async (
     await page.getByLabel("Kode 6 digit").fill(await freshAdminCode("admin-2@geraiexpress.test"));
     await page.getByRole("button", { name: "Verifikasi" }).click();
     await expect(page).toHaveURL(/\/admin\/integrasi$/);
-    await expect(page.getByText("Kemampuan Anda belum memiliki halaman")).toHaveCount(0);
+    await expect(page.getByText("Belum ada halaman untuk hak akses Anda")).toHaveCount(0);
   } finally {
     localSql(`update public.platform_grants set capabilities = '${before}'::text[] where user_id = '${ADMIN2}' and revoked_at is null`);
   }
@@ -106,7 +106,7 @@ test("F10: 'Kirim sekarang' asks for confirmation naming the reference and sends
     await expect(dialog).toContainText(ref);
     await expect(dialog).toContainText("Tidak ada pesanan baru yang dibuat");
     await expectNoHorizontalOverflow(page);
-    await dialog.getByRole("button", { name: "Kembali" }).click();
+    await dialog.getByRole("button", { name: "Batal" }).click();
     await expect(dialog).toHaveCount(0);
     expect(posted).toBe(0);
     expect(localSql(`select state from public.provider_operations where id = '${op}'`)).toBe("queued");

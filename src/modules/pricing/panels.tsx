@@ -115,7 +115,7 @@ export function VariancePanel({ row, observations }: { row: DiscountOverviewRow;
         </Figure>
       </dl>
       <p className="text-sm text-muted-foreground">
-        Selisih = diskon Mengantar tertinggi yang teramati dikurangi diskon gerai. Selisih ini tidak ditagihkan dan tidak ditanggung GeraiExpress; debit Mengantar mengikuti tarif akun seller gerai. Sisa platform dihitung otomatis, berstatus perkiraan, dan tidak bisa diketik.
+        Selisih = diskon Mengantar tertinggi yang teramati dikurangi diskon gerai. Selisih ini tidak ditagihkan dan tidak ditanggung GeraiExpress; debit Mengantar mengikuti tarif akun penjual Mengantar gerai. Sisa platform dihitung otomatis, berstatus perkiraan, dan tidak bisa diketik.
       </p>
       <div className="flex items-start gap-3 rounded-md bg-info-soft px-4 py-3">
         <Scale className="mt-0.5 size-5 shrink-0 text-info" aria-hidden="true" />

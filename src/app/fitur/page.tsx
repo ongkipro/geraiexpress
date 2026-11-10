@@ -91,7 +91,7 @@ const FEATURE_GROUPS = [
         "Kontak dan kiriman satu gerai tidak terlihat oleh gerai lain.",
       ],
       [
-        "Status kesiapan di Pengaturan",
+        "Status layanan di Pengaturan",
         "Halaman Pengaturan menunjukkan kemampuan mana yang sudah aktif untuk gerai Anda dan mana yang belum.",
       ],
     ],

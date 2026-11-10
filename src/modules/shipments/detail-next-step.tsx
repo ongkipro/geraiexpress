@@ -18,8 +18,8 @@ const REOPENABLE = ["PROVIDER_REJECTED", "NOT_ALLOWED", "INPUT_INVALID", "INPUT_
 // T-043: result codes of the pickup flow, kept beside the shared table.
 const FAILURE_REASON: Record<string, string> = {
   ...BASE_FAILURE_REASON,
-  PICKUP_TIME_INVALID: "Jam jemput tidak memenuhi syarat Mengantar (terlalu dekat dari sekarang).",
-  PICKUP_SLOT_UNAVAILABLE: "Mengantar menolak slot jemput yang dipilih. Tidak ada slot yang dipesan dan tidak ada pesanan yang dibuat.",
+  PICKUP_TIME_INVALID: "Jam pickup tidak memenuhi syarat Mengantar (terlalu dekat dari sekarang).",
+  PICKUP_SLOT_UNAVAILABLE: "Mengantar menolak jadwal pickup yang dipilih. Tidak ada slot yang dipesan dan tidak ada pesanan yang dibuat.",
 };
 
 const RECHECKED = ["NOT_CREATED", "PROVIDER_ERROR_ITEM"];
@@ -81,7 +81,7 @@ export function NextStepCard({ s, op, hasLabel, isAdmin, batchReview }: {
         {unresolvedPayment ? (
           <p>Pesanan Mengantar sudah dibuat dan perintah bayar batch sudah pernah dikirim. Jangan buat pengiriman baru dan jangan bayar ulang untuk paket ini.</p>
         ) : isAdmin ? (
-          <p>Pesanan Mengantar sudah dibuat, tetapi saldo Mengantar belum cukup sehingga resi belum terbit. Isi saldo terlebih dahulu; Anda dapat membayar batch dari sini (khusus admin) atau membayarnya di aplikasi Mengantar lalu memeriksa pembayarannya. Jangan buat pengiriman baru untuk paket ini.</p>
+          <p>Pesanan Mengantar sudah dibuat, tetapi saldo Mengantar belum cukup sehingga resi belum terbit. Isi saldo, lalu bayar batch dari sini (khusus admin) atau di aplikasi Mengantar dan periksa pembayarannya. Jangan buat pengiriman baru untuk paket ini.</p>
         ) : (
           // Operators cannot see the batch's payment attempts, so an unresolved attempt cannot be
           // ruled out: no instruction to pay anywhere, only to escalate.
@@ -93,7 +93,7 @@ export function NextStepCard({ s, op, hasLabel, isAdmin, batchReview }: {
           <div className="flex flex-col gap-3 border-t border-border pt-4" data-testid="batch-payment-review">
             <div className="flex flex-col gap-1">
               <h3 className="text-base font-semibold">
-                Tinjau Batch Mengantar <span className="tabular">{batchReview.batch}</span> ({courierName(batchReview.courier)})
+                Tinjau batch Mengantar <span className="tabular">{batchReview.batch}</span> ({courierName(batchReview.courier)})
               </h3>
               <p className="text-sm text-muted-foreground">
                 <span className="tabular">{batchReview.member_count}</span> pesanan · Total ongkir pelanggan{" "}
@@ -168,8 +168,8 @@ export function NextStepCard({ s, op, hasLabel, isAdmin, batchReview }: {
           <div className="flex flex-col gap-3 border-t border-border pt-4" data-testid="close-reservation">
             <p className="text-sm text-muted-foreground">
               {reservationClosable
-                ? "Jawaban Mengantar atas pemesanan slot jemput hilang dan pemeriksaan belum bisa memastikan slotnya. Jika Anda sudah memastikan di aplikasi Mengantar bahwa tidak ada slot maupun pesanan untuk paket ini, tutup pemesanan ini lalu buka drafnya lagi."
-                : "Jawaban Mengantar atas pemesanan slot jemput hilang. Jika pemeriksaan tetap tidak memberi hasil, admin gerai bisa menutup pemesanan ini 30 menit setelah dikirim dan setelah satu kali pemeriksaan."}
+                ? "Jawaban Mengantar atas pemesanan jadwal pickup hilang dan pemeriksaan belum bisa memastikan slotnya. Jika Anda sudah memastikan di aplikasi Mengantar bahwa tidak ada slot maupun pesanan untuk paket ini, tutup pemesanan ini lalu buka drafnya lagi."
+                : "Jawaban Mengantar atas pemesanan jadwal pickup hilang. Jika pemeriksaan tetap tidak memberi hasil, admin gerai bisa menutup pemesanan ini 30 menit setelah dikirim dan setelah satu kali pemeriksaan."}
             </p>
             {reservationClosable ? (
               <div className="flex">

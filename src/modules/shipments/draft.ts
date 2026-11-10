@@ -133,7 +133,7 @@ function parseHandover(values: DraftValues, update: DraftUpdate, now: Date, lead
 // Shared with the confirmation check, which reads the stored draft.
 export function pickupFieldErrors(fields: { pickup_date: string; pickup_slot_hour: string }, now: Date, leadMinutes: number = PICKUP_LEAD_MINUTES): Partial<Record<DraftField, string>> {
   if (!fields.pickup_date) return { pickup_date: PICKUP_ERROR_TEXT.date_invalid };
-  if (!/^[0-9]{1,2}$/.test(fields.pickup_slot_hour)) return { pickup_slot_hour: "Pilih jam jemput." };
+  if (!/^[0-9]{1,2}$/.test(fields.pickup_slot_hour)) return { pickup_slot_hour: "Pilih jam pickup." };
   const reason = pickupSlotError(fields.pickup_date, Number(fields.pickup_slot_hour), now, leadMinutes);
   if (reason === null) return {};
   return reason === "date_invalid" || reason === "too_far"

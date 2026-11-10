@@ -104,7 +104,7 @@ test("dialog and sheet close buttons are announced as Tutup", async ({ page }) =
 });
 
 test("live and demo intake explain per-courier billable weight and reweigh settlement", async ({ page }) => {
-  const NOTE = "Berat ditagih mengikuti aturan tiap kurir.";
+  const NOTE = "Berat ditagih mengikuti aturan tiap kurir (ukuran opsional).";
   await signIn(page, "operator-a@geraiexpress.test");
   await page.goto("/pengiriman/00000000-0000-4000-e000-00000000000a");
   await expect(page.getByText(NOTE)).toBeVisible();

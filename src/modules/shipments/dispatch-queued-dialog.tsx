@@ -27,7 +27,7 @@ export function DispatchQueuedDialog({ shipmentId, reference }: { shipmentId: st
         <form action={dispatchQueuedAction}>
           <input type="hidden" name="shipment_id" value={shipmentId} />
           <DialogFooter className="gap-3">
-            <DialogClose asChild><Button type="button" variant="outline">Kembali</Button></DialogClose>
+            <DialogClose asChild><Button type="button" variant="outline">Batal</Button></DialogClose>
             <SubmitButton pendingLabel="Mengirim…">Ya, kirim ke Mengantar</SubmitButton>
           </DialogFooter>
         </form>

@@ -67,7 +67,7 @@ function NewContactForm() {
         <div className="grid gap-4 border-t border-border p-4">
           <Field name="label" label="Label alamat" state={state} />
           <Field name="address_line" label="Alamat lengkap" state={state} textarea />
-          <Field name="area" label="Kecamatan / kota" state={state} />
+          <Field name="area" label="Kecamatan/kota" state={state} />
           <Field name="postal_code" label="Kode pos" inputMode="numeric" state={state} />
         </div>
       </details>
@@ -86,7 +86,7 @@ export function NewContactSheet({ label = "Tambah kontak", className }: { label?
       <SheetContent side="right" className="w-full overflow-y-auto data-[side=right]:w-full sm:data-[side=right]:max-w-lg">
         <SheetHeader className="pr-16">
           <SheetTitle>Tambah kontak</SheetTitle>
-          <SheetDescription>Pengirim atau penerima yang sering dipakai. Kontak bukan akun login.</SheetDescription>
+          <SheetDescription>Pengirim atau penerima yang sering dipakai. Kontak bukan akun untuk masuk.</SheetDescription>
         </SheetHeader>
         <div className="px-6 pb-6">
           <NewContactForm />
@@ -122,7 +122,7 @@ export function AddAddressForm({ contactId }: { contactId: string }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <Field name="label" label="Label alamat" state={state} className="sm:col-span-2" />
         <Field name="address_line" label="Alamat lengkap" state={state} textarea className="sm:col-span-2" />
-        <Field name="area" label="Kecamatan / kota" state={state} />
+        <Field name="area" label="Kecamatan/kota" state={state} />
         <Field name="postal_code" label="Kode pos" inputMode="numeric" state={state} />
       </div>
       <SubmitButton variant="outline" className="w-full sm:w-auto sm:self-start" pendingLabel="Menambahkan…">Tambah alamat</SubmitButton>
