@@ -152,15 +152,15 @@ test("choosing 'Jemput kurir' saves the slot with the draft and the review shows
   const column = (name: string) => localSql(`select coalesce(${name}::text, '-') from public.shipments where id = '${id}'`);
   expect(column("handover")).toBe("dropoff");
 
-  await page.getByRole("radio", { name: /Jemput kurir/ }).check();
+  await page.getByRole("radio", { name: /Pickup \(dijemput kurir\)/ }).check();
   await expect(page.getByTestId("pickup-details")).toBeVisible();
   await expect(page.getByText(/Data berubah sejak ongkir dicek/)).toBeVisible();
   // Tomorrow noon WIB is always inside the options (the second date) and always at least 120 minutes ahead (the default lead time).
-  await chooseOption(page, "Tanggal jemput", { index: 1 });
-  const dateText = (await page.getByLabel("Tanggal jemput").textContent())!.trim();
-  await chooseOption(page, "Jam jemput (WIB)", "12.00–13.00 WIB");
+  await chooseOption(page, "Tanggal pickup", { index: 1 });
+  const dateText = (await page.getByLabel("Tanggal pickup").textContent())!.trim();
+  await chooseOption(page, "Jam pickup (WIB)", "12.00–13.00 WIB");
   await chooseOption(page, "Perkiraan kendaraan penjemput", "Mobil");
-  await page.getByLabel("Catatan jemput (opsional)").fill("Titip di satpam");
+  await page.getByLabel("Catatan pickup (opsional)").fill("Titip di satpam");
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole("button", { name: "Simpan & cek ongkir" }).click();
@@ -172,18 +172,18 @@ test("choosing 'Jemput kurir' saves the slot with the draft and the review shows
   await page.getByRole("button", { name: "Periksa & konfirmasi" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Penyerahan", { exact: true })).toBeVisible();
-  await expect(dialog.getByText(`Jemput kurir · ${dateText} · 12.00–13.00 WIB`)).toBeVisible();
+  await expect(dialog.getByText(`Pickup · ${dateText} · 12.00–13.00 WIB`)).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   // Back to drop-off: the review says so and the pickup columns are cleared on the next save.
   await dialog.getByRole("button", { name: "Kembali" }).click();
-  await page.getByRole("radio", { name: /Antar sendiri/ }).check();
+  await page.getByRole("radio", { name: /Drop Off \(antar ke gerai kurir\)/ }).check();
   await page.getByRole("button", { name: "Simpan & cek ongkir" }).click();
   // The previous "Ongkir diperbarui" message is still on screen: wait on the stored state itself.
   await expect.poll(() => column("handover")).toBe("dropoff");
   expect(column("pickup_date")).toBe("-");
   await page.getByRole("button", { name: "Periksa & konfirmasi" }).click();
-  await expect(page.getByRole("dialog").getByText("Antar sendiri ke gerai kurir")).toBeVisible();
+  await expect(page.getByRole("dialog").getByText("Drop Off")).toBeVisible();
 });
 
 test("confirmation without the content declaration is refused with the missing item named (T-081)", async ({ page }) => {
@@ -462,7 +462,7 @@ test("shipment detail shows handover type, slot and reservation state for pickup
 
     await page.goto(`/pengiriman/${reserved}`);
     await expect(page.getByText("Serah paket")).toBeVisible();
-    await expect(page.getByText("Dijemput kurir")).toBeVisible();
+    await expect(page.getByText("Pickup", { exact: true })).toBeVisible();
     await expect(page.getByTestId("pickup-slot")).toHaveText("Selasa, 15 Desember 2026 · 12.00–13.00 WIB");
     await expect(page.getByText("Kendaraan penjemput")).toBeVisible();
     await expect(page.getByText("Mobil", { exact: true })).toBeVisible();
@@ -481,7 +481,7 @@ test("shipment detail shows handover type, slot and reservation state for pickup
     // A refused slot is a definite refusal: reopenable, and says that no slot was reserved.
     await page.goto(`/pengiriman/${refused}`);
     await expect(page.getByTestId("pickup-state")).toHaveText("Slot tidak dipesan.");
-    await expect(page.getByText(/Mengantar menolak slot jemput yang dipilih/)).toBeVisible();
+    await expect(page.getByText(/Mengantar menolak jadwal pickup yang dipilih/)).toBeVisible();
     await expect(page.getByTestId("pickup-state")).not.toContainText("belum pasti");
     await expect(page.getByRole("button", { name: "Ubah & coba lagi" })).toBeVisible();
 
@@ -491,7 +491,7 @@ test("shipment detail shows handover type, slot and reservation state for pickup
     await expect(page.getByTestId("pickup-state")).not.toContainText("belum pasti");
 
     await page.goto(`/pengiriman/${dropoff}`);
-    await expect(page.getByText("Antar sendiri ke gerai kurir")).toBeVisible();
+    await expect(page.getByText("Drop Off", { exact: true })).toBeVisible();
     await expect(page.getByTestId("pickup-slot")).toHaveCount(0);
     await expect(page.getByTestId("pickup-state")).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
@@ -710,7 +710,7 @@ test("an operator gets no close control for an unknown payment or an ambiguous r
     await page.goto(`/pengiriman/${reservation.id}`);
     await expect(page.getByText("Minta admin gerai memeriksa status operasi asli.")).toBeVisible();
     await expect(page.getByTestId("close-reservation")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Tutup pemesanan slot jemput" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Tutup pemesanan jadwal pickup" })).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
   } finally {
     payment.cleanup();
@@ -804,11 +804,11 @@ test("an admin closes an ambiguous pickup reservation once it is closable; the d
     // Under 30 minutes after dispatch: explained, not offered.
     await page.goto(`/pengiriman/${fresh.id}`);
     await expect(page.getByTestId("close-reservation")).toContainText("30 menit setelah dikirim");
-    await expect(page.getByRole("button", { name: "Tutup pemesanan slot jemput" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Tutup pemesanan jadwal pickup" })).toHaveCount(0);
 
     await page.goto(`/pengiriman/${old.id}`);
     await expect(page.getByRole("button", { name: "Periksa status operasi asli" })).toBeVisible();
-    await page.getByRole("button", { name: "Tutup pemesanan slot jemput" }).click();
+    await page.getByRole("button", { name: "Tutup pemesanan jadwal pickup" }).click();
     const dialog = page.getByTestId("close-reservation-dialog");
     await expect(dialog).toContainText("tidak mengirim apa pun ke Mengantar");
     await expect(dialog).toContainText(old.ref);

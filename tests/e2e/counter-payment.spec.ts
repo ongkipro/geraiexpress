@@ -89,7 +89,7 @@ test("operator records a cash payment once, even on a double-click, and prints t
   await expect(sheet).toContainText("Kembalian");
   const paymentId = localSql(`select id from public.counter_payments where shipment_id = '${id}' and voided_at is null`);
   await expect(sheet).toContainText(`PAY-${paymentId.slice(0, 8).toUpperCase()}`);
-  await expect(sheet).toContainText("Outlet Outlet A");
+  await expect(sheet).toContainText("Cabang Outlet A");
   await expect(sheet).not.toContainText(/13\.579|diskon|bersih|Petugas/i);
   await sheet.screenshot({ path: testInfo.outputPath("receipt-58.png") });
   await page.getByTestId("receipt-width-80").click();
@@ -101,7 +101,7 @@ test("operator records a cash payment once, even on a double-click, and prints t
   await expect(page.getByTestId("receipt-whatsapp")).toHaveAttribute("href", /^https:\/\/wa\.me\/6281200000077\?text=/);
   const whatsappText = new URL((await page.getByTestId("receipt-whatsapp").getAttribute("href"))!).searchParams.get("text");
   expect(whatsappText).toContain(`No. pembayaran: PAY-${paymentId.slice(0, 8).toUpperCase()}`);
-  expect(whatsappText).toContain("Outlet Outlet A");
+  expect(whatsappText).toContain("Cabang Outlet A");
   expect(whatsappText).not.toMatch(/Petugas/i);
   await expectNoHorizontalOverflow(page);
 });
@@ -158,7 +158,7 @@ test("a COD receipt refuses stale identity before printing, then freezes it for 
     await expect(sheet).toContainText("Ditagih kurir (COD)");
     await expect(sheet).toContainText("74.680");
     await expect(sheet).toContainText(original.name);
-    await expect(sheet).toContainText("Outlet Outlet A");
+    await expect(sheet).toContainText("Cabang Outlet A");
     await expect(sheet).not.toContainText(/Dibayar|Petugas|No\. pembayaran/i);
     await expectNoHorizontalOverflow(page);
 

@@ -257,7 +257,7 @@ export function ApplicationForm({ application }: { application: Application | nu
         <FieldLegend className={legendClass}>Identitas usaha</FieldLegend>
         <FieldGroup className="gap-5">
           <TextField name="business_name" label="Nama bisnis / gerai" state={state} defaultValue={a?.business_name} />
-          <TextField name="outlet_name" label="Nama outlet pertama" state={state} defaultValue={a?.outlet_name} hint="Contoh: Outlet Dago. Outlet lain bisa ditambah setelah disetujui." />
+          <TextField name="outlet_name" label="Nama cabang pertama" state={state} defaultValue={a?.outlet_name} hint="Contoh: Cabang Dago. Cabang lain bisa ditambah setelah disetujui." />
         </FieldGroup>
       </FieldSet>
       <FieldSet className="gap-4">
@@ -267,7 +267,7 @@ export function ApplicationForm({ application }: { application: Application | nu
       <FieldSet className="gap-4">
         <FieldLegend className={legendClass}>Alamat</FieldLegend>
         <FieldGroup className="gap-5">
-          <TextField name="pickup_address" label="Alamat pickup outlet" textarea state={state} defaultValue={a?.pickup_address} />
+          <TextField name="pickup_address" label="Alamat pickup gerai" textarea state={state} defaultValue={a?.pickup_address} />
           <TextField name="pickup_area" label="Kecamatan / kota" state={state} defaultValue={a?.pickup_area} />
         </FieldGroup>
       </FieldSet>

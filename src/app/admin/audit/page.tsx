@@ -33,7 +33,7 @@ const ACTIONS: Record<string, string> = {
   "discount.template": "Templat diskon gerai",
   "shipment.batch_pay": "Pembayaran batch Mengantar",
   "shipment.close_failed": "Percobaan pengiriman ditutup",
-  "outlet.mengantar_pickup": "Alamat pickup outlet",
+  "outlet.mengantar_pickup": "Alamat pickup gerai",
   "partner.onboarding_begin": "Pendaftaran akun Mengantar dimulai",
   "partner.onboarding_complete": "Akun Mengantar terhubung",
   "partner.onboarding_outcome": "Hasil pendaftaran akun Mengantar",

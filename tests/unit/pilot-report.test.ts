@@ -89,7 +89,7 @@ describe("pilot CSV", () => {
 
   it("labels outlet and grand totals and appends the measure definitions", () => {
     const rows = pilotCsvRows([row({ row_level: "outlet", day: null }), row({ row_level: "total", outlet_id: null, outlet_name: null, day: null })], range, wibIso);
-    expect(rows.map((r) => r.slice(0, 3))).toEqual([["Total outlet", "Outlet Satu", ""], ["Total semua outlet", "Semua outlet", ""]]);
+    expect(rows.map((r) => r.slice(0, 3))).toEqual([["Total cabang", "Outlet Satu", ""], ["Total semua cabang", "Semua cabang", ""]]);
     expect(pilotDefinitionRows().map((r) => r[1])).toEqual(["Resi terbit", "Median draf ke resi", "Cara bayar", "Label masking", "Pendapatan (estimasi)"]);
   });
 

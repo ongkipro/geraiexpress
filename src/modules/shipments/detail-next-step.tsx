@@ -18,8 +18,8 @@ const REOPENABLE = ["PROVIDER_REJECTED", "NOT_ALLOWED", "INPUT_INVALID", "INPUT_
 // T-043: result codes of the pickup flow, kept beside the shared table.
 const FAILURE_REASON: Record<string, string> = {
   ...BASE_FAILURE_REASON,
-  PICKUP_TIME_INVALID: "Jam jemput tidak memenuhi syarat Mengantar (terlalu dekat dari sekarang).",
-  PICKUP_SLOT_UNAVAILABLE: "Mengantar menolak slot jemput yang dipilih. Tidak ada slot yang dipesan dan tidak ada pesanan yang dibuat.",
+  PICKUP_TIME_INVALID: "Jam pickup tidak memenuhi syarat Mengantar (terlalu dekat dari sekarang).",
+  PICKUP_SLOT_UNAVAILABLE: "Mengantar menolak jadwal pickup yang dipilih. Tidak ada slot yang dipesan dan tidak ada pesanan yang dibuat.",
 };
 
 const RECHECKED = ["NOT_CREATED", "PROVIDER_ERROR_ITEM"];
@@ -168,8 +168,8 @@ export function NextStepCard({ s, op, hasLabel, isAdmin, batchReview }: {
           <div className="flex flex-col gap-3 border-t border-border pt-4" data-testid="close-reservation">
             <p className="text-sm text-muted-foreground">
               {reservationClosable
-                ? "Jawaban Mengantar atas pemesanan slot jemput hilang dan pemeriksaan belum bisa memastikan slotnya. Jika Anda sudah memastikan di aplikasi Mengantar bahwa tidak ada slot maupun pesanan untuk paket ini, tutup pemesanan ini lalu buka drafnya lagi."
-                : "Jawaban Mengantar atas pemesanan slot jemput hilang. Jika pemeriksaan tetap tidak memberi hasil, admin gerai bisa menutup pemesanan ini 30 menit setelah dikirim dan setelah satu kali pemeriksaan."}
+                ? "Jawaban Mengantar atas pemesanan jadwal pickup hilang dan pemeriksaan belum bisa memastikan slotnya. Jika Anda sudah memastikan di aplikasi Mengantar bahwa tidak ada slot maupun pesanan untuk paket ini, tutup pemesanan ini lalu buka drafnya lagi."
+                : "Jawaban Mengantar atas pemesanan jadwal pickup hilang. Jika pemeriksaan tetap tidak memberi hasil, admin gerai bisa menutup pemesanan ini 30 menit setelah dikirim dan setelah satu kali pemeriksaan."}
             </p>
             {reservationClosable ? (
               <div className="flex">

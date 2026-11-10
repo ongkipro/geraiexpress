@@ -115,14 +115,14 @@ export const VOLUME_LABEL: Record<PickupVolume, string> = {
 
 // Bahasa field-error text for the draft validation and the confirmation check.
 export const PICKUP_ERROR_TEXT: Record<Exclude<PickupSlotError, "too_soon">, string> = {
-  date_invalid: "Pilih tanggal jemput.",
-  slot_invalid: "Pilih jam jemput antara 09.00 dan 18.00 WIB.",
-  too_far: `Tanggal jemput maksimal ${PICKUP_MAX_DAYS_AHEAD} hari ke depan.`,
+  date_invalid: "Pilih tanggal pickup.",
+  slot_invalid: "Pilih jam pickup antara 09.00 dan 18.00 WIB.",
+  too_far: `Tanggal pickup maksimal ${PICKUP_MAX_DAYS_AHEAD} hari ke depan.`,
 };
 
 // The text for a refusal; "too soon" names the effective lead time.
 export function pickupErrorText(reason: PickupSlotError, leadMinutes: number = PICKUP_LEAD_MINUTES): string {
   return reason === "too_soon"
-    ? `Jam jemput harus minimal ${leadMinutes} menit dari sekarang (WIB). Pilih jam yang lebih lambat.`
+    ? `Jam pickup harus minimal ${leadMinutes} menit dari sekarang (WIB). Pilih jam yang lebih lambat.`
     : PICKUP_ERROR_TEXT[reason];
 }

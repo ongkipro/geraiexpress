@@ -83,7 +83,7 @@ describe("pickup failure copy over every phase and reopenable code (T-056 final 
     const shared = "tidak ada yang dikirim ke Mengantar.";
     for (const phase of ["reserved", "creating"] as const) {
       const reason = pickupFailureReason("QUOTE_STALE", phase, shared);
-      expect(reason, phase).toMatch(/slot jemput sudah dipesan/);
+      expect(reason, phase).toMatch(/jadwal pickup sudah dipesan/);
       expect(reason, phase).not.toMatch(/tidak ada yang dikirim/);
     }
     for (const phase of ["reserving", null] as const) expect(pickupFailureReason("QUOTE_STALE", phase, shared), String(phase)).toBe(shared);

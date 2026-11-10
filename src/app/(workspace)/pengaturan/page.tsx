@@ -136,7 +136,7 @@ export default async function SettingsPage() {
   const provider: Readiness = ws.isDemo ? "simulated" : keyWorks ? "ready" : credential.configured ? "unverified" : "blocked";
   const quoting: Readiness = ws.isDemo ? "simulated" : keyWorks && pickupReady ? "ready" : "blocked";
   const rows: { name: string; state: Readiness; detail: string }[] = [
-    { name: "Alamat pickup outlet", state: pickupReady ? "ready" : "blocked",
+    { name: "Alamat pickup gerai", state: pickupReady ? "ready" : "blocked",
       detail: pickupReady ? `${ws.outlet.pickupAddress}, ${ws.outlet.pickupArea}`
         : ws.isDemo ? "Isi alamat pickup sebelum cek ongkir." : "Admin gerai memilih alamat pickup dari akun Mengantar." },
     { name: "Akun Mengantar", state: provider,
@@ -165,11 +165,11 @@ export default async function SettingsPage() {
     : onboarding.connection_mode === "byok" || credential.configured ? "Kunci API sendiri" : "Belum ada akun terhubung";
 
   const sections: SettingsSection[] = ws.isDemo
-    ? [{ id: "kesiapan", label: "Kesiapan" }, { id: "demo", label: "Demo" }]
+    ? [{ id: "kesiapan", label: "Status layanan" }, { id: "demo", label: "Demo" }]
     : [
-        { id: "kesiapan", label: "Kesiapan" },
+        { id: "kesiapan", label: "Status layanan" },
         { id: "mengantar", label: "Mengantar" },
-        { id: "alamat-jemput", label: "Alamat jemput" },
+        { id: "alamat-jemput", label: "Alamat pickup" },
         { id: "whatsapp-gerai", label: "WhatsApp gerai" },
         { id: "logo-gerai", label: "Logo gerai" },
         { id: "harga", label: "Harga & diskon" },
@@ -179,14 +179,14 @@ export default async function SettingsPage() {
     <div className="flex max-w-[1120px] flex-col gap-6 lg:gap-8">
       <div className="flex flex-col gap-2">
         <h1 className="text-[28px] leading-tight tracking-tight md:text-3xl">Pengaturan</h1>
-        <p className="text-muted-foreground">Kesiapan {ws.outlet.name} untuk setiap kemampuan. Peran Anda: {isAdmin ? "Admin gerai" : "Operator"}.</p>
+        <p className="text-muted-foreground">Status layanan {ws.outlet.name} untuk setiap fitur. Peran Anda: {isAdmin ? "Admin gerai" : "Operator"}.</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-10">
         <SettingsNav sections={sections} />
 
         <div className="flex min-w-0 flex-col gap-10">
-          <Group id="kesiapan" title="Kesiapan outlet" description="Setiap kemampuan punya status sendiri; akun yang terhubung belum berarti semuanya siap.">
+          <Group id="kesiapan" title="Status layanan gerai" description="Apa yang sudah siap dan apa yang belum, per fitur.">
             <ul className="divide-y divide-border rounded-lg bg-card ring-1 ring-border">
               {rows.map((r) => (
                 <li key={r.name} className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
@@ -208,7 +208,7 @@ export default async function SettingsPage() {
             </Group>
           ) : (
             <>
-              <Group id="mengantar" title="Mengantar" description="Akun penjual Mengantar milik bisnis ini dipakai untuk cek ongkir, penerbitan resi dan alamat jemput.">
+              <Group id="mengantar" title="Mengantar" description="Akun penjual Mengantar milik bisnis ini dipakai untuk cek ongkir, penerbitan resi dan alamat pickup.">
                 <div className="flex flex-col rounded-lg bg-card ring-1 ring-border">
                   <dl className="divide-y divide-border">
                     <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-5 py-4">
@@ -315,7 +315,7 @@ export default async function SettingsPage() {
                 ) : null}
               </Group>
 
-              <Group id="alamat-jemput" title="Alamat jemput" description={`Alamat tempat kurir menjemput paket ${ws.outlet.name}.`}>
+              <Group id="alamat-jemput" title="Alamat pickup" description={`Alamat tempat kurir menjemput paket ${ws.outlet.name}.`}>
                 {isAdmin && credential.configured ? (
                   <section aria-labelledby="pickup-heading" className={CARD}>
                     <div className="flex flex-col gap-1">
@@ -338,13 +338,13 @@ export default async function SettingsPage() {
                 ) : (
                   <div className={CARD}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <p className="min-w-0">{pickupReady ? `${ws.outlet.pickupAddress}, ${ws.outlet.pickupArea}` : "Alamat jemput belum dipilih."}</p>
+                      <p className="min-w-0">{pickupReady ? `${ws.outlet.pickupAddress}, ${ws.outlet.pickupArea}` : "Alamat pickup belum dipilih."}</p>
                       <ReadinessBadge state={pickupReady ? "ready" : "blocked"} />
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {isAdmin
-                        ? "Hubungkan akun Mengantar di atas dulu; alamat jemput dipilih dari alamat yang tersimpan di akun itu."
-                        : "Alamat jemput dipilih admin gerai dari akun Mengantar."}
+                        ? "Hubungkan akun Mengantar di atas dulu; alamat pickup dipilih dari alamat yang tersimpan di akun itu."
+                        : "Alamat pickup dipilih admin gerai dari akun Mengantar."}
                     </p>
                   </div>
                 )}

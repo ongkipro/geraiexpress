@@ -60,7 +60,7 @@ export function buildReceipt(input: ReceiptInput): Receipt {
   if (!receiptAmountsSupported(input)) throw new RangeError(UNSUPPORTED_PAYMENT_AMOUNT);
   const header = [input.geraiName];
   const outlet = input.outletName?.trim();
-  if (outlet && outlet !== input.geraiName.trim()) header.push(`Outlet ${outlet}`);
+  if (outlet && outlet !== input.geraiName.trim()) header.push(`Cabang ${outlet}`);
   if (input.geraiWhatsapp) header.push(`WhatsApp ${input.geraiWhatsapp}`);
   const lines: ReceiptLine[] = [
     { label: "Referensi", value: input.reference },

@@ -137,8 +137,8 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
                 ["Email", <span key="e" className="break-all">{shown.applicant_email}</span>],
                 ["No. HP penanggung jawab", <span key="p" className="tabular">{shown.contact_phone}</span>],
               ]} />
-              <Facts title="Outlet pertama" rows={[
-                ["Nama outlet", shown.outlet_name],
+              <Facts title="Cabang pertama" rows={[
+                ["Nama cabang", shown.outlet_name],
                 ["Alamat pickup", shown.pickup_address],
                 ["Kecamatan / kota", shown.pickup_area],
               ]} />

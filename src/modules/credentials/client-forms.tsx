@@ -107,7 +107,7 @@ function RegenerateKeyControl({ action, pending }: { action: (data: FormData) =>
             </DialogDescription>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Kunci baru disimpan terenkripsi dan tidak ditampilkan. Alamat pickup outlet tidak berubah. Pastikan tidak ada aplikasi lain
+            Kunci baru disimpan terenkripsi dan tidak ditampilkan. Alamat pickup gerai tidak berubah. Pastikan tidak ada aplikasi lain
             yang masih memakai kunci lama.
           </p>
           <form action={confirm}>

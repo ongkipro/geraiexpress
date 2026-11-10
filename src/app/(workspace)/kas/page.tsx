@@ -52,10 +52,10 @@ export default async function CashPage() {
     const names = new Map(outlets.map((o) => [o.id, o.name]));
     const renderPeriod = ({ period, totals }: typeof periods[number]) => <article key={period.id} data-testid={`cash-period-${period.id}`} className="flex flex-col gap-4 rounded-lg bg-card p-4 ring-1 ring-border sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0"><h3 className="text-lg font-semibold break-words">{names.get(period.outlet_id) ?? "Outlet"}</h3>
+        <div className="min-w-0"><h3 className="text-lg font-semibold break-words">{names.get(period.outlet_id) ?? "Cabang"}</h3>
           <p className="text-sm text-muted-foreground">{period.closed_at ? "Ditutup" : "Periode terbuka"} · Mulai {formatWib(period.opened_at)}</p>
         </div>
-        {!period.closed_at || ws.role === "tenant_admin" ? <CashPeriodDialog period={period} outlet={names.get(period.outlet_id) ?? "Outlet"} totals={totals} isDemo={ws.isDemo} reopen={!!period.closed_at} /> : null}
+        {!period.closed_at || ws.role === "tenant_admin" ? <CashPeriodDialog period={period} outlet={names.get(period.outlet_id) ?? "Cabang"} totals={totals} isDemo={ws.isDemo} reopen={!!period.closed_at} /> : null}
       </div>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">{PAYMENT_METHODS.map((m) => <div key={m}><dt className="text-sm text-muted-foreground">{PAYMENT_METHOD_LABEL[m]}</dt><dd className="tabular break-words">{money(totals.methods[m])}</dd></div>)}</dl>
       <div><h4 className="text-sm text-muted-foreground">Total per petugas</h4>
@@ -79,5 +79,5 @@ export default async function CashPage() {
   } catch (error) {
     content = <Notice tone="danger">{error instanceof Error && error.message === UNSUPPORTED_PAYMENT_AMOUNT ? UNSUPPORTED_PAYMENT_AMOUNT : "Kas belum bisa dimuat lengkap. Muat ulang halaman; jangan menutup kas sebelum data tersedia."}</Notice>;
   }
-  return <div className="flex flex-col gap-6 lg:gap-8"><header><h1 className="text-3xl tracking-tight">Kas</h1><p className="mt-2 text-muted-foreground">Kas per outlet milik {ws.tenant.name}. Periode tetap terbuka melewati tengah malam sampai ditutup. Waktu ditampilkan dalam WIB.</p><p className="mt-1 text-sm text-muted-foreground">Total hanya pembayaran aktif. Selisih kas adalah uang terhitung dikurangi tunai yang diharapkan{ws.isDemo ? "; semua nilai merupakan contoh" : ""}.</p>{ws.role === "tenant_admin" ? <p className="mt-2"><Link href="/kas/laporan" className="font-semibold text-primary underline-offset-4 hover:underline">Laporan pilot</Link> <span className="text-sm text-muted-foreground">(khusus admin gerai)</span></p> : null}</header>{content}</div>;
+  return <div className="flex flex-col gap-6 lg:gap-8"><header><h1 className="text-3xl tracking-tight">Kas</h1><p className="mt-2 text-muted-foreground">Kas per cabang milik {ws.tenant.name}. Periode tetap terbuka melewati tengah malam sampai ditutup. Waktu ditampilkan dalam WIB.</p><p className="mt-1 text-sm text-muted-foreground">Total hanya pembayaran aktif. Selisih kas adalah uang terhitung dikurangi tunai yang diharapkan{ws.isDemo ? "; semua nilai merupakan contoh" : ""}.</p>{ws.role === "tenant_admin" ? <p className="mt-2"><Link href="/kas/laporan" className="font-semibold text-primary underline-offset-4 hover:underline">Laporan pilot</Link> <span className="text-sm text-muted-foreground">(khusus admin gerai)</span></p> : null}</header>{content}</div>;
 }
