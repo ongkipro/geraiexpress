@@ -324,19 +324,23 @@ const COOLIFY_DIFFERENCES = {
 };
 
 // The host files each service reads its secrets from (compose.coolify.yaml header). A bind that may auto-create its
-// source would turn a missing secret file into an empty directory and a container without secrets.
+// source would turn a missing secret file into an empty directory and a container without secrets. Because the drift
+// guard exempts these services' `command`, `group_add` and `volumes`, checkCoolifySecrets pins them EXACTLY.
 const COOLIFY_SECRET_MOUNTS = {
-  app: { source: "/etc/geraiexpress/app.env", target: "/run/gx/app.env", group: "10101", envFile: true },
-  scheduler: { source: "/etc/geraiexpress/scheduler.env", target: "/run/gx/scheduler.env", group: "10102", envFile: true },
+  app: { source: "/etc/geraiexpress/app.env", target: "/run/gx/app.env", group: "10101", command: ["node", "--env-file=/run/gx/app.env", "server.js"] },
+  scheduler: { source: "/etc/geraiexpress/scheduler.env", target: "/run/gx/scheduler.env", group: "10102", command: ["node", "--env-file=/run/gx/scheduler.env", "scheduler.mjs"] },
   postgrest: { source: "/etc/geraiexpress/postgrest", target: "/run/gx", group: "10103" },
   postgres: { source: "/etc/geraiexpress/postgres_password", target: "/run/gx/postgres_password" },
 };
 const SECRET_KEY_PATTERN = /SECRET|PASSWORD|CREDENTIAL_KEYS?$|DB_URI|DATABASE_URL/;
+const PROXY_TMPFS = ["/tmp:uid=65534,gid=65534,mode=0700", "/data:uid=65534,gid=65534,mode=0700", "/config:uid=65534,gid=65534,mode=0700"];
+const isSecretMount = (v) => String(v?.source ?? "").startsWith("/etc/geraiexpress");
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-// Coolify only: no service may receive a secret VALUE through its environment (Coolify would copy its whole `.env`
-// beside it anyway; this keeps the file itself honest), and each secret file is mounted read-only, never auto-created,
-// and readable through the service's own group.
-export function checkCoolifySecrets(model, { name = "compose" } = {}) {
+// Coolify only: no service may receive a secret VALUE through its environment; each secret file is mounted read-only,
+// never auto-created, into its one owner, readable through that owner's group alone. `standalone` (the rendered
+// compose.yaml model) lets every non-secret volume still be compared, since the drift guard skips `volumes` here.
+export function checkCoolifySecrets(model, { name = "compose", standalone } = {}) {
   const problems = [];
   const services = model?.services ?? {};
   for (const [serviceName, service] of Object.entries(services)) {
@@ -346,22 +350,28 @@ export function checkCoolifySecrets(model, { name = "compose" } = {}) {
         || (key === "POSTGRES_PASSWORD_FILE" && value === "/run/gx/postgres_password");
       if (!fileRef) problems.push(`${name}: service ${serviceName} receives ${key} through its environment; Coolify secrets come from a host file`);
     }
-  }
-  for (const [serviceName, want] of Object.entries(COOLIFY_SECRET_MOUNTS)) {
-    const service = services[serviceName];
-    if (!service) continue;
-    const mount = asList(service.volumes).find((v) => v.target === want.target);
-    if (!mount || mount.type !== "bind" || mount.source !== want.source || mount.read_only !== true || mount.bind?.create_host_path !== false) {
-      problems.push(`${name}: service ${serviceName} must mount ${want.source} read-only at ${want.target} with create_host_path: false`);
+    const want = COOLIFY_SECRET_MOUNTS[serviceName];
+    const secretMounts = asList(service.volumes).filter(isSecretMount);
+    if (want) {
+      const mount = secretMounts.find((v) => v.target === want.target);
+      if (!mount || mount.type !== "bind" || mount.source !== want.source || mount.read_only !== true || mount.bind?.create_host_path !== false) {
+        problems.push(`${name}: service ${serviceName} must mount ${want.source} read-only at ${want.target} with create_host_path: false`);
+      }
     }
-    if (want.group && !asList(service.group_add).map(String).includes(want.group)) problems.push(`${name}: service ${serviceName} must join group ${want.group} to read its secret file`);
-    if (want.envFile && !asList(service.command).includes(`--env-file=${want.target}`)) problems.push(`${name}: service ${serviceName} must start node with --env-file=${want.target}`);
+    if (secretMounts.some((v) => !want || v.source !== want.source || v.target !== want.target)) problems.push(`${name}: service ${serviceName} mounts a secret file it does not own`);
+    // Exactly its own group: one extra group would open another service's secret file.
+    if (!same(asList(service.group_add).map(String), want?.group ? [want.group] : [])) problems.push(`${name}: service ${serviceName} must join exactly ${want?.group ? `group ${want.group}` : "no extra group"}`);
+    if (want?.command && !same(asList(service.command), want.command)) problems.push(`${name}: service ${serviceName} must run ${want.command.join(" ")}`);
+    if (want && standalone?.services?.[serviceName]) {
+      const rest = asList(service.volumes).filter((v) => !isSecretMount(v));
+      if (!same(rest, asList(standalone.services[serviceName].volumes))) problems.push(`Coolify compose drifts from compose.yaml at services.${serviceName}.volumes (besides its secret file)`);
+    }
   }
-  for (const [serviceName, service] of Object.entries(services)) {
-    if (COOLIFY_SECRET_MOUNTS[serviceName]) continue;
-    if (asList(service.volumes).some((v) => String(v.source ?? "").startsWith("/etc/geraiexpress"))) problems.push(`${name}: service ${serviceName} mounts a secret file it does not own`);
+  if (services.proxy) {
+    if (services.proxy.user !== "65534:65534") problems.push(`${name}: the Coolify proxy must run as 65534:65534`);
+    const tmpfs = asList(services.proxy.tmpfs).map(String);
+    if (!same([...tmpfs].sort(), [...PROXY_TMPFS].sort())) problems.push(`${name}: the Coolify proxy tmpfs must be ${PROXY_TMPFS.join(", ")}`);
   }
-  if (services.proxy && String(services.proxy.user ?? "").split(":")[0] !== "65534") problems.push(`${name}: the Coolify proxy must run as the unprivileged user 65534`);
   return problems;
 }
 
@@ -421,7 +431,7 @@ function main() {
         for (const coolify of [false, true]) {
           problems.push(...checkCompose(composeModel(path, template, coolify), { name: `${name} ${coolify ? "Coolify" : "standalone"} compose`, coolify }));
         }
-        problems.push(...checkCoolifySecrets(composeModel(path, template, true), { name: `${name} Coolify compose` }));
+        problems.push(...checkCoolifySecrets(composeModel(path, template, true), { name: `${name} Coolify compose`, standalone: composeModel(path, template, false, ["prod", "db"]) }));
       } catch {
         // Compose diagnostics can include interpolated secret values; never relay them.
         console.error(`check-environments: cannot render the Compose model for ${name}; check Docker Compose and required variables (diagnostic values withheld)`);

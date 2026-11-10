@@ -57,6 +57,8 @@ try {
   assert.equal(forwarded["x-forwarded-proto"], "https");
   assert.equal(forwarded.forwarded, undefined);
   assert.equal(forwarded["cf-connecting-ip"], undefined);
+  // IPv6 visitors (the zone serves AAAA through Cloudflare) arrive the same way.
+  assert.equal(viaEdge({ "x-forwarded-for": "162.158.106.7", "cf-connecting-ip": "2001:db8::24" })["x-real-ip"], "2001:db8::24");
   // From the trusted edge without CF-Connecting-IP, X-Forwarded-For is NOT a fallback: the address stays the edge's.
   const noCf = viaEdge({ "x-forwarded-for": "203.0.113.9" });
   assert.notEqual(noCf["x-real-ip"], "203.0.113.9");

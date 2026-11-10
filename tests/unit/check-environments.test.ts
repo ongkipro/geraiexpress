@@ -512,19 +512,45 @@ describe("Coolify secrets come from per-service host files, never from Coolify's
     expect(checkCoolifySecrets(m)).toEqual(expect.arrayContaining([
       "compose: service app must mount /etc/geraiexpress/app.env read-only at /run/gx/app.env with create_host_path: false",
       "compose: service scheduler must mount /etc/geraiexpress/scheduler.env read-only at /run/gx/scheduler.env with create_host_path: false",
-      "compose: service postgrest must join group 10103 to read its secret file",
+      "compose: service postgrest must join exactly group 10103",
       "compose: service postgres must mount /etc/geraiexpress/postgres_password read-only at /run/gx/postgres_password with create_host_path: false",
-      "compose: service app must start node with --env-file=/run/gx/app.env",
+      "compose: service app must run node --env-file=/run/gx/app.env server.js",
     ]));
   });
 
-  it("refuses a proxy running as root or holding another service's secret file", () => {
+  it("refuses a proxy running as root or another group, or holding another service's secret file", () => {
     const m = rendered();
     delete m.services.proxy.user;
+    m.services.proxy.tmpfs = ["/tmp", "/data", "/config"];
     m.services.proxy.volumes.push({ type: "bind", source: "/etc/geraiexpress/app.env", target: "/x", read_only: true });
     expect(checkCoolifySecrets(m)).toEqual(expect.arrayContaining([
-      "compose: the Coolify proxy must run as the unprivileged user 65534",
+      "compose: the Coolify proxy must run as 65534:65534",
+      "compose: the Coolify proxy tmpfs must be /tmp:uid=65534,gid=65534,mode=0700, /data:uid=65534,gid=65534,mode=0700, /config:uid=65534,gid=65534,mode=0700",
       "compose: service proxy mounts a secret file it does not own",
+    ]));
+    const g = rendered();
+    g.services.proxy.user = "65534:10101";
+    expect(checkCoolifySecrets(g)).toContain("compose: the Coolify proxy must run as 65534:65534");
+  });
+
+  // Argon review of ac98259: the drift guard exempts these fields, so the secret check must pin them exactly.
+  it("refuses an extra group, another service's secret file, a changed command or a dropped data volume", () => {
+    const standalone = JSON.parse(execFileSync("docker", ["compose", "-p", "gxcheck", "--env-file", "infra/env/production.env.example",
+      "-f", "compose.yaml", "--profile", "prod", "--profile", "db", "config", "--format", "json"],
+      { env: { ...process.env, CRON_SECRET: "check-environments-placeholder-32-chars" }, encoding: "utf8" }));
+    expect(checkCoolifySecrets(rendered(), { standalone })).toEqual([]);
+    const m = rendered();
+    m.services.scheduler.group_add = ["10102", "10101"];
+    m.services.postgres.group_add = ["10101"];
+    m.services.scheduler.volumes.push({ type: "bind", source: "/etc/geraiexpress/app.env", target: "/run/gx/app.env", read_only: true, bind: { create_host_path: false } });
+    m.services.scheduler.command = ["node", "--env-file=/run/gx/scheduler.env", "server.js"];
+    m.services.postgres.volumes = m.services.postgres.volumes.filter((v: { target: string }) => v.target !== "/var/lib/postgresql/data");
+    expect(checkCoolifySecrets(m, { standalone })).toEqual(expect.arrayContaining([
+      "compose: service scheduler must join exactly group 10102",
+      "compose: service postgres must join exactly no extra group",
+      "compose: service scheduler mounts a secret file it does not own",
+      "compose: service scheduler must run node --env-file=/run/gx/scheduler.env scheduler.mjs",
+      "Coolify compose drifts from compose.yaml at services.postgres.volumes (besides its secret file)",
     ]));
   });
 });

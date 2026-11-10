@@ -83,6 +83,12 @@ RPO 24 h / RTO 4 h for the pilot.
 - [ ] `MENGANTAR_ENV=sandbox` (the checker refuses `production` outside production).
 - [ ] `GX_IMAGE` = an immutable image built with `APP_ORIGIN=https://app-staging.geraiexpress.com` (RELEASE container gate 1).
 - [ ] Run on the host: `pnpm check:environments staging=/etc/geraiexpress/staging.env production=<production file or the template>` → PASS (validates host/origin separation, secret length/uniqueness, local-only settings, Compose model).
+- [ ] Secrets are NOT Coolify variables (Coolify copies its whole `.env` into every service; RELEASE "Secrets are never
+      Coolify variables"). Before the first deploy, write the per-service host files from the secret store:
+      `/etc/geraiexpress/app.env` (0440 root:10101), `scheduler.env` (0440 root:10102), `postgrest/db-uri` and
+      `postgrest/jwt-secret` (0440 root:10103), `postgres_password` (0400 root). A missing file fails the deployment
+      (`create_host_path: false`). Coolify holds only non-secret settings; DELETE any secret variable there, never leave
+      it empty (an empty value overrides the file). After rotating a file, restart the resource.
 
 ## 4. Database and app up
 - [ ] Persistent `postgres_data` (the Coolify file always starts `postgres`; `COMPOSE_PROFILES` is not used); migrations as the `postgres` owner via `scripts/db-migrate.sh`; never seed or reset (RELEASE Vultr+Coolify step 3).
