@@ -5,7 +5,7 @@ import { atDashboard, expectNoHorizontalOverflow, expectTouchTargets, localSql, 
 test("demo settings show simulated capabilities and restrictions", async ({ page }) => {
   await startDemo(page);
   await page.goto("/pengaturan");
-  await expect(page.getByRole("heading", { name: "Kesiapan outlet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Status layanan gerai" })).toBeVisible();
   await expect(page.getByText("Simulasi").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Dibatasi di demo" })).toBeVisible();
   await expectNoHorizontalOverflow(page);

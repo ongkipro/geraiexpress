@@ -150,12 +150,12 @@ describe("handover choice (pickup)", () => {
   });
 
   it("refuses missing or impossible slots, hours outside 9-18, far dates and a long note", () => {
-    expect(parseDraft(pickup({ pickup_date: "" }), false, NOW).errors.pickup_date).toBe("Pilih tanggal jemput.");
-    expect(parseDraft(pickup({ pickup_slot_hour: "" }), false, NOW).errors.pickup_slot_hour).toBe("Pilih jam jemput.");
+    expect(parseDraft(pickup({ pickup_date: "" }), false, NOW).errors.pickup_date).toBe("Pilih tanggal pickup.");
+    expect(parseDraft(pickup({ pickup_slot_hour: "" }), false, NOW).errors.pickup_slot_hour).toBe("Pilih jam pickup.");
     expect(parseDraft(pickup({ pickup_slot_hour: "8" }), false, NOW).errors.pickup_slot_hour).toContain("09.00 dan 18.00");
     expect(parseDraft(pickup({ pickup_slot_hour: "19" }), false, NOW).errors.pickup_slot_hour).toContain("09.00 dan 18.00");
-    expect(parseDraft(pickup({ pickup_slot_hour: "13.5" }), false, NOW).errors.pickup_slot_hour).toBe("Pilih jam jemput.");
-    expect(parseDraft(pickup({ pickup_date: "2026-02-30" }), false, NOW).errors.pickup_date).toBe("Pilih tanggal jemput.");
+    expect(parseDraft(pickup({ pickup_slot_hour: "13.5" }), false, NOW).errors.pickup_slot_hour).toBe("Pilih jam pickup.");
+    expect(parseDraft(pickup({ pickup_date: "2026-02-30" }), false, NOW).errors.pickup_date).toBe("Pilih tanggal pickup.");
     expect(parseDraft(pickup({ pickup_date: "2026-04-01" }), false, NOW).errors.pickup_date).toContain("maksimal");
     expect(parseDraft(pickup({ pickup_volume: "volumeBus" }), false, NOW).errors.pickup_volume).toBeDefined();
     expect(parseDraft(pickup({ pickup_note: "x".repeat(201) }), false, NOW).errors.pickup_note).toBeDefined();

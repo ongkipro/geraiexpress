@@ -18,8 +18,8 @@ const EVENT_LABEL: Record<string, string> = {
   reopened: "Draf dibuka lagi",
   price_mismatch: "Harga Mengantar berbeda",
   closed: "Ditutup admin",
-  pickup_reserving: "Memesan slot jemput",
-  pickup_reserved: "Slot jemput dipesan",
+  pickup_reserving: "Memesan jadwal pickup",
+  pickup_reserved: "Jadwal pickup dipesan",
   payment_count_mismatch: "Jumlah pembayaran berbeda",
   payment_closed: "Pembayaran ditutup admin",
   // T-086: case lifecycle on the shipment history (details live on the case).

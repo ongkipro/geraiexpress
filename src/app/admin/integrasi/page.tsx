@@ -88,7 +88,7 @@ export default async function IntegrationsPage() {
     <div className="flex max-w-[1160px] flex-col gap-8">
       <PageHeader
         title="Integrasi Mengantar"
-        description="Kesiapan konfigurasi platform dan koneksi akun penjual tiap gerai. Nilai rahasia tidak pernah ditampilkan."
+        description="Status layanan konfigurasi platform dan koneksi akun penjual tiap gerai. Nilai rahasia tidak pernah ditampilkan."
         meta={<EnvironmentBadge environment={environment} />}
       />
       {environment === "production" || environment === "sandbox" ? (

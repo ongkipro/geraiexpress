@@ -49,7 +49,7 @@ const MESSAGES: Record<string, string> = {
   nothing_to_check: "Tidak ada pembayaran yang perlu diperiksa.",
   mengantar_data_unreadable: "Data dari Mengantar tidak bisa dibaca. Coba lagi; jika berulang, hubungi admin GeraiExpress.",
   mengantar_refused: "Mengantar menolak permintaan ini. Periksa wilayah, berat dan alamat pickup.",
-  pickup_not_set: "Alamat pickup Mengantar outlet ini belum dipilih. Admin gerai bisa memilihnya di Pengaturan.",
+  pickup_not_set: "Alamat pickup Mengantar gerai ini belum dipilih. Admin gerai bisa memilihnya di Pengaturan.",
   pickup_not_found: "Alamat pickup itu tidak ditemukan di akun Mengantar gerai ini. Muat ulang lalu pilih lagi.",
   // T-025 COD & T-026 batch payment recovery
   // T-091 platform configuration
@@ -110,7 +110,7 @@ const MESSAGES: Record<string, string> = {
   rotation_restricted: "Mengantar menonaktifkan akun penjual atau kunci API ini, jadi pembuatan ulang dihentikan dan tidak dicoba lagi. Hubungi dukungan Mengantar; pengiriman tetap dijeda.",
   rotation_store_failed: "Kunci baru dibuat di Mengantar tetapi belum tersimpan. Pengiriman dijeda; pilih Ambil kunci terbaru untuk melanjutkan.",
   // T-043 Pickup orders
-  pickup_time_invalid: "Jam jemput terlalu dekat dari sekarang (WIB; batas minimal ada di keterangan jam jemput) atau di luar 09.00 sampai 18.00. Pilih slot yang lebih lambat lalu cek ongkir lagi.",
+  pickup_time_invalid: "Jam pickup terlalu dekat dari sekarang (WIB; batas minimal ada di keterangan jam pickup) atau di luar 09.00 sampai 18.00. Pilih slot yang lebih lambat lalu cek ongkir lagi.",
   // T-105: a visitor budget (src/lib/rate-limit.ts) refused the action.
   rate_limited: "Terlalu banyak percobaan dari jaringan ini. Tunggu satu menit lalu coba lagi.",
   // T-110: Partner-wide quota (all gerai share one Partner account) and the post-restore mutation fence.

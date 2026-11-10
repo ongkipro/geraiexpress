@@ -120,7 +120,7 @@ test("a provider return shows Retur with the return rule on list, detail and das
   await signIn(page, "operator-a@geraiexpress.test");
   await page.goto(`/pengiriman/${s.id}`);
   await expect(page.getByTestId("shipment-cases").getByTestId("return-badge")).toHaveText("Retur");
-  await expect(page.getByTestId("return-rule")).toContainText("alamat jemput");
+  await expect(page.getByTestId("return-rule")).toContainText("alamat pickup");
   await page.goto(`/pengiriman?q=${s.reference}`);
   await expect(page.getByTestId("return-badge").filter({ visible: true }).first()).toHaveText("Retur");
   await page.goto("/");

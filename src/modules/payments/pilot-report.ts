@@ -34,7 +34,7 @@ export type PilotReportRow = {
 export const PILOT_DEFINITIONS: readonly { measure: string; definition: string }[] = [
   { measure: "Resi terbit", definition: "Pengiriman berstatus terbit yang resinya terbit pada hari WIB itu (gerai nyata: bukan simulasi; demo: contoh simulasi)." },
   { measure: "Median draf ke resi", definition: "Median menit dari draf dibuat (created_at) sampai resi terbit (issued_at) untuk pengiriman tersebut." },
-  { measure: "Cara bayar", definition: "Catatan pembayaran kasir aktif (tidak dibatalkan) per cara bayar, menurut hari WIB pencatatan dan outlet pembayaran." },
+  { measure: "Cara bayar", definition: "Catatan pembayaran kasir aktif (tidak dibatalkan) per cara bayar, menurut hari WIB pencatatan dan cabang pembayaran." },
   { measure: "Label masking", definition: "Pengiriman yang snapshot label terakhirnya memakai masking pengirim, dibagi pengiriman yang sudah punya label." },
   { measure: "Pendapatan (estimasi)", definition: "Tarif normal layanan terpilih dikurangi biaya gerai dari diskon yang berlaku saat tarif dicek; biaya COD dan asuransi tidak dihitung. Bila ada biaya gerai yang belum diketahui, total ditampilkan \"Belum diketahui\", bukan 0." },
 ];
@@ -106,20 +106,20 @@ export const maskedShareText = (row: PilotReportRow) => {
 };
 
 export const PILOT_CSV_HEADER = [
-  "Baris", "Outlet", "Hari (WIB)", "Resi terbit", "Median draf ke resi (menit)",
+  "Baris", "Cabang", "Hari (WIB)", "Resi terbit", "Median draf ke resi (menit)",
   "Tunai (jumlah)", "Tunai (Rp)", "QRIS (jumlah)", "QRIS (Rp)", "Transfer (jumlah)", "Transfer (Rp)",
   "Lainnya (jumlah)", "Lainnya (Rp)", "Pengiriman berlabel", "Label masking", "Porsi label masking (%)",
   "Pendapatan estimasi (Rp)", "Pengiriman biaya gerai belum diketahui", "Periode (WIB)", "Data per (WIB)",
 ] as const;
 
-const LEVEL_LABEL: Record<PilotReportRow["row_level"], string> = { day: "Hari", outlet: "Total outlet", total: "Total semua outlet" };
+const LEVEL_LABEL: Record<PilotReportRow["row_level"], string> = { day: "Hari", outlet: "Total cabang", total: "Total semua cabang" };
 
 // Unknown is written as the word "Belum diketahui", never 0 or an empty cell. Outlet names are
 // tenant-typed text and pass through the formula guard of csvCell in src/lib/csv.ts. Earnings are never
 // negative (the gerai cost never exceeds the normal tariff), so the integer cells are valid CSV numbers.
 export function pilotCsvRows(rows: PilotReportRow[], range: { from: string; to: string }, wib: (iso: string) => string): CsvCell[][] {
   return rows.map((r) => [
-    LEVEL_LABEL[r.row_level], r.row_level === "total" ? "Semua outlet" : (r.outlet_name ?? "Outlet"), r.day ?? "",
+    LEVEL_LABEL[r.row_level], r.row_level === "total" ? "Semua cabang" : (r.outlet_name ?? "Cabang"), r.day ?? "",
     r.shipments_issued, r.median_draft_to_resi_minutes === null ? PILOT_UNKNOWN : String(r.median_draft_to_resi_minutes),
     r.cash_count, r.cash_idr, r.qris_count, r.qris_idr, r.transfer_count, r.transfer_idr, r.other_count, r.other_idr,
     r.labelled_shipments, r.masked_shipments, maskedSharePercent(r) ?? PILOT_UNKNOWN,

@@ -82,7 +82,7 @@ test("a tenant admin sees the pilot report per outlet and day and downloads the 
     for (const method of ["Tunai: 0", "QRIS: 0", "Transfer: 0", "Lainnya: 0"]) await expect(mix).toContainText(method);
     await expect(card.getByTestId("pilot-card-earnings")).toContainText("1 pengiriman biaya gerai belum diketahui");
     await expect(page.getByTestId("pilot-card-outlet").filter({ hasText: `Total ${f.name}` })).toBeVisible();
-    await expect(page.getByTestId("pilot-card-total")).toContainText("Total semua outlet");
+    await expect(page.getByTestId("pilot-card-total")).toContainText("Total semua cabang");
   } else {
     await expect(page.getByTestId("pilot-cards")).toBeHidden();
     const table = page.getByTestId("pilot-table");
@@ -91,7 +91,7 @@ test("a tenant admin sees the pilot report per outlet and day and downloads the 
     await expect(day).toContainText("20 menit"); // median of 10 and 30 minutes
     await expect(day.getByTestId("pilot-earnings")).toContainText("Belum diketahui");
     await expect(day.getByTestId("pilot-earnings")).toContainText("1 pengiriman biaya gerai belum diketahui");
-    await expect(table.getByTestId("pilot-row-total")).toContainText("Total semua outlet");
+    await expect(table.getByTestId("pilot-row-total")).toContainText("Total semua cabang");
   }
   await expect(page.getByTestId("pilot-data-at")).toContainText("WIB");
   // No net cost (18400) and no percentage on the page.

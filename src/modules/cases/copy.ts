@@ -98,7 +98,7 @@ export const CASE_COPY = {
   lostSuggestionDeferred: "Saran kasus otomatis dari status Hilang akan tersedia setelah status kurir diterima otomatis.",
   returnBadge: "Retur",
   openCaseBadge: "Kasus terbuka",
-  returnRule: "Paket retur kembali ke alamat jemput (pickup) di Mengantar, bukan ke pengirim yang tercetak pada label masking. Alamat retur khusus hanya berlaku bila asal dan tujuan sama-sama di Pulau Jawa (JNE, SiCepat, SAP).",
+  returnRule: "Paket retur kembali ke alamat pickup di Mengantar, bukan ke pengirim yang tercetak pada label masking. Alamat retur khusus hanya berlaku bila asal dan tujuan sama-sama di Pulau Jawa (JNE, SiCepat, SAP).",
   attentionTitle: "Retur dan kasus",
   unknownResult: "Hasil penyimpanan kasus belum pasti. Muat ulang halaman untuk memeriksa status kasus sebelum mencoba lagi.",
   checkFields: "Periksa isian yang ditandai.",
