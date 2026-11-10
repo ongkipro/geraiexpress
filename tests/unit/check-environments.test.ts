@@ -1,7 +1,8 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error plain ESM script, no type declarations
-import { checkCompose, checkEnvFiles, checkProxyConfig, composeDrift, parseEnv, validProxyPeer } from "../../scripts/check-environments.mjs";
+import { checkCompose, checkCoolifySecrets, checkEnvFiles, checkProxyConfig, composeDrift, parseEnv, validProxyPeer } from "../../scripts/check-environments.mjs";
 
 // T-062: the environment guard validates env files, the Compose model and the proxy configuration.
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/environments/${name}`, import.meta.url), "utf8");
@@ -383,6 +384,12 @@ describe("proxy configuration (inspection of infra/proxy)", () => {
       .toContain("proxy: the Coolify proxy must trust only {$COOLIFY_PROXY_CIDR} (strict)");
     expect(checkProxyConfig(coolify.replace("header_up X-Real-IP {client_ip}", ""), { coolify: true })).toContain("proxy: X-Real-IP is not overwritten with the peer address");
     expect(checkProxyConfig(coolify.replace("handle @internal", "handle @nothing"), { coolify: true })).toContain("proxy: /api/internal is not denied");
+    // Behind Cloudflare the visitor is only in CF-Connecting-IP; an X-Forwarded-For fallback would let the trusted edge's
+    // copy of a client header choose the limiter key (live finding 2026-11-10).
+    for (const bad of ["client_ip_headers X-Forwarded-For", "client_ip_headers CF-Connecting-IP X-Forwarded-For"]) {
+      expect(checkProxyConfig(coolify.replace("client_ip_headers CF-Connecting-IP", bad), { coolify: true }))
+        .toContain("proxy: the Coolify proxy must read the visitor address from CF-Connecting-IP only");
+    }
     expect(readFileSync(new URL("../../scripts/check-environments.mjs", import.meta.url), "utf8")).toContain('"infra/proxy/Caddyfile.coolify"');
   });
 
@@ -466,6 +473,58 @@ describe("compose.coolify.yaml stays a faithful flat mirror of compose.yaml", ()
     expect(composeDrift(base(), f)).toEqual(expect.arrayContaining([
       "Coolify compose drifts from compose.yaml at services.proxy.image",
       "Coolify compose drifts from compose.yaml at services.app.ports",
+    ]));
+  });
+});
+
+describe("Coolify secrets come from per-service host files, never from Coolify's shared .env (live finding 2026-11-10)", () => {
+  // The rendered model of the real compose.coolify.yaml (the same call check:environments makes).
+  const rendered = () => JSON.parse(execFileSync("docker", ["compose", "-p", "gxcheck", "--env-file", "infra/env/production.env.example",
+    "-f", "compose.coolify.yaml", "config", "--format", "json"], { env: { ...process.env, COOLIFY_PROXY_CIDR: "192.0.2.1/32" }, encoding: "utf8" }));
+
+  it("accepts compose.coolify.yaml as committed", () => {
+    expect(checkCoolifySecrets(rendered())).toEqual([]);
+  });
+
+  it("refuses a secret value in any service environment, including the proxy", () => {
+    const m = rendered();
+    m.services.app.environment.AUTH_JWT_SECRET = "${AUTH_JWT_SECRET}";
+    m.services.proxy.environment.CREDENTIAL_KEYS = "x";
+    m.services.postgres.environment.POSTGRES_PASSWORD = "x";
+    m.services.postgrest.environment.PGRST_DB_URI = "postgres://authenticator:x@postgres/geraiexpress";
+    m.services.scheduler.environment.CRON_SECRET = "x";
+    expect(checkCoolifySecrets(m)).toEqual(expect.arrayContaining([
+      "compose: service app receives AUTH_JWT_SECRET through its environment; Coolify secrets come from a host file",
+      "compose: service proxy receives CREDENTIAL_KEYS through its environment; Coolify secrets come from a host file",
+      "compose: service postgres receives POSTGRES_PASSWORD through its environment; Coolify secrets come from a host file",
+      "compose: service postgrest receives PGRST_DB_URI through its environment; Coolify secrets come from a host file",
+      "compose: service scheduler receives CRON_SECRET through its environment; Coolify secrets come from a host file",
+    ]));
+  });
+
+  it("refuses an auto-created, writable or missing secret mount, a missing group or --env-file", () => {
+    const m = rendered();
+    m.services.app.volumes[0].bind = {};
+    m.services.scheduler.volumes[0].read_only = false;
+    m.services.postgrest.group_add = [];
+    m.services.postgres.volumes = m.services.postgres.volumes.filter((v: { target: string }) => v.target !== "/run/gx/postgres_password");
+    m.services.app.command = ["node", "server.js"];
+    expect(checkCoolifySecrets(m)).toEqual(expect.arrayContaining([
+      "compose: service app must mount /etc/geraiexpress/app.env read-only at /run/gx/app.env with create_host_path: false",
+      "compose: service scheduler must mount /etc/geraiexpress/scheduler.env read-only at /run/gx/scheduler.env with create_host_path: false",
+      "compose: service postgrest must join group 10103 to read its secret file",
+      "compose: service postgres must mount /etc/geraiexpress/postgres_password read-only at /run/gx/postgres_password with create_host_path: false",
+      "compose: service app must start node with --env-file=/run/gx/app.env",
+    ]));
+  });
+
+  it("refuses a proxy running as root or holding another service's secret file", () => {
+    const m = rendered();
+    delete m.services.proxy.user;
+    m.services.proxy.volumes.push({ type: "bind", source: "/etc/geraiexpress/app.env", target: "/x", read_only: true });
+    expect(checkCoolifySecrets(m)).toEqual(expect.arrayContaining([
+      "compose: the Coolify proxy must run as the unprivileged user 65534",
+      "compose: service proxy mounts a secret file it does not own",
     ]));
   });
 });

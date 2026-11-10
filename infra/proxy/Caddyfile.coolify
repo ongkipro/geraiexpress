@@ -1,11 +1,16 @@
-# Coolify terminates public TLS. Only its verified peer may supply forwarded IPs.
+# Coolify terminates public TLS. Only its verified peer may supply the visitor address.
+# Path: visitor -> Cloudflare -> Coolify edge (Traefik) -> this gateway -> app. Traefik replaces X-Forwarded-For with
+# its own peer (a Cloudflare edge address, observed on the live host 2026-11-10), so the visitor address survives only
+# in CF-Connecting-IP, which Cloudflare overwrites on every request. Trusting it is safe only because the host firewall
+# admits 80/443 from Cloudflare's published ranges alone (RELEASE.md, Vultr+Coolify gate 2): re-check that firewall
+# before changing this. A request from any other peer keeps its TCP address.
 {
 	admin off
 	auto_https off
 	servers {
 		trusted_proxies static {$COOLIFY_PROXY_CIDR}
 		trusted_proxies_strict
-		client_ip_headers X-Forwarded-For
+		client_ip_headers CF-Connecting-IP
 	}
 }
 

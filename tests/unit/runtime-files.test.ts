@@ -54,8 +54,11 @@ describe("no Cloudflare Workers runtime remains", () => {
   });
 
   it("imports no Cloudflare module and reads no Cloudflare header in application code or scripts", () => {
-    // infra/proxy is out of scope here on purpose: the Caddyfile DROPS CF-Connecting-IP and friends from requests.
-    const files = [...sources("src"), ...sources("scripts"), ...sources("infra/scheduler"), "next.config.ts", "package.json", "compose.yaml", "Dockerfile"];
+    // infra/proxy is out of scope here on purpose: only the gateway reads CF-Connecting-IP (behind Cloudflare, Coolify
+    // build) and it removes the header before the app. The proxy guard and its executable test assert exactly that
+    // header, so they are the two scripts allowed to name it; the app itself only ever reads X-Real-IP.
+    const proxyGuards = ["scripts/check-environments.mjs", "scripts/test-coolify-proxy.mjs"];
+    const files = [...sources("src"), ...sources("scripts").filter((f) => !proxyGuards.includes(f)), ...sources("infra/scheduler"), "next.config.ts", "package.json", "compose.yaml", "Dockerfile"];
     for (const file of files) {
       const text = read(file);
       expect(text, file).not.toMatch(/@opennextjs|getCloudflareContext|cf-connecting-ip|wrangler (secret|deploy|dev|types|rollback)|opennextjs-cloudflare/i);

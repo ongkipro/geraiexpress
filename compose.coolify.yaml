@@ -3,6 +3,15 @@
 # to service proxy, port 8080. No application/database port is published.
 # Supply variables through Coolify; GX_IMAGE names an already built immutable image.
 #
+# SECRETS ARE NOT COOLIFY VARIABLES. Coolify attaches its whole `.env` (`env_file`) to EVERY service, so a
+# secret set in the UI would reach the internet-facing proxy and every other container (live finding
+# 2026-11-10). Secrets live in root-owned host files under /etc/geraiexpress/, each readable by one service
+# only through its own group (group_add): app.env (gid 10101), scheduler.env (gid 10102), postgrest db-uri and
+# jwt-secret (gid 10103), postgres_password (root, read by the image entrypoint). Mounts use
+# `create_host_path: false`, so a missing file fails the deployment instead of becoming an empty directory.
+# Never add AUTH_*, CREDENTIAL_KEYS, CRON_SECRET, TRACKING_TOKEN_SECRET, TURNSTILE_SECRET_KEY, Mengantar,
+# SMTP_PASSWORD, PGRST_DB_URI or POSTGRES_PASSWORD to Coolify (check:environments refuses them here).
+#
 # FLAT ON PURPOSE: Coolify parses this file with Symfony YAML (no custom tags) and
 # does not resolve `extends`. Do not use `extends`, `!reset`/`!override` or any other
 # YAML tag, anchors, aliases or merge keys here (tests/unit/coolify-compose.test.ts).
@@ -18,16 +27,23 @@ services:
         max-size: "10m"
         max-file: "3"
     restart: unless-stopped
+    # Secrets (AUTH_JWT_SECRET, AUTH_SECRET, TRACKING_TOKEN_SECRET, TURNSTILE_SECRET_KEY, CREDENTIAL_KEYS,
+    # CRON_SECRET, Mengantar and SMTP secrets) come from the host file below, never from Coolify.
+    command: ["node", "--env-file=/run/gx/app.env", "server.js"]
+    group_add: ["10101"]
+    volumes:
+      - type: bind
+        source: /etc/geraiexpress/app.env
+        target: /run/gx/app.env
+        read_only: true
+        bind:
+          create_host_path: false
     # T-105: covers the 270 s cron deadline plus persisting its outcome before SIGKILL.
     stop_grace_period: 300s
     environment:
-      # Explicit allowlist: migration credentials and the PostgreSQL owner password
-      # must never enter the application container.
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-}
-      AUTH_SECRET: ${AUTH_SECRET:-}
-      TRACKING_TOKEN_SECRET: ${TRACKING_TOKEN_SECRET:-}
+      # Explicit allowlist of NON-secret settings: migration credentials and the PostgreSQL owner
+      # password must never enter the application container.
       TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
-      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       TURNSTILE_HOSTNAMES: ${TURNSTILE_HOSTNAMES:-}
       SITE_ORIGIN: ${SITE_ORIGIN:-}
       APP_ORIGIN: ${APP_ORIGIN:-}
@@ -35,23 +51,17 @@ services:
       HOOKS_ORIGIN: ${HOOKS_ORIGIN:-}
       MENGANTAR_ENV: ${MENGANTAR_ENV:-}
       PARTNER_ID: ${PARTNER_ID:-}
-      MENGANTAR_PARTNER_SECRET: ${MENGANTAR_PARTNER_SECRET:-}
-      GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET: ${GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET:-}
       PARTNER_TERMS_VERSION: ${PARTNER_TERMS_VERSION:-}
       PARTNER_PRIVACY_VERSION: ${PARTNER_PRIVACY_VERSION:-}
       PARTNER_TERMS_URL: ${PARTNER_TERMS_URL:-}
       PARTNER_PRIVACY_URL: ${PARTNER_PRIVACY_URL:-}
-      CREDENTIAL_KEY: ${CREDENTIAL_KEY:-}
-      CREDENTIAL_KEYS: ${CREDENTIAL_KEYS:-}
       CREDENTIAL_KEY_CURRENT: ${CREDENTIAL_KEY_CURRENT:-}
-      CRON_SECRET: ${CRON_SECRET:-}
       MAIL_FROM: ${MAIL_FROM:-}
       MAIL_TRANSPORT: ${MAIL_TRANSPORT:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-}
       SMTP_SECURITY: ${SMTP_SECURITY:-}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       # The proxy below is the only peer that can reach this container; it overwrites X-Real-IP.
       TRUSTED_PROXY: "1"
       POSTGREST_URL: ${POSTGREST_URL:-http://postgrest:3000}
@@ -75,11 +85,18 @@ services:
         max-size: "10m"
         max-file: "3"
     restart: unless-stopped
-    command: ["node", "scheduler.mjs"]
+    # The scheduler holds the cron secret only (its own host file), never the app's other secrets.
+    command: ["node", "--env-file=/run/gx/scheduler.env", "scheduler.mjs"]
+    group_add: ["10102"]
+    volumes:
+      - type: bind
+        source: /etc/geraiexpress/scheduler.env
+        target: /run/gx/scheduler.env
+        read_only: true
+        bind:
+          create_host_path: false
     stop_grace_period: 300s
     environment:
-      # The scheduler holds the cron secret only, never the app's other secrets.
-      CRON_SECRET: ${CRON_SECRET:?CRON_SECRET must be set in the env file passed with --env-file}
       SCHEDULER_TARGET: http://app:3000
     depends_on:
       app:
@@ -101,6 +118,9 @@ services:
         max-size: "10m"
         max-file: "3"
     restart: unless-stopped
+    # Not root: Coolify terminates TLS, so this gateway only listens on 8080. NET_BIND_SERVICE stays in
+    # cap_add because the image's caddy binary carries it as a file capability (exec fails without it).
+    user: "65534:65534"
     environment:
       ACME_EMAIL: ${ACME_EMAIL:-}
       SITE_HOST: ${SITE_HOST:-geraiexpress.com}
@@ -117,9 +137,9 @@ services:
       - ./infra/proxy/Caddyfile.coolify:/etc/caddy/Caddyfile:ro
     read_only: true
     tmpfs:
-      - /tmp
-      - /data
-      - /config
+      - /tmp:uid=65534,gid=65534,mode=0700
+      - /data:uid=65534,gid=65534,mode=0700
+      - /config:uid=65534,gid=65534,mode=0700
     cap_drop: [ALL]
     cap_add: [NET_BIND_SERVICE]
     security_opt:
@@ -137,9 +157,18 @@ services:
         max-size: "10m"
         max-file: "3"
     restart: unless-stopped
+    # PostgREST reads a value that starts with `@` from that file (db-uri and jwt-secret).
+    group_add: ["10103"]
+    volumes:
+      - type: bind
+        source: /etc/geraiexpress/postgrest
+        target: /run/gx
+        read_only: true
+        bind:
+          create_host_path: false
     environment:
-      PGRST_DB_URI: ${PGRST_DB_URI:-}
-      PGRST_JWT_SECRET: ${AUTH_JWT_SECRET:-}
+      PGRST_DB_URI: "@/run/gx/db-uri"
+      PGRST_JWT_SECRET: "@/run/gx/jwt-secret"
       PGRST_DB_SCHEMAS: public
       PGRST_DB_ANON_ROLE: anon
       PGRST_DB_EXTRA_SEARCH_PATH: public, extensions
@@ -176,11 +205,18 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-geraiexpress}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      # Read by the image entrypoint (root) at first initialisation only; root-only host file.
+      POSTGRES_PASSWORD_FILE: /run/gx/postgres_password
     expose:
       - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - type: bind
+        source: /etc/geraiexpress/postgres_password
+        target: /run/gx/postgres_password
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 10s

@@ -260,7 +260,8 @@ export function checkCompose(model, { name = "compose", coolify = false } = {}) 
   if (sched) {
     if (asList(sched.env_file).length) problems.push(`${name}: the scheduler must not load the app's env file (it holds CRON_SECRET only)`);
     const schedEnv = sched.environment ?? {};
-    if (!schedEnv.CRON_SECRET) problems.push(`${name}: the scheduler has no CRON_SECRET`);
+    // Coolify: CRON_SECRET comes from the scheduler's own host file (checkCoolifySecrets).
+    if (!coolify && !schedEnv.CRON_SECRET) problems.push(`${name}: the scheduler has no CRON_SECRET`);
     for (const secret of SECRET_NAMES) {
       if (secret !== "CRON_SECRET" && secret in schedEnv) problems.push(`${name}: the scheduler holds ${secret}; it may hold CRON_SECRET only`);
     }
@@ -293,6 +294,9 @@ export function checkProxyConfig(text, { local = false, coolify = false, name = 
     if (!/trusted_proxies\s+static\s+\{\$COOLIFY_PROXY_CIDR\}\s*\n/.test(code) || !/trusted_proxies_strict/.test(code)) {
       problems.push(`${name}: the Coolify proxy must trust only {$COOLIFY_PROXY_CIDR} (strict)`);
     }
+    // Behind Cloudflare the visitor address is only in CF-Connecting-IP (Traefik rewrites X-Forwarded-For); one header,
+    // so no client-supplied fallback can be chosen when it is missing.
+    if (!/client_ip_headers\s+CF-Connecting-IP\s*\n/.test(code)) problems.push(`${name}: the Coolify proxy must read the visitor address from CF-Connecting-IP only`);
   } else if (!local && trusting) problems.push(`${name}: the production proxy must not trust any client X-Forwarded-* (remove trusted_proxies)`);
   if (local && /auto_https\s+off/.test(code) === false) problems.push(`${name}: the local profile is expected to be plain HTTP (auto_https off)`);
   if (local && !/trusted_proxies\s+static\s+172\.30\.62\.1\/32\s*\n/.test(code)) problems.push(`${name}: local forwarded headers may be trusted only from the pinned gateway 172.30.62.1/32`);
@@ -305,11 +309,61 @@ export function checkProxyConfig(text, { local = false, coolify = false, name = 
 
 // compose.coolify.yaml is a flat, hand-kept mirror of compose.yaml (Coolify parses YAML without custom tags and does
 // not resolve `extends`). These are the only intended differences; anything else is drift.
+// Secrets are the exception that checkCoolifySecrets() below proves instead: Coolify attaches its whole `.env` to every
+// service, so the Coolify file takes each secret from a root-owned host file mounted into its one service.
+const APP_FILE_SECRETS = ["AUTH_JWT_SECRET", "AUTH_SECRET", "TRACKING_TOKEN_SECRET", "TURNSTILE_SECRET_KEY", "MENGANTAR_PARTNER_SECRET",
+  "GERAIEXPRESS_MENGANTAR_SANDBOX_SECRET", "CREDENTIAL_KEY", "CREDENTIAL_KEYS", "CRON_SECRET", "SMTP_PASSWORD"];
 const COOLIFY_DIFFERENCES = {
-  proxy: ["ports", "expose", "volumes", "tmpfs", "environment.COOLIFY_PROXY_CIDR", "profiles"],
-  postgrest: ["profiles"],
-  postgres: ["profiles"],
+  // proxy.user: Coolify's gateway only listens on 8080 with tmpfs state; the standalone proxy keeps root for its
+  // certificate volumes.
+  proxy: ["ports", "expose", "volumes", "tmpfs", "environment.COOLIFY_PROXY_CIDR", "profiles", "user"],
+  app: ["command", "group_add", "volumes", ...APP_FILE_SECRETS.map((k) => `environment.${k}`)],
+  scheduler: ["command", "group_add", "volumes", "environment.CRON_SECRET"],
+  postgrest: ["profiles", "group_add", "volumes", "environment.PGRST_DB_URI", "environment.PGRST_JWT_SECRET"],
+  postgres: ["profiles", "volumes", "environment.POSTGRES_PASSWORD", "environment.POSTGRES_PASSWORD_FILE"],
 };
+
+// The host files each service reads its secrets from (compose.coolify.yaml header). A bind that may auto-create its
+// source would turn a missing secret file into an empty directory and a container without secrets.
+const COOLIFY_SECRET_MOUNTS = {
+  app: { source: "/etc/geraiexpress/app.env", target: "/run/gx/app.env", group: "10101", envFile: true },
+  scheduler: { source: "/etc/geraiexpress/scheduler.env", target: "/run/gx/scheduler.env", group: "10102", envFile: true },
+  postgrest: { source: "/etc/geraiexpress/postgrest", target: "/run/gx", group: "10103" },
+  postgres: { source: "/etc/geraiexpress/postgres_password", target: "/run/gx/postgres_password" },
+};
+const SECRET_KEY_PATTERN = /SECRET|PASSWORD|CREDENTIAL_KEYS?$|DB_URI|DATABASE_URL/;
+
+// Coolify only: no service may receive a secret VALUE through its environment (Coolify would copy its whole `.env`
+// beside it anyway; this keeps the file itself honest), and each secret file is mounted read-only, never auto-created,
+// and readable through the service's own group.
+export function checkCoolifySecrets(model, { name = "compose" } = {}) {
+  const problems = [];
+  const services = model?.services ?? {};
+  for (const [serviceName, service] of Object.entries(services)) {
+    for (const [key, value] of Object.entries(service.environment ?? {})) {
+      if (!SECRET_KEY_PATTERN.test(key)) continue;
+      const fileRef = (key === "PGRST_DB_URI" && value === "@/run/gx/db-uri") || (key === "PGRST_JWT_SECRET" && value === "@/run/gx/jwt-secret")
+        || (key === "POSTGRES_PASSWORD_FILE" && value === "/run/gx/postgres_password");
+      if (!fileRef) problems.push(`${name}: service ${serviceName} receives ${key} through its environment; Coolify secrets come from a host file`);
+    }
+  }
+  for (const [serviceName, want] of Object.entries(COOLIFY_SECRET_MOUNTS)) {
+    const service = services[serviceName];
+    if (!service) continue;
+    const mount = asList(service.volumes).find((v) => v.target === want.target);
+    if (!mount || mount.type !== "bind" || mount.source !== want.source || mount.read_only !== true || mount.bind?.create_host_path !== false) {
+      problems.push(`${name}: service ${serviceName} must mount ${want.source} read-only at ${want.target} with create_host_path: false`);
+    }
+    if (want.group && !asList(service.group_add).map(String).includes(want.group)) problems.push(`${name}: service ${serviceName} must join group ${want.group} to read its secret file`);
+    if (want.envFile && !asList(service.command).includes(`--env-file=${want.target}`)) problems.push(`${name}: service ${serviceName} must start node with --env-file=${want.target}`);
+  }
+  for (const [serviceName, service] of Object.entries(services)) {
+    if (COOLIFY_SECRET_MOUNTS[serviceName]) continue;
+    if (asList(service.volumes).some((v) => String(v.source ?? "").startsWith("/etc/geraiexpress"))) problems.push(`${name}: service ${serviceName} mounts a secret file it does not own`);
+  }
+  if (services.proxy && String(services.proxy.user ?? "").split(":")[0] !== "65534") problems.push(`${name}: the Coolify proxy must run as the unprivileged user 65534`);
+  return problems;
+}
 
 // Rendered-model comparison: every service of compose.yaml (all profiles) must render identically in the Coolify
 // file except for the documented differences above. Returns problems naming paths, never values.
@@ -367,6 +421,7 @@ function main() {
         for (const coolify of [false, true]) {
           problems.push(...checkCompose(composeModel(path, template, coolify), { name: `${name} ${coolify ? "Coolify" : "standalone"} compose`, coolify }));
         }
+        problems.push(...checkCoolifySecrets(composeModel(path, template, true), { name: `${name} Coolify compose` }));
       } catch {
         // Compose diagnostics can include interpolated secret values; never relay them.
         console.error(`check-environments: cannot render the Compose model for ${name}; check Docker Compose and required variables (diagnostic values withheld)`);

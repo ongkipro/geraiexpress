@@ -53,8 +53,11 @@ The current hosting direction is **Vultr + Coolify**, superseding the hosting ex
 DEC-020. `compose.coolify.yaml` is a flat mirror of compose.yaml's Node app, scheduler, PostgREST and
 same-host PostgreSQL services (no `extends` or YAML tags, which Coolify's parser refuses; drift is a
 `check:environments` failure). Coolify owns TLS/public ports; the Caddy gateway listens on
-8080 internally and trusts only the explicitly verified edge `/32` or `/128`, parsing
-X-Forwarded-For right-to-left. All four domains route to that gateway. The app, data API and
+8080 internally as an unprivileged user and trusts only the explicitly verified edge `/32` or `/128`; from that
+peer it takes the visitor address from `CF-Connecting-IP` alone (Traefik rewrites X-Forwarded-For to the
+Cloudflare edge; the host firewall admits only Cloudflare). Coolify copies its whole `.env` into every service,
+so in the Coolify deployment secrets are not Coolify variables: each service reads its own root-owned host file
+under `/etc/geraiexpress/` (group-scoped, read-only, never auto-created), proved by `check:environments`. All four domains route to that gateway. The app, data API and
 SQL port remain unpublished. Standalone `compose.yaml --profile prod` is an alternate
 single-edge deployment, not the Coolify start command.
 

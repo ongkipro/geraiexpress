@@ -17,9 +17,22 @@ gates below remain the source of each step.
 This is the current deployment direction. Nothing has been deployed by this audit. Use
 `compose.coolify.yaml` as the Coolify Compose location; it is a flat, self-contained mirror of
 `compose.yaml` (Coolify parses YAML without custom tags and does not resolve `extends`), and
-`pnpm check:environments` fails if the two drift apart beyond the documented proxy and profile differences. Select an immutable `GX_IMAGE` built for the target `APP_ORIGIN`. Configure
-all runtime values in Coolify; the app receives only its allowlisted variables, never
-`DATABASE_URL`, `PGRST_DB_URI`, `POSTGRES_PASSWORD` or `AUTHENTICATOR_PASSWORD`.
+`pnpm check:environments` fails if the two drift apart beyond the documented proxy, profile and secret-file differences. Select an immutable `GX_IMAGE` built for the target `APP_ORIGIN`.
+
+**Secrets are never Coolify variables.** Coolify attaches its whole generated `.env` to every service with
+`env_file` (seen on the live host 2026-11-10: all 45 variables, including the database password and the
+credential keys, reached the internet-facing proxy). Coolify holds only non-secret settings. Each secret lives
+in a root-owned host file mounted into its one service (`compose.coolify.yaml` header): `/etc/geraiexpress/app.env`
+(group 10101, `node --env-file`), `scheduler.env` (group 10102, `CRON_SECRET` only), `postgrest/db-uri` and
+`postgrest/jwt-secret` (group 10103, PostgREST's `@file` form), `postgres_password` (root, `POSTGRES_PASSWORD_FILE`).
+Mounts use `create_host_path: false`, so a missing file fails the deployment. `check:environments` refuses any
+secret value in a Coolify service environment, a writable or auto-created secret mount, and a root gateway. Write
+or rotate the files with the operator script (values from the secret store over SSH stdin), then restart the
+resource; never paste a secret into the Coolify UI or API. Delete a secret's Coolify variable outright, never leave
+it empty: Node gives an environment value precedence over `--env-file`, so an empty Coolify copy would blank the
+file's value (the app then refuses to start, `startup_config_invalid`), and the postgres image refuses
+`POSTGRES_PASSWORD` next to `POSTGRES_PASSWORD_FILE`. The app still never receives `DATABASE_URL`,
+`PGRST_DB_URI`, `POSTGRES_PASSWORD` or `AUTHENTICATOR_PASSWORD`.
 Use managed Compose routing, not Raw Compose (this definition does not supply edge labels).
 Enable **Preserve repository during deployment**: the gateway bind-mounts
 `infra/proxy/Caddyfile.coolify`, which must remain a real file on the deployment host.
@@ -29,8 +42,11 @@ Enable **Preserve repository during deployment**: the gateway bind-mounts
    PostgREST or PostgreSQL. Do not use the standalone `--profile prod` command below for this resource.
 2. Inspect the actual Coolify edge address on the resource network, then set
    `COOLIFY_PROXY_CIDR` to that exact IPv4 `/32` or IPv6 `/128`. Re-verify after the edge
-   is recreated. Never use `private_ranges`, a whole subnet or `0.0.0.0/0`. Caddy resolves
-   forwarded addresses right-to-left; untrusted peers cannot choose a visitor's limiter key.
+   is recreated. Never use `private_ranges`, a whole subnet or `0.0.0.0/0`. Behind Cloudflare the gateway reads
+   the visitor address from `CF-Connecting-IP` only (Coolify's Traefik replaces `X-Forwarded-For` with the
+   Cloudflare edge address, observed live 2026-11-10), and only when the peer is that edge. This is safe only
+   while the host firewall admits 80/443 from Cloudflare's published ranges alone; untrusted peers cannot choose
+   a visitor's limiter key (`node scripts/test-coolify-proxy.mjs`).
 3. For the initial same-host PostgreSQL target, `compose.coolify.yaml` always starts `postgres`
    (it has no profiles, so `COMPOSE_PROFILES` is not needed); give `postgres_data` persistent storage, and set independent database passwords. Apply the
    schema as the `postgres` migration owner through the approved operator credential path;
