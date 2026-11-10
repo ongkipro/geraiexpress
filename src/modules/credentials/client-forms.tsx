@@ -176,10 +176,10 @@ export function PartnerSellerOnboardingFields({ onboarding, documents }: {
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
-        <p className="font-semibold text-foreground">Kepemilikan akun, saldo &amp; dana COD (PR-20)</p>
+        <p className="font-semibold text-foreground">Kepemilikan akun, saldo &amp; dana COD</p>
         <p className="mt-1">
           Akun penjual, saldo pengiriman, dan pencairan dana COD dimiliki penuh oleh pemilik bisnis gerai ini.
-          Login pertama ke dashboard web Mengantar dilakukan melalui menu <span className="font-semibold text-foreground">Lupa Password</span> menggunakan email pemilik yang didaftarkan.
+          Saat pertama kali masuk ke dashboard web Mengantar, gunakan menu <span className="font-semibold text-foreground">Lupa Password</span> dengan email pemilik yang didaftarkan.
           GeraiExpress tidak pernah meminta atau menyimpan kata sandi Mengantar Anda.
         </p>
       </div>

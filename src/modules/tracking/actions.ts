@@ -35,13 +35,13 @@ export async function shareTrackingAction(shipmentId: string): Promise<ShareResu
     revalidatePath(`/pengiriman/${shipmentId}`);
     return { link, message, whatsapp: phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : null };
   } catch {
-    return { error: "Tautan belum bisa disiapkan. Muat ulang dan coba lagi; hubungi administrator jika tetap gagal." };
+    return { error: "Tautan belum bisa disiapkan. Muat ulang dan coba lagi; hubungi admin gerai jika tetap gagal." };
   }
 }
 
 export async function revokeTrackingAction(shipmentId: string, linkId: string): Promise<{ error?: string }> {
   const ws = await requireWorkspace();
-  if (!uuid.test(shipmentId) || !uuid.test(linkId) || ws.role !== "tenant_admin" || ws.isDemo) return { error: "Hanya administrator gerai yang dapat mencabut tautan." };
+  if (!uuid.test(shipmentId) || !uuid.test(linkId) || ws.role !== "tenant_admin" || ws.isDemo) return { error: "Hanya admin gerai yang dapat mencabut tautan." };
   const db = await dbServer();
   const { data: s } = await db.from("shipments").select("id").eq("tenant_id", ws.tenant.id).eq("id", shipmentId).maybeSingle();
   if (!s) return { error: "Pengiriman tidak ditemukan." };

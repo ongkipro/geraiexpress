@@ -179,7 +179,7 @@ export function LabelWorkbench({
           return;
         }
         setPrinted(result.snapshot);
-        setNotice(`Permintaan cetak label versi ${result.snapshot.version} dicatat di riwayat dan dialog cetak peramban dibuka. Ini belum membuktikan kertas tercetak.`);
+        setNotice(`Permintaan cetak label versi ${result.snapshot.version} dicatat di riwayat dan dialog cetak dibuka. Ini belum membuktikan kertas tercetak.`);
         setPrintNonce((n) => n + 1);
       } catch {
         setReconcile(true);

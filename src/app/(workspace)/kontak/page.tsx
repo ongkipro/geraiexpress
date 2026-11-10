@@ -43,7 +43,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
         <div className="flex min-w-0 flex-col gap-1">
           <h1 className="text-3xl tracking-tight">Kontak</h1>
           <p className="text-[15px] text-muted-foreground">
-            Pengirim dan penerima tersimpan milik {ws.tenant.name}. Kontak bukan akun login dan bukan akun Mengantar.
+            Pengirim dan penerima tersimpan milik {ws.tenant.name}. Kontak bukan akun untuk masuk dan bukan akun Mengantar.
           </p>
         </div>
         <NewContactSheet className="w-full md:w-auto" />

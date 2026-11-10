@@ -64,7 +64,7 @@ export function buildReceipt(input: ReceiptInput): Receipt {
   if (input.geraiWhatsapp) header.push(`WhatsApp ${input.geraiWhatsapp}`);
   const lines: ReceiptLine[] = [
     { label: "Referensi", value: input.reference },
-    { label: "AWB", value: input.awb ?? "Belum terbit" },
+    { label: "Resi", value: input.awb ?? "Belum terbit" },
     {
       label: "Kurir",
       value: input.courier ? [courierName(input.courier), input.service].filter(Boolean).join(" ") : "—",

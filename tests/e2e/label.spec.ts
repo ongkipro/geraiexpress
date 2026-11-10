@@ -461,7 +461,7 @@ test("an empty gerai WhatsApp blocks the unmasked print: operators see the promp
   await signIn(page, "operator-a@geraiexpress.test");
   await page.goto(`/pengiriman/${id}/label`);
   const prompt = page.getByTestId("whatsapp-missing");
-  await expect(prompt).toContainText("Nomor WhatsApp gerai belum diisi. Minta administrator gerai mengisinya di Pengaturan.");
+  await expect(prompt).toContainText("Nomor WhatsApp gerai belum diisi. Minta admin gerai mengisinya di Pengaturan.");
   await expect(page.getByRole("link", { name: /Isi nomor WhatsApp gerai/ })).toHaveCount(0);
   await expect(printButton(page)).toBeDisabled();
   expect(count("label_snapshots", id)).toBe(0);
@@ -490,7 +490,7 @@ test("masking disabled by the platform: the switch is disabled with the reason, 
   await expect(maskSwitch(page)).toBeDisabled();
   await expect(maskSwitch(page)).not.toBeChecked();
   await expect(page.getByTestId("mask-disabled-reason")).toHaveText(
-    "Masking pengirim dinonaktifkan untuk gerai ini oleh administrator platform. Label dicetak dengan identitas gerai. Hubungi administrator gerai untuk informasi lebih lanjut.",
+    "Masking pengirim dinonaktifkan untuk gerai ini oleh administrator platform. Label dicetak dengan identitas gerai. Hubungi admin gerai untuk informasi lebih lanjut.",
   );
   await expect(maskSwitch(page)).toHaveAccessibleDescription(/dinonaktifkan untuk gerai ini oleh administrator platform/);
   await expect(page.getByTestId("label-sender-name")).toHaveText("Gerai Uji A");

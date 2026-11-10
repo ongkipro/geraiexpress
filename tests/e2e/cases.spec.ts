@@ -45,7 +45,7 @@ test("operator opens and updates a case with an entered anchor; admin closes it 
   await dialog.getByRole("radio", { name: "Rusak", exact: true }).check();
   await dialog.getByRole("radio", { name: /Klaim nilai penuh/ }).check();
   await dialog.getByLabel("Keterangan").fill("Kardus penyok, piring pecah saat diterima");
-  await dialog.getByLabel("Bukti (nama file atau tautan)").fill("foto-paket.jpg\nvideo-unboxing.mp4");
+  await dialog.getByLabel("Bukti (nama berkas atau tautan)").fill("foto-paket.jpg\nvideo-unboxing.mp4");
   await dialog.getByLabel("Nomor tiket Mengantar (jika ada)").fill("TKT-4411");
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("case-open-dialog.png"), fullPage: true, animations: "disabled" });

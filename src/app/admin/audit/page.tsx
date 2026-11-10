@@ -40,7 +40,7 @@ const ACTIONS: Record<string, string> = {
   "tenant.contact_whatsapp": "WhatsApp gerai",
   "tenant.masking": "Izin masking pengirim",
   "label.snapshot": "Snapshot label",
-  "invoice.snapshot": "Snapshot faktur",
+  "invoice.snapshot": "Snapshot invoice",
   "export.shipments": "Ekspor daftar pengiriman",
   // T-081 / T-080 (G2): append-only provider configuration versions.
   "declaration_text.append": "Versi teks pernyataan isi paket",
@@ -231,7 +231,7 @@ export default async function PlatformAuditPage({ searchParams }: { searchParams
       </form>
       {category === null && !action ? (
         <p className="-mt-2 text-sm text-muted-foreground">
-          &ldquo;Semua&rdquo; tidak memuat snapshot label dan snapshot faktur karena jumlahnya besar; buka kategori Pengiriman atau pilih jenisnya untuk melihatnya.
+          &ldquo;Semua&rdquo; tidak memuat snapshot label dan snapshot invoice karena jumlahnya besar; buka kategori Pengiriman atau pilih jenisnya untuk melihatnya.
         </p>
       ) : null}
 

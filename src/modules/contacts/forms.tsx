@@ -86,7 +86,7 @@ export function NewContactSheet({ label = "Tambah kontak", className }: { label?
       <SheetContent side="right" className="w-full overflow-y-auto data-[side=right]:w-full sm:data-[side=right]:max-w-lg">
         <SheetHeader className="pr-16">
           <SheetTitle>Tambah kontak</SheetTitle>
-          <SheetDescription>Pengirim atau penerima yang sering dipakai. Kontak bukan akun login.</SheetDescription>
+          <SheetDescription>Pengirim atau penerima yang sering dipakai. Kontak bukan akun untuk masuk.</SheetDescription>
         </SheetHeader>
         <div className="px-6 pb-6">
           <NewContactForm />

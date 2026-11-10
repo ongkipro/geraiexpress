@@ -105,7 +105,7 @@ export function WeightRuleForm({ prefill }: { prefill: RulePrefill }) {
           <DialogHeader className="pr-12">
             <DialogTitle>Versi baru aturan {name}</DialogTitle>
             <DialogDescription>
-              Ongkir berikutnya memakai versi ini sejak waktu berlaku. Kutipan dan kiriman yang sudah ada tetap memakai versinya sendiri. Kosongkan angka yang belum terverifikasi; jangan menebak.
+              Cek ongkir berikutnya memakai versi ini sejak waktu berlaku. Estimasi ongkir dan pengiriman yang sudah ada tetap memakai versinya sendiri. Kosongkan angka yang belum terverifikasi; jangan menebak.
             </DialogDescription>
           </DialogHeader>
           <form action={action} className="flex flex-col gap-5">

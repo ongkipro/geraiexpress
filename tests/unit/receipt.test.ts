@@ -32,7 +32,7 @@ describe("receiptText", () => {
     expect(text).not.toContain(base.payment!.id);
     expect(text).toContain("WhatsApp 081234567890");
     expect(text).toContain("Referensi: GX261104-ABC123");
-    expect(text).toContain("AWB: JT0001234567");
+    expect(text).toContain("Resi: JT0001234567");
     expect(text).toContain("REG");
     expect(text).toContain("Ongkir: Rp 12.000");
     expect(text).toContain("Dibayar: Rp 12.000");

@@ -125,7 +125,7 @@ export default async function IntegrationsPage() {
 
       <section aria-labelledby="acceptance-heading" className="flex flex-col gap-4">
         <SectionHeader id="acceptance-heading" title="Penerimaan label masking per kurir"
-          description="Bukti bahwa kurir menerima label masking yang dicetak gerai (PR-46). Selain terverifikasi, operator wajib mencentang konfirmasi sebelum mencetak label masking, dan konfirmasinya dicatat di riwayat cetak." />
+          description="Bukti bahwa kurir menerima label masking yang dicetak gerai. Selain terverifikasi, operator wajib mencentang konfirmasi sebelum mencetak label masking, dan konfirmasinya dicatat di riwayat cetak." />
         <ul className="divide-y divide-border rounded-lg bg-card ring-1 ring-border">
           {acceptance.map(({ courier, row }) => {
             const state = ACCEPTANCE[row?.state ?? "unverified"];

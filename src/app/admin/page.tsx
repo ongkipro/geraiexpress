@@ -80,7 +80,7 @@ export default async function PlatformTenantsPage({ searchParams }: { searchPara
     if (session.capabilities.includes("audit_review")) redirect("/admin/audit");
     return (
       <div className="flex max-w-[680px] flex-col gap-6">
-        <PageHeader title="Super Admin" description="Kemampuan Anda belum memiliki halaman di versi ini." />
+        <PageHeader title="Super Admin" description="Belum ada halaman untuk hak akses Anda di versi ini." />
       </div>
     );
   }

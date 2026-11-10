@@ -112,7 +112,7 @@ export function InvoiceWorkbench({
         }
         setNotice(scope === "both"
           ? "Dialog cetak resi lalu dialog cetak invoice dibuka. Ini belum membuktikan kertas tercetak."
-          : "Dialog cetak peramban dibuka. Ini belum membuktikan kertas tercetak.");
+          : "Dialog cetak dibuka. Ini belum membuktikan kertas tercetak.");
         setJobs(scope === "both" ? ["label", "invoice"] : [scope]);
       } finally {
         busy.current = false;

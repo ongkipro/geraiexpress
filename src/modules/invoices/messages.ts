@@ -3,7 +3,7 @@ import { friendlyError } from "@/lib/errors";
 // Bahasa Indonesia messages for the invoice command (PR-16). Stable database codes in, operator-facing
 // sentences out; anything else falls back to the shared mapping.
 const MESSAGES: Record<string, string> = {
-  whatsapp_missing: "Nomor WhatsApp gerai belum diisi. Minta administrator gerai mengisinya di Pengaturan.",
+  whatsapp_missing: "Nomor WhatsApp gerai belum diisi. Minta admin gerai mengisinya di Pengaturan.",
   simulated_shipment: "Pengiriman demo tidak memiliki invoice.",
   no_awb: "Invoice hanya tersedia setelah resi Mengantar terbit.",
   masking_acknowledgement_required: "Centang konfirmasi bahwa penerimaan label masking oleh kurir belum terverifikasi sebelum mencetak resi.",
