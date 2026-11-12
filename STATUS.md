@@ -10,6 +10,14 @@ Independent-Review-Detail: M4: T-045 R4 GPT-6.1 Sol 68b3b525 -> c14f0e6d -> 3844
 Independent-Reviewer: reviewer (cx/gpt-6.1-sol, high), separate subagent per task; implementer pi-parent-01a1a300 (cc/claude-opus-5-5)
 Independent-Review-Head: c9c7164
 
+## Ops 2026-11-12 — off-server backup live (RELEASE gates 12 and 13)
+
+- Daily dump on the host now also goes encrypted (gpg AES256) to Cloudflare R2 bucket `geraiexpress-backups`
+  (bucket-scoped token); upload size and sha256 verified; R2 retention 30 days / min 7.
+- Off-server restore drill PASS from the R2 copy on the operator machine (restored state equals live). Wrong passphrase
+  refused; no plaintext in the object. RPO 24 h / RTO 4 h proposed, owner confirmation pending.
+- Still open: SMTP (OTP sign-in), SSH 22 source restriction, monitoring/alerting, T-037 release record.
+
 ## M12 CLOSED (2026-11-10) — Live-deploy audit fixes: secrets per service, visitor IP, non-root gateway, UI copy
 
 - INT-M12 on head `f2403cb`. Executed, ledger-recorded PASS: typecheck; unit 1629; db 661; upgrade; e2e 738 passed /

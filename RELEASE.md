@@ -201,9 +201,20 @@ by the app. Gates before a release is started:
     password hashes, sealed MFA/credential material, identities and session hashes. Owner chooses off-server
     storage, retention, encryption-at-rest/key custody and encrypted transport; copy every successful archive
     off-server, monitor missed backups/copy failures, test decryption and restore from that off-server copy.
-    No production schedule/storage/encryption has been provisioned. RPO: **OWNER-DECIDED: [pending]**.
-    RTO: **OWNER-DECIDED: [pending]**. Record backup age, restore wall time and owner acceptance before release.
-13. **Restore drill (local evidence; owner-gated on actual deployment/off-server archive).** Stop source writers
+    **Production (Vultr + Coolify host, 2026-11-12):** `gx-db-backup.timer` runs daily at 02:30 WIB (and on demand
+    before a migration): container-native `pg_dump -Fc` of the resource's own PostgreSQL into
+    `/var/backups/geraiexpress` (0700 root), verified with `pg_restore --list`, sha256 beside it, kept 14 days and
+    never fewer than 5. `ExecStartPost` then encrypts the newest dump (`gpg --symmetric`, AES256; passphrase in a
+    0400 root host file and in the operator secret store, never in the bucket) and uploads it to Cloudflare R2
+    bucket `geraiexpress-backups` with a token scoped to that bucket only; the uploaded object's size and sha256
+    are checked; R2 keeps 30 days and never fewer than 7 copies. Losing the passphrase makes every R2 copy
+    unreadable: keep a copy outside the operator machine. Proposed (owner to confirm): RPO **24 h**, RTO **4 h**.
+13. **Restore drill.** Production evidence 2026-11-12: the newest R2 copy was downloaded on the operator machine,
+    its sha256 matched the upload, it decrypted, restored with `pg_restore --exit-on-error` into a throwaway
+    PostgreSQL 17 without network in 3 s, and matched live (72 migrations, newest `20261109210000`, 53 tables,
+    79,391 areas). A wrong passphrase is refused and the object holds no plaintext marker. On-host drill also PASS.
+    Local mechanism (below) unchanged.
+    **Local evidence:** Stop source writers
     during dump/comparison or expect row-count drift; source data is never modified by these scripts. Run
     `pnpm db:restore-check <archive> <scratch>` on the same server with CREATE DATABASE privilege. Scratch must
     match `^gxrestore[a-z0-9_]*$` (at most 63 characters), differ from source and not already exist; restore uses
